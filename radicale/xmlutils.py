@@ -35,7 +35,9 @@ from radicale import item, pathutils
 MIMETYPES: Mapping[str, str] = {
     "VADDRESSBOOK": "text/vcard",
     "VCALENDAR": "text/calendar",
-    "VSUBSCRIBED": "text/calendar"}
+    "VSUBSCRIBED": "text/calendar",
+    "SCHEDULING-INBOX": "text/calendar",
+    "SCHEDULING-OUTBOX": "text/calendar"}
 
 OBJECT_MIMETYPES: Mapping[str, str] = {
     "VCARD": "text/vcard",
@@ -187,6 +189,12 @@ def props_from_request(xml_request: Optional[ET.Element]
                         break
                     if resource_type.tag == make_clark("CR:addressbook"):
                         value = "VADDRESSBOOK"
+                        break
+                    if resource_type.tag == make_clark("C:schedule-inbox"):
+                        value = "SCHEDULING-INBOX"
+                        break
+                    if resource_type.tag == make_clark("C:schedule-outbox"):
+                        value = "SCHEDULING-OUTBOX"
                         break
         elif prop.tag == make_clark("C:supported-calendar-component-set"):
             if is_set:

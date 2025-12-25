@@ -82,6 +82,13 @@ class StoragePartDiscover(StorageBase):
 
         yield collection
 
+        # RFC 6638: Auto-create scheduling collections for principals
+        logger.debug("Checking scheduling auto-create: is_principal=%s, depth=%s, path=%s",
+                    collection.is_principal, depth, collection.path)
+        if collection.is_principal and depth != "0":
+            logger.debug("Principal discovered with depth=%s, calling _ensure_scheduling_collections", depth)
+            self._ensure_scheduling_collections(collection, folder, sane_path)
+
         if depth == "0":
             return
 
@@ -115,3 +122,43 @@ class StoragePartDiscover(StorageBase):
             with child_context_manager(sane_child_path, None):
                 yield self._collection_class(
                     cast(multifilesystem.Storage, self), child_path)
+
+    def _ensure_scheduling_collections(self, principal_collection, folder: str,
+                                      sane_path: str) -> None:
+        """Ensure schedule-inbox and schedule-outbox exist for principal.
+
+        RFC 6638 requires principals to have inbox and outbox collections
+        for scheduling operations. This method creates them if they don't exist.
+        """
+        # assert isinstance(self, multifilesystem.Storage)
+
+        # Only create scheduling collections if scheduling is enabled
+        scheduling_enabled = self.configuration.get("scheduling", "enabled")
+        logger.debug("Scheduling enabled: %s", scheduling_enabled)
+        if not scheduling_enabled:
+            logger.debug("Scheduling not enabled, skipping collection creation")
+            return
+
+        for collection_name, tag in [("schedule-inbox", "SCHEDULING-INBOX"),
+                                      ("schedule-outbox", "SCHEDULING-OUTBOX")]:
+            sane_child_path = posixpath.join(sane_path, collection_name)
+            child_path = pathutils.unstrip_path(sane_child_path, True)
+
+            # Check if collection already exists
+            try:
+                existing = next(iter(self.discover(child_path, depth="0")), None)
+                if existing:
+                    logger.debug("Scheduling collection %s already exists", child_path)
+                    continue
+            except Exception:
+                pass
+
+            # Create collection with proper props
+            try:
+                props = {"tag": tag}
+                cast(multifilesystem.Storage, self).create_collection(
+                    child_path, props=props)
+                logger.debug("Created scheduling collection: %s (tag=%s)",
+                           child_path, tag)
+            except Exception as e:
+                logger.warning("Failed to create %s: %s", collection_name, e)

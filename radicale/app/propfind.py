@@ -120,6 +120,11 @@ def xml_propfind_response(
             props.append(xmlutils.make_clark("D:principal-URL"))
             props.append(xmlutils.make_clark("CR:addressbook-home-set"))
             props.append(xmlutils.make_clark("C:calendar-home-set"))
+            # RFC 6638 scheduling properties
+            props.append(xmlutils.make_clark("C:schedule-inbox-URL"))
+            props.append(xmlutils.make_clark("C:schedule-outbox-URL"))
+            props.append(xmlutils.make_clark("C:schedule-default-calendar-URL"))
+            props.append(xmlutils.make_clark("C:calendar-user-type"))
 
         if not is_collection or is_leaf:
             props.append(xmlutils.make_clark("D:getetag"))
@@ -174,6 +179,27 @@ def xml_propfind_response(
             child_element = ET.Element(xmlutils.make_clark("D:href"))
             child_element.text = xmlutils.make_href(base_prefix, path)
             element.append(child_element)
+        # RFC 6638 scheduling property handlers
+        elif (tag == xmlutils.make_clark("C:schedule-inbox-URL") and
+              is_collection and collection.is_principal):
+            child_element = ET.Element(xmlutils.make_clark("D:href"))
+            child_element.text = xmlutils.make_href(base_prefix, path + "schedule-inbox/")
+            element.append(child_element)
+        elif (tag == xmlutils.make_clark("C:schedule-outbox-URL") and
+              is_collection and collection.is_principal):
+            child_element = ET.Element(xmlutils.make_clark("D:href"))
+            child_element.text = xmlutils.make_href(base_prefix, path + "schedule-outbox/")
+            element.append(child_element)
+        elif (tag == xmlutils.make_clark("C:schedule-default-calendar-URL") and
+              is_collection and collection.is_principal):
+            # Point to the principal's default calendar if it exists
+            # For now, we'll leave this empty - clients will use their own defaults
+            pass
+        elif (tag == xmlutils.make_clark("C:calendar-user-type") and
+              is_collection and collection.is_principal):
+            # RFC 6638 Section 2.4.2: INDIVIDUAL, GROUP, RESOURCE, ROOM, UNKNOWN
+            # Default to INDIVIDUAL for user principals
+            element.text = "INDIVIDUAL"
         elif tag == xmlutils.make_clark("C:supported-calendar-component-set"):
             human_tag = xmlutils.make_human_tag(tag)
             if is_collection and is_leaf:
@@ -204,6 +230,14 @@ def xml_propfind_response(
                 privileges.append("D:write")
                 privileges.append("D:write-properties")
                 privileges.append("D:write-content")
+                # RFC 6638 scheduling privileges
+                if is_collection and is_leaf:
+                    if collection.tag == "VCALENDAR":
+                        privileges.append("C:schedule")
+                    elif collection.tag == "SCHEDULING-INBOX":
+                        privileges.append("C:schedule-deliver")
+                    elif collection.tag == "SCHEDULING-OUTBOX":
+                        privileges.append("C:schedule-send")
             for human_tag in privileges:
                 privilege = ET.Element(xmlutils.make_clark("D:privilege"))
                 privilege.append(ET.Element(
@@ -269,6 +303,14 @@ def xml_propfind_response(
                     elif collection.tag == "VSUBSCRIBED":
                         child_element = ET.Element(
                             xmlutils.make_clark("CS:subscribed"))
+                        element.append(child_element)
+                    elif collection.tag == "SCHEDULING-INBOX":
+                        child_element = ET.Element(
+                            xmlutils.make_clark("C:schedule-inbox"))
+                        element.append(child_element)
+                    elif collection.tag == "SCHEDULING-OUTBOX":
+                        child_element = ET.Element(
+                            xmlutils.make_clark("C:schedule-outbox"))
                         element.append(child_element)
                 child_element = ET.Element(xmlutils.make_clark("D:collection"))
                 element.append(child_element)

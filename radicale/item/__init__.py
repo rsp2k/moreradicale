@@ -97,7 +97,8 @@ def check_and_sanitize_items(
     The ``tag`` of the collection.
 
     """
-    if tag and tag not in ("VCALENDAR", "VADDRESSBOOK", "VSUBSCRIBED"):
+    if tag and tag not in ("VCALENDAR", "VADDRESSBOOK", "VSUBSCRIBED",
+                           "SCHEDULING-INBOX", "SCHEDULING-OUTBOX"):
         raise ValueError("Unsupported collection tag: %r" % tag)
     if not is_collection and len(vobject_items) != 1:
         raise ValueError("Item contains %d components" % len(vobject_items))
@@ -236,7 +237,8 @@ def check_and_sanitize_props(props: MutableMapping[Any, Any]
             raise ValueError("Value of %r must be %r not %r: %r" % (
                 k, str.__name__, type(v).__name__, v))
         if k == "tag":
-            if v not in ("", "VCALENDAR", "VADDRESSBOOK", "VSUBSCRIBED"):
+            if v not in ("", "VCALENDAR", "VADDRESSBOOK", "VSUBSCRIBED",
+                         "SCHEDULING-INBOX", "SCHEDULING-OUTBOX"):
                 raise ValueError("Unsupported collection tag: %r" % v)
     return props
 

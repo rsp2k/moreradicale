@@ -546,6 +546,28 @@ This is an automated message. Please do not reply.""",
             "type": str
         })
     ])),
+    ("scheduling", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable CalDAV scheduling support (RFC 6638)",
+            "type": bool}),
+        ("mode", {
+            "value": "none",
+            "help": "scheduling processing mode: none (disabled), internal (same-server only), email (with external attendees)",
+            "type": str}),
+        ("auto_process", {
+            "value": "False",
+            "help": "automatically process incoming iTIP messages in inbox",
+            "type": bool}),
+        ("max_attendees", {
+            "value": "100",
+            "help": "maximum number of attendees per event (prevents email bombing)",
+            "type": positive_int}),
+        ("internal_domain", {
+            "value": "",
+            "help": "internal domain for routing attendees (e.g., example.com)",
+            "type": str})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",
