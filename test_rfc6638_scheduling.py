@@ -285,6 +285,141 @@ END:VCALENDAR
         print("  ⚠️  Full REPLY processing (POST) not yet implemented")
         print("  ⚠️  Requires additional handler for schedule-outbox POST")
 
+    def test_4_itip_cancel_delivery(self):
+        """Test 4: Verify CANCEL delivery when event deleted."""
+        print("\n" + "="*60)
+        print("TEST 4: iTIP CANCEL Message Delivery")
+        print("="*60)
+
+        # Create a new event for cancellation testing
+        now = datetime.utcnow()
+        start = now + timedelta(days=2)
+        end = start + timedelta(hours=1)
+        uid = f"cancel-test-{now.strftime('%Y%m%d%H%M%S')}@localhost"
+
+        event_ical = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test Suite//EN
+BEGIN:VEVENT
+UID:{uid}
+DTSTAMP:{now.strftime('%Y%m%dT%H%M%SZ')}
+DTSTART:{start.strftime('%Y%m%dT%H%M%SZ')}
+DTEND:{end.strftime('%Y%m%dT%H%M%SZ')}
+SUMMARY:Cancellation Test Event
+ORGANIZER:mailto:alice@localhost
+ATTENDEE;PARTSTAT=NEEDS-ACTION;ROLE=REQ-PARTICIPANT;CN="Bob":mailto:bob@localhost
+END:VEVENT
+END:VCALENDAR
+"""
+
+        # PUT event to Alice's calendar
+        response = requests.put(
+            f"{RADICALE_URL}/alice/calendar.ics/cancel-test.ics",
+            auth=('alice', 'alice'),
+            headers={'Content-Type': 'text/calendar'},
+            data=event_ical
+        )
+
+        self.test(
+            "Alice creates event for cancellation",
+            response.status_code in (201, 204),
+            f"Expected 201/204, got {response.status_code}"
+        )
+
+        # Count Bob's inbox messages before deletion
+        response = self.propfind(
+            '/bob/schedule-inbox/',
+            'bob', 'bob',
+            ['{DAV:}getetag'],
+            depth='1'
+        )
+
+        inbox_count_before = 0
+        if response.status_code == 207:
+            root = ET.fromstring(response.text)
+            ics_items = [elem for elem in root.findall('.//{DAV:}href')
+                        if elem.text and elem.text.endswith('.ics')]
+            inbox_count_before = len(ics_items)
+
+        # Delete the event (should trigger CANCEL)
+        response = requests.delete(
+            f"{RADICALE_URL}/alice/calendar.ics/cancel-test.ics",
+            auth=('alice', 'alice')
+        )
+
+        self.test(
+            "Alice deletes event (triggers CANCEL)",
+            response.status_code in (200, 204),
+            f"Expected 200/204, got {response.status_code}"
+        )
+
+        # Give server a moment to process
+        import time
+        time.sleep(0.2)
+
+        # Check Bob's inbox for CANCEL message
+        response = self.propfind(
+            '/bob/schedule-inbox/',
+            'bob', 'bob',
+            ['{DAV:}getetag'],
+            depth='1'
+        )
+
+        self.test(
+            "Bob inbox PROPFIND after CANCEL",
+            response.status_code == 207,
+            f"Expected 207, got {response.status_code}"
+        )
+
+        if response.status_code == 207:
+            root = ET.fromstring(response.text)
+            ics_items = [elem for elem in root.findall('.//{DAV:}href')
+                        if elem.text and elem.text.endswith('.ics')]
+            inbox_count_after = len(ics_items)
+
+            self.test(
+                "CANCEL message delivered to Bob's inbox",
+                inbox_count_after > inbox_count_before,
+                f"Expected more messages, got {inbox_count_before} → {inbox_count_after}"
+            )
+
+            # Find and verify CANCEL message
+            cancel_found = False
+            for item in ics_items:
+                if 'cancel' in item.text.lower():
+                    cancel_url = f"{RADICALE_URL}{item.text}"
+                    response = requests.get(cancel_url, auth=('bob', 'bob'))
+
+                    if response.status_code == 200:
+                        cancel_content = response.text
+                        unfolded_content = cancel_content.replace('\r\n ', '').replace('\r\n\t', '')
+
+                        if 'METHOD:CANCEL' in cancel_content:
+                            cancel_found = True
+                            self.test(
+                                "iTIP message has METHOD:CANCEL",
+                                True
+                            )
+
+                            self.test(
+                                "CANCEL has correct UID",
+                                uid in unfolded_content
+                            )
+
+                            self.test(
+                                "CANCEL has correct ORGANIZER",
+                                'ORGANIZER:mailto:alice@localhost' in unfolded_content
+                            )
+
+                            self.test(
+                                "CANCEL has Bob as ATTENDEE",
+                                'bob@localhost' in unfolded_content
+                            )
+                            break
+
+            if not cancel_found:
+                self.test("CANCEL message found", False, "No CANCEL message in inbox")
+
     def run_all_tests(self):
         """Run all RFC 6638 tests."""
         print("\n" + "█"*60)
@@ -296,6 +431,7 @@ END:VCALENDAR
         self.test_1_scheduling_discovery()
         self.test_2_itip_request_delivery()
         self.test_3_itip_reply_processing()
+        self.test_4_itip_cancel_delivery()
 
         print("\n" + "="*60)
         print("TEST SUMMARY")
