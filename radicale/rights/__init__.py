@@ -37,7 +37,7 @@ from typing import Sequence, Set
 from radicale import config, utils
 
 INTERNAL_TYPES: Sequence[str] = ("authenticated", "owner_write", "owner_only",
-                                 "from_file")
+                                 "from_file", "allow_read_write")
 
 
 def load(configuration: "config.Configuration") -> "BaseRights":

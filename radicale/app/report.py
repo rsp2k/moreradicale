@@ -176,7 +176,7 @@ def xml_report(base_prefix: str, path: str, xml_request: Optional[ET.Element],
             root.tag == xmlutils.make_clark("CR:addressbook-multiget") and
             collection.tag != "VADDRESSBOOK" or
             root.tag == xmlutils.make_clark("D:sync-collection") and
-            collection.tag not in ("VADDRESSBOOK", "VCALENDAR")):
+            collection.tag not in ("VADDRESSBOOK", "VCALENDAR", "SCHEDULING-INBOX", "SCHEDULING-OUTBOX")):
         logger.warning("Invalid REPORT method %r on %r requested",
                        xmlutils.make_human_tag(root.tag), path)
         return client.FORBIDDEN, xmlutils.webdav_error("D:supported-report")
