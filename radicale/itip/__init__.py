@@ -1,24 +1,8 @@
-# This file is part of Radicale - CalDAV and CardDAV server
-# Copyright © 2025-2025 RFC 6638 Scheduling Implementation
-#
-# This library is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Radicale.  If not, see <http://www.gnu.org/licenses/>.
-
 """
-iTIP (iCalendar Transport-Independent Interoperability Protocol) support.
+iTIP (RFC 5546) and CalDAV Scheduling (RFC 6638) support.
 
-This package implements RFC 5546 (iTIP) and RFC 6638 (CalDAV Scheduling)
-for handling meeting invitations, responses, and cancellations.
+This package handles iTIP message processing for CalDAV scheduling,
+including parsing, validation, and delivery of scheduling messages.
 """
 
-__all__ = ["models", "validator"]
+__all__ = ["models", "validator", "router", "processor"]
