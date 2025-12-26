@@ -377,9 +377,11 @@ class ITIPProcessor:
         Handles:
         - REPLY: Attendees responding to invitations (ACCEPT/DECLINE/TENTATIVE)
         - REFRESH: Attendees requesting latest event version from organizer
+        - COUNTER: Attendees proposing changes to event (time, location, etc.)
+        - DECLINECOUNTER: Organizers declining counter-proposals
 
         Args:
-            user: User posting the message (attendee)
+            user: User posting the message (attendee or organizer)
             ical_text: iTIP message
             base_prefix: Base URL prefix for responses
 
@@ -407,6 +409,10 @@ class ITIPProcessor:
                 return self._process_reply(vcal, user, base_prefix)
             elif method == 'REFRESH':
                 return self._process_refresh(vcal, user, base_prefix)
+            elif method == 'COUNTER':
+                return self._process_counter(vcal, user, base_prefix)
+            elif method == 'DECLINECOUNTER':
+                return self._process_declinecounter(vcal, user, base_prefix)
             else:
                 logger.warning(f"Unsupported METHOD posted to schedule-outbox: {method}")
                 return httputils.BAD_REQUEST
@@ -641,6 +647,207 @@ class ITIPProcessor:
 
         except Exception as e:
             logger.error(f"Error processing REFRESH: {e}", exc_info=True)
+            return httputils.INTERNAL_SERVER_ERROR
+
+    def _process_counter(self, vcal: vobject.base.Component, user: str, base_prefix: str):
+        """
+        Process iTIP COUNTER message.
+
+        When an attendee proposes a change (different time, location, etc.),
+        we deliver the COUNTER proposal to the organizer's schedule-inbox for review.
+
+        Args:
+            vcal: Parsed VCALENDAR with METHOD:COUNTER
+            user: User posting the COUNTER (attendee)
+            base_prefix: Base URL prefix for responses
+
+        Returns:
+            HTTP response with schedule-response XML
+        """
+        from radicale import httputils
+
+        try:
+            # Get the component (VEVENT/VTODO/VJOURNAL)
+            component = None
+            for comp_type in ('vevent', 'vtodo', 'vjournal'):
+                if hasattr(vcal, comp_type):
+                    component = getattr(vcal, comp_type)
+                    break
+
+            if not component:
+                logger.warning("No schedulable component in COUNTER")
+                return httputils.BAD_REQUEST
+
+            # Extract UID and ORGANIZER
+            if not hasattr(component, 'uid'):
+                logger.warning("COUNTER missing UID")
+                return httputils.BAD_REQUEST
+
+            uid = component.uid.value
+
+            if not hasattr(component, 'organizer'):
+                logger.warning("COUNTER missing ORGANIZER")
+                return httputils.BAD_REQUEST
+
+            organizer_uri = component.organizer.value
+            organizer_email = extract_email(organizer_uri)
+
+            if not organizer_email:
+                logger.warning(f"Invalid ORGANIZER email: {organizer_uri}")
+                return httputils.BAD_REQUEST
+
+            # Extract ATTENDEE (should be the user proposing the counter)
+            if not hasattr(component, 'attendee'):
+                logger.warning("COUNTER missing ATTENDEE")
+                return httputils.BAD_REQUEST
+
+            attendee = component.attendee
+            attendee_email = extract_email(attendee.value)
+
+            logger.info(f"Processing COUNTER from {attendee_email} for {uid}")
+
+            # Route organizer (must be internal for now)
+            is_internal, organizer_principal = route_attendee(organizer_email, self.storage)
+
+            if not is_internal:
+                logger.warning(f"COUNTER for external organizer {organizer_email} - not supported yet")
+                return self._build_schedule_response_error(
+                    base_prefix, "External organizers not supported")
+
+            # Deliver COUNTER to organizer's schedule-inbox
+            inbox_path = get_inbox_path(organizer_principal)
+            discovered = list(self.storage.discover(inbox_path, depth="0"))
+
+            if not discovered:
+                logger.warning(f"Schedule-inbox not found: {inbox_path}")
+                return self._build_schedule_response_error(
+                    base_prefix, "Organizer inbox not found")
+
+            inbox = discovered[0]
+
+            # Create item from COUNTER message
+            counter_item = radicale_item.Item(collection_path=inbox.path, vobject_item=vcal)
+            counter_item.prepare()
+
+            # Generate filename with timestamp to prevent overwrites
+            import time
+            timestamp = int(time.time())
+            filename = f"{uid}-counter-{timestamp}.ics"
+
+            # Upload to organizer's inbox
+            inbox.upload(filename, counter_item)
+
+            logger.info(f"Delivered COUNTER from {attendee_email} to {organizer_email} inbox")
+
+            # Return success schedule-response
+            return self._build_schedule_response_success(base_prefix, organizer_email)
+
+        except Exception as e:
+            logger.error(f"Error processing COUNTER: {e}", exc_info=True)
+            return httputils.INTERNAL_SERVER_ERROR
+
+    def _process_declinecounter(self, vcal: vobject.base.Component, user: str, base_prefix: str):
+        """
+        Process iTIP DECLINECOUNTER message.
+
+        When an organizer declines an attendee's counter-proposal, we deliver
+        the DECLINECOUNTER message to the attendee's schedule-inbox.
+
+        Args:
+            vcal: Parsed VCALENDAR with METHOD:DECLINECOUNTER
+            user: User posting the DECLINECOUNTER (organizer)
+            base_prefix: Base URL prefix for responses
+
+        Returns:
+            HTTP response with schedule-response XML
+        """
+        from radicale import httputils
+
+        try:
+            # Get the component (VEVENT/VTODO/VJOURNAL)
+            component = None
+            for comp_type in ('vevent', 'vtodo', 'vjournal'):
+                if hasattr(vcal, comp_type):
+                    component = getattr(vcal, comp_type)
+                    break
+
+            if not component:
+                logger.warning("No schedulable component in DECLINECOUNTER")
+                return httputils.BAD_REQUEST
+
+            # Extract UID
+            if not hasattr(component, 'uid'):
+                logger.warning("DECLINECOUNTER missing UID")
+                return httputils.BAD_REQUEST
+
+            uid = component.uid.value
+
+            # Extract ORGANIZER (should be the user posting the DECLINECOUNTER)
+            if not hasattr(component, 'organizer'):
+                logger.warning("DECLINECOUNTER missing ORGANIZER")
+                return httputils.BAD_REQUEST
+
+            organizer_uri = component.organizer.value
+            organizer_email = extract_email(organizer_uri)
+
+            # Extract ATTENDEE(s) who proposed the counter
+            if not hasattr(component, 'attendee'):
+                logger.warning("DECLINECOUNTER missing ATTENDEE")
+                return httputils.BAD_REQUEST
+
+            attendees = component.attendee_list if hasattr(component, 'attendee_list') else [component.attendee]
+
+            logger.info(f"Processing DECLINECOUNTER from {organizer_email} for {uid}")
+
+            # Deliver to each attendee's inbox
+            delivered_count = 0
+            for attendee in attendees:
+                attendee_email = extract_email(attendee.value)
+                if not attendee_email:
+                    continue
+
+                # Route attendee (must be internal for now)
+                is_internal, attendee_principal = route_attendee(attendee_email, self.storage)
+
+                if not is_internal:
+                    logger.warning(f"DECLINECOUNTER for external attendee {attendee_email} - skipping")
+                    continue
+
+                # Deliver DECLINECOUNTER to attendee's schedule-inbox
+                inbox_path = get_inbox_path(attendee_principal)
+                discovered = list(self.storage.discover(inbox_path, depth="0"))
+
+                if not discovered:
+                    logger.warning(f"Schedule-inbox not found: {inbox_path}")
+                    continue
+
+                inbox = discovered[0]
+
+                # Create item from DECLINECOUNTER message
+                declinecounter_item = radicale_item.Item(collection_path=inbox.path, vobject_item=vcal)
+                declinecounter_item.prepare()
+
+                # Generate filename with timestamp
+                import time
+                timestamp = int(time.time())
+                filename = f"{uid}-declinecounter-{timestamp}.ics"
+
+                # Upload to attendee's inbox
+                inbox.upload(filename, declinecounter_item)
+
+                logger.info(f"Delivered DECLINECOUNTER to {attendee_email} inbox")
+                delivered_count += 1
+
+            if delivered_count == 0:
+                logger.warning("DECLINECOUNTER not delivered to any attendees")
+                return self._build_schedule_response_error(
+                    base_prefix, "No attendees could receive DECLINECOUNTER")
+
+            # Return success schedule-response
+            return self._build_schedule_response_success(base_prefix, organizer_email)
+
+        except Exception as e:
+            logger.error(f"Error processing DECLINECOUNTER: {e}", exc_info=True)
             return httputils.INTERNAL_SERVER_ERROR
 
     def _find_organizer_event(self, organizer_principal: str, uid: str):

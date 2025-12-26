@@ -420,6 +420,316 @@ END:VCALENDAR
             if not cancel_found:
                 self.test("CANCEL message found", False, "No CANCEL message in inbox")
 
+    def test_5_itip_counter_proposal(self):
+        """Test 5: Verify COUNTER proposal delivery to organizer."""
+        print("\n" + "="*60)
+        print("TEST 5: iTIP COUNTER Proposal (Attendee → Organizer)")
+        print("="*60)
+
+        # Create a new event for counter-proposal testing
+        now = datetime.utcnow()
+        start = now + timedelta(days=3)
+        end = start + timedelta(hours=1)
+        uid = f"counter-test-{now.strftime('%Y%m%d%H%M%SZ')}@localhost"
+
+        event_ical = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test Suite//EN
+BEGIN:VEVENT
+UID:{uid}
+DTSTAMP:{now.strftime('%Y%m%dT%H%M%SZ')}
+DTSTART:{start.strftime('%Y%m%dT%H%M%SZ')}
+DTEND:{end.strftime('%Y%m%dT%H%M%SZ')}
+SUMMARY:Counter-Proposal Test Event
+ORGANIZER:mailto:alice@localhost
+ATTENDEE;PARTSTAT=NEEDS-ACTION;ROLE=REQ-PARTICIPANT;CN="Bob":mailto:bob@localhost
+END:VEVENT
+END:VCALENDAR
+"""
+
+        # PUT event to Alice's calendar
+        response = requests.put(
+            f"{RADICALE_URL}/alice/calendar.ics/counter-test.ics",
+            auth=('alice', 'alice'),
+            headers={'Content-Type': 'text/calendar'},
+            data=event_ical
+        )
+
+        self.test(
+            "Alice creates event for counter-proposal test",
+            response.status_code in (201, 204),
+            f"Expected 201/204, got {response.status_code}"
+        )
+
+        # Count Alice's inbox messages before COUNTER
+        response = self.propfind(
+            '/alice/schedule-inbox/',
+            'alice', 'alice',
+            ['{DAV:}getetag'],
+            depth='1'
+        )
+
+        inbox_count_before = 0
+        if response.status_code == 207:
+            root = ET.fromstring(response.text)
+            ics_items = [elem for elem in root.findall('.//{DAV:}href')
+                        if elem.text and elem.text.endswith('.ics')]
+            inbox_count_before = len(ics_items)
+
+        # Bob sends COUNTER with different time
+        counter_start = start + timedelta(hours=2)
+        counter_end = counter_start + timedelta(hours=1)
+
+        counter_ical = f"""BEGIN:VCALENDAR
+VERSION:2.0
+METHOD:COUNTER
+PRODID:-//Test Suite//EN
+BEGIN:VEVENT
+UID:{uid}
+DTSTAMP:{now.strftime('%Y%m%dT%H%M%SZ')}
+DTSTART:{counter_start.strftime('%Y%m%dT%H%M%SZ')}
+DTEND:{counter_end.strftime('%Y%m%dT%H%M%SZ')}
+SUMMARY:Counter-Proposal Test Event (Bob's proposal)
+ORGANIZER:mailto:alice@localhost
+ATTENDEE;PARTSTAT=NEEDS-ACTION;CN="Bob":mailto:bob@localhost
+COMMENT:Proposing 2 hours later
+END:VEVENT
+END:VCALENDAR
+"""
+
+        # POST COUNTER to Bob's schedule-outbox
+        response = requests.post(
+            f"{RADICALE_URL}/bob/schedule-outbox/",
+            auth=('bob', 'bob'),
+            headers={'Content-Type': 'text/calendar'},
+            data=counter_ical
+        )
+
+        self.test(
+            "Bob POST COUNTER to schedule-outbox",
+            response.status_code == 200,
+            f"Expected 200, got {response.status_code}"
+        )
+
+        if response.status_code == 200:
+            # Verify schedule-response
+            root = ET.fromstring(response.text)
+            status = root.find('.//{urn:ietf:params:xml:ns:caldav}request-status')
+            self.test(
+                "Schedule-response status: 2.0;Success",
+                status is not None and status.text.startswith('2.0'),
+                f"Got status: {status.text if status is not None else 'None'}"
+            )
+
+        # Give server a moment to process
+        import time
+        time.sleep(0.2)
+
+        # Check Alice's inbox for COUNTER message
+        response = self.propfind(
+            '/alice/schedule-inbox/',
+            'alice', 'alice',
+            ['{DAV:}getetag'],
+            depth='1'
+        )
+
+        self.test(
+            "Alice inbox PROPFIND after COUNTER",
+            response.status_code == 207,
+            f"Expected 207, got {response.status_code}"
+        )
+
+        if response.status_code == 207:
+            root = ET.fromstring(response.text)
+            ics_items = [elem for elem in root.findall('.//{DAV:}href')
+                        if elem.text and elem.text.endswith('.ics')]
+            inbox_count_after = len(ics_items)
+
+            self.test(
+                "COUNTER message delivered to Alice's inbox",
+                inbox_count_after > inbox_count_before,
+                f"Expected more messages, got {inbox_count_before} → {inbox_count_after}"
+            )
+
+            # Find and verify COUNTER message
+            counter_found = False
+            for item in ics_items:
+                if 'counter' in item.text.lower():
+                    counter_url = f"{RADICALE_URL}{item.text}"
+                    response = requests.get(counter_url, auth=('alice', 'alice'))
+
+                    if response.status_code == 200:
+                        counter_content = response.text
+                        unfolded_content = counter_content.replace('\r\n ', '').replace('\r\n\t', '')
+
+                        if 'METHOD:COUNTER' in counter_content:
+                            counter_found = True
+                            self.test(
+                                "iTIP message has METHOD:COUNTER",
+                                True
+                            )
+
+                            self.test(
+                                "COUNTER has correct UID",
+                                uid in unfolded_content
+                            )
+
+                            self.test(
+                                "COUNTER has correct ORGANIZER",
+                                'ORGANIZER:mailto:alice@localhost' in unfolded_content
+                            )
+
+                            self.test(
+                                "COUNTER has Bob as ATTENDEE",
+                                'bob@localhost' in unfolded_content
+                            )
+
+                            # Verify proposed time is different
+                            self.test(
+                                "COUNTER proposes different time",
+                                counter_start.strftime('%Y%m%dT%H%M%SZ') in unfolded_content
+                            )
+                            break
+
+            if not counter_found:
+                self.test("COUNTER message found", False, "No COUNTER message in inbox")
+
+    def test_6_itip_declinecounter(self):
+        """Test 6: Verify DECLINECOUNTER delivery to attendee."""
+        print("\n" + "="*60)
+        print("TEST 6: iTIP DECLINECOUNTER (Organizer → Attendee)")
+        print("="*60)
+
+        # Use the event from test 5 (or create a new one)
+        now = datetime.utcnow()
+        start = now + timedelta(days=4)
+        end = start + timedelta(hours=1)
+        uid = f"declinecounter-test-{now.strftime('%Y%m%d%H%M%SZ')}@localhost"
+
+        # Count Bob's inbox messages before DECLINECOUNTER
+        response = self.propfind(
+            '/bob/schedule-inbox/',
+            'bob', 'bob',
+            ['{DAV:}getetag'],
+            depth='1'
+        )
+
+        inbox_count_before = 0
+        if response.status_code == 207:
+            root = ET.fromstring(response.text)
+            ics_items = [elem for elem in root.findall('.//{DAV:}href')
+                        if elem.text and elem.text.endswith('.ics')]
+            inbox_count_before = len(ics_items)
+
+        # Alice sends DECLINECOUNTER to Bob
+        declinecounter_ical = f"""BEGIN:VCALENDAR
+VERSION:2.0
+METHOD:DECLINECOUNTER
+PRODID:-//Test Suite//EN
+BEGIN:VEVENT
+UID:{uid}
+DTSTAMP:{now.strftime('%Y%m%dT%H%M%SZ')}
+DTSTART:{start.strftime('%Y%m%dT%H%M%SZ')}
+DTEND:{end.strftime('%Y%m%dT%H%M%SZ')}
+SUMMARY:Original Event (No Counter Changes)
+ORGANIZER:mailto:alice@localhost
+ATTENDEE;PARTSTAT=NEEDS-ACTION;CN="Bob":mailto:bob@localhost
+COMMENT:Counter-proposal declined
+END:VEVENT
+END:VCALENDAR
+"""
+
+        # POST DECLINECOUNTER to Alice's schedule-outbox
+        response = requests.post(
+            f"{RADICALE_URL}/alice/schedule-outbox/",
+            auth=('alice', 'alice'),
+            headers={'Content-Type': 'text/calendar'},
+            data=declinecounter_ical
+        )
+
+        self.test(
+            "Alice POST DECLINECOUNTER to schedule-outbox",
+            response.status_code == 200,
+            f"Expected 200, got {response.status_code}"
+        )
+
+        if response.status_code == 200:
+            # Verify schedule-response
+            root = ET.fromstring(response.text)
+            status = root.find('.//{urn:ietf:params:xml:ns:caldav}request-status')
+            self.test(
+                "Schedule-response status: 2.0;Success",
+                status is not None and status.text.startswith('2.0'),
+                f"Got status: {status.text if status is not None else 'None'}"
+            )
+
+        # Give server a moment to process
+        import time
+        time.sleep(0.2)
+
+        # Check Bob's inbox for DECLINECOUNTER message
+        response = self.propfind(
+            '/bob/schedule-inbox/',
+            'bob', 'bob',
+            ['{DAV:}getetag'],
+            depth='1'
+        )
+
+        self.test(
+            "Bob inbox PROPFIND after DECLINECOUNTER",
+            response.status_code == 207,
+            f"Expected 207, got {response.status_code}"
+        )
+
+        if response.status_code == 207:
+            root = ET.fromstring(response.text)
+            ics_items = [elem for elem in root.findall('.//{DAV:}href')
+                        if elem.text and elem.text.endswith('.ics')]
+            inbox_count_after = len(ics_items)
+
+            self.test(
+                "DECLINECOUNTER message delivered to Bob's inbox",
+                inbox_count_after > inbox_count_before,
+                f"Expected more messages, got {inbox_count_before} → {inbox_count_after}"
+            )
+
+            # Find and verify DECLINECOUNTER message
+            declinecounter_found = False
+            for item in ics_items:
+                if 'declinecounter' in item.text.lower():
+                    dc_url = f"{RADICALE_URL}{item.text}"
+                    response = requests.get(dc_url, auth=('bob', 'bob'))
+
+                    if response.status_code == 200:
+                        dc_content = response.text
+                        unfolded_content = dc_content.replace('\r\n ', '').replace('\r\n\t', '')
+
+                        if 'METHOD:DECLINECOUNTER' in dc_content:
+                            declinecounter_found = True
+                            self.test(
+                                "iTIP message has METHOD:DECLINECOUNTER",
+                                True
+                            )
+
+                            self.test(
+                                "DECLINECOUNTER has correct UID",
+                                uid in unfolded_content
+                            )
+
+                            self.test(
+                                "DECLINECOUNTER has correct ORGANIZER",
+                                'ORGANIZER:mailto:alice@localhost' in unfolded_content
+                            )
+
+                            self.test(
+                                "DECLINECOUNTER has Bob as ATTENDEE",
+                                'bob@localhost' in unfolded_content
+                            )
+                            break
+
+            if not declinecounter_found:
+                self.test("DECLINECOUNTER message found", False, "No DECLINECOUNTER message in inbox")
+
     def run_all_tests(self):
         """Run all RFC 6638 tests."""
         print("\n" + "█"*60)
@@ -432,6 +742,8 @@ END:VCALENDAR
         self.test_2_itip_request_delivery()
         self.test_3_itip_reply_processing()
         self.test_4_itip_cancel_delivery()
+        self.test_5_itip_counter_proposal()
+        self.test_6_itip_declinecounter()
 
         print("\n" + "="*60)
         print("TEST SUMMARY")
