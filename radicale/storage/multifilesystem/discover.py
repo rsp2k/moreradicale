@@ -85,7 +85,7 @@ class StoragePartDiscover(StorageBase):
         # RFC 6638: Auto-create scheduling collections for principals
         logger.debug("Checking scheduling auto-create: is_principal=%s, depth=%s, path=%s",
                     collection.is_principal, depth, collection.path)
-        if collection.is_principal and depth != "0":
+        if collection.is_principal:
             logger.debug("Principal discovered with depth=%s, calling _ensure_scheduling_collections", depth)
             self._ensure_scheduling_collections(collection, folder, sane_path)
 
@@ -133,7 +133,10 @@ class StoragePartDiscover(StorageBase):
         # assert isinstance(self, multifilesystem.Storage)
 
         # Only create scheduling collections if scheduling is enabled
+        # Default to True since we have implemented RFC 6638 support
         scheduling_enabled = self.configuration.get("scheduling", "enabled")
+        if scheduling_enabled is None:
+            scheduling_enabled = True
         logger.debug("Scheduling enabled: %s", scheduling_enabled)
         if not scheduling_enabled:
             logger.debug("Scheduling not enabled, skipping collection creation")

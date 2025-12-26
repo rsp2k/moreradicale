@@ -89,7 +89,8 @@ def xml_propfind_response(
 
     if isinstance(item, storage.BaseCollection):
         is_collection = True
-        is_leaf = item.tag in ("VADDRESSBOOK", "VCALENDAR", "VSUBSCRIBED")
+        is_leaf = item.tag in ("VADDRESSBOOK", "VCALENDAR", "VSUBSCRIBED",
+                                "SCHEDULING-INBOX", "SCHEDULING-OUTBOX")
         collection = item
         # Some clients expect collections to end with `/`
         uri = pathutils.unstrip_path(item.path, True)
