@@ -144,7 +144,127 @@ class ITIPProcessor:
             
         except Exception as e:
             logger.error(f"Error processing iTIP scheduling: {e}", exc_info=True)
-    
+
+    def process_delete(self, item, user: str) -> None:
+        """
+        Process deletion of an event that may need iTIP CANCEL.
+
+        When an organizer deletes an event with attendees, we generate and deliver
+        CANCEL messages to all attendees' inboxes.
+
+        Args:
+            item: Radicale Item being deleted
+            user: User deleting the item
+        """
+        try:
+            # Get the iCalendar data
+            vcal_text = item.serialize()
+
+            # Check if this needs scheduling
+            if not needs_scheduling(vcal_text):
+                logger.debug("Deleted item doesn't need scheduling (no ORGANIZER+ATTENDEE)")
+                return
+
+            # Parse the calendar object
+            vcal = item.vobject_item
+
+            # Get the component
+            component = None
+            comp_type_name = None
+            for comp_type in ('vevent', 'vtodo', 'vjournal'):
+                if hasattr(vcal, comp_type):
+                    component = getattr(vcal, comp_type)
+                    comp_type_name = comp_type.upper()
+                    break
+
+            if not component:
+                logger.warning("No schedulable component found in deleted item")
+                return
+
+            # Extract organizer
+            if not hasattr(component, 'organizer'):
+                logger.debug("No organizer, skipping CANCEL")
+                return
+
+            organizer_uri = component.organizer.value
+            organizer_email = extract_email(organizer_uri)
+
+            if not organizer_email:
+                logger.warning(f"Invalid organizer email: {organizer_uri}")
+                return
+
+            # Extract attendees
+            if not hasattr(component, 'attendee'):
+                logger.debug("No attendees, skipping CANCEL")
+                return
+
+            attendees = component.attendee_list if hasattr(component, 'attendee_list') else [component.attendee]
+
+            # Parse each attendee
+            itip_attendees = []
+            for att in attendees:
+                att_email = extract_email(att.value)
+                if not att_email:
+                    continue
+
+                # Get participation status (from before deletion)
+                partstat_str = att.params.get('PARTSTAT', ['NEEDS-ACTION'])[0]
+                try:
+                    partstat = AttendeePartStat(partstat_str)
+                except ValueError:
+                    partstat = AttendeePartStat.NEEDS_ACTION
+
+                # Get common name
+                cn = att.params.get('CN', [None])[0]
+
+                # Get role
+                role = att.params.get('ROLE', ['REQ-PARTICIPANT'])[0]
+
+                # Get calendar user type
+                cutype = att.params.get('CUTYPE', ['INDIVIDUAL'])[0]
+
+                itip_attendee = ITIPAttendee(
+                    email=att_email,
+                    partstat=partstat,
+                    cn=cn,
+                    role=role,
+                    cutype=cutype
+                )
+
+                # Check if internal
+                is_internal, principal_path = route_attendee(att_email, self.storage)
+                itip_attendee.is_internal = is_internal
+                itip_attendee.principal_path = principal_path
+
+                itip_attendees.append(itip_attendee)
+
+            if not itip_attendees:
+                logger.debug("No valid attendees found for CANCEL")
+                return
+
+            # Get UID and SEQUENCE
+            uid = component.uid.value
+            sequence = component.sequence.value if hasattr(component, 'sequence') else 0
+
+            # Create iTIP CANCEL message
+            itip_msg = ITIPMessage(
+                method=ITIPMethod.CANCEL,
+                uid=uid,
+                sequence=sequence,
+                organizer=organizer_email,
+                attendees=itip_attendees,
+                component_type=comp_type_name,
+                icalendar_text=self._generate_itip_cancel(vcal, component)
+            )
+
+            # Deliver CANCEL to internal attendees
+            self._deliver_internal(itip_msg)
+
+            logger.info(f"Processed iTIP CANCEL for {uid}: {len([a for a in itip_attendees if a.is_internal])} internal, {len([a for a in itip_attendees if not a.is_internal])} external")
+
+        except Exception as e:
+            logger.error(f"Error processing iTIP CANCEL: {e}", exc_info=True)
+
     def _generate_itip_request(self, vcal: vobject.base.Component, component: vobject.base.Component) -> str:
         """
         Generate iTIP REQUEST message from calendar component.
@@ -176,7 +296,39 @@ class ITIPProcessor:
                         itip_comp.contents[prop.name.lower()][-1].params[param_name] = param_values
         
         return itip_vcal.serialize()
-    
+
+    def _generate_itip_cancel(self, vcal: vobject.base.Component, component: vobject.base.Component) -> str:
+        """
+        Generate iTIP CANCEL message from calendar component.
+
+        Args:
+            vcal: Parent VCALENDAR
+            component: VEVENT/VTODO/VJOURNAL component
+
+        Returns:
+            iCalendar text with METHOD:CANCEL
+        """
+        # Clone the calendar
+        itip_vcal = vobject.newFromBehavior('VCALENDAR')
+        itip_vcal.add('version').value = '2.0'
+        itip_vcal.add('prodid').value = '-//Radicale//NONSGML Radicale Server//EN'
+        itip_vcal.add('method').value = 'CANCEL'
+
+        # Clone the component
+        comp_type = component.name.lower()
+        itip_comp = itip_vcal.add(comp_type)
+
+        # Copy all properties
+        for prop in component.getChildren():
+            if prop.name.lower() not in ('method',):  # Skip METHOD at component level
+                itip_comp.add(prop.name).value = prop.value
+                # Copy parameters
+                if hasattr(prop, 'params'):
+                    for param_name, param_values in prop.params.items():
+                        itip_comp.contents[prop.name.lower()][-1].params[param_name] = param_values
+
+        return itip_vcal.serialize()
+
     def _deliver_internal(self, itip_msg: ITIPMessage) -> None:
         """
         Deliver iTIP message to internal attendees' schedule-inbox.
@@ -191,11 +343,13 @@ class ITIPProcessor:
             try:
                 inbox_path = get_inbox_path(attendee.principal_path)
 
-                # Generate filename: UID-SEQUENCE.ics
-                filename = f"{itip_msg.uid}-{itip_msg.sequence}.ics"
+                # Generate filename: UID-SEQUENCE-METHOD.ics
+                # Include method to avoid CANCEL overwriting REQUEST
+                method_str = itip_msg.method.value.lower()
+                filename = f"{itip_msg.uid}-{itip_msg.sequence}-{method_str}.ics"
                 item_path = f"{inbox_path}{filename}"
 
-                # Discover inbox collection (no lock needed - we're already in PUT handler's lock)
+                # Discover inbox collection (no lock needed - we're already in DELETE/PUT handler's lock)
                 discovered = list(self.storage.discover(inbox_path, depth="0"))
                 if not discovered:
                     logger.warning(f"Schedule-inbox not found: {inbox_path}")
@@ -211,7 +365,7 @@ class ITIPProcessor:
                 # Upload iTIP message
                 inbox.upload(filename, itip_item)
 
-                logger.info(f"Delivered iTIP REQUEST to {attendee.email} inbox: {item_path}")
+                logger.info(f"Delivered iTIP {itip_msg.method.value} to {attendee.email} inbox: {item_path}")
 
             except Exception as e:
                 logger.error(f"Failed to deliver to {attendee.email}: {e}", exc_info=True)
