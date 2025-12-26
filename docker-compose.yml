@@ -10,6 +10,8 @@ services:
       - ./test-users:/config/users:ro
       - ./test-rights.conf:/config/rights:ro
       - radicale-data:/data
+    ports:
+      - "5232:5232"
     networks:
       - caddy
       - default
