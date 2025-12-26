@@ -2,10 +2,15 @@
 hosts = 0.0.0.0:5232
 
 [auth]
-type = none
+type = htpasswd
+htpasswd_filename = /config/users
+htpasswd_encryption = plain
+delay = 0
+realm = Radicale
 
 [rights]
-type = allow_all
+# Allow any authenticated user
+type = authenticated
 
 [storage]
 filesystem_folder = /tmp/radicale-scheduling-test
@@ -21,5 +26,3 @@ max_attendees = 100
 level = debug
 response_content_on_debug = True
 request_content_on_debug = True
-request_header_on_debug = True
-response_header_on_debug = True

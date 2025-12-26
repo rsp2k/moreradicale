@@ -26,7 +26,7 @@ import xml.etree.ElementTree as ET
 from http import client
 from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
-from radicale import httputils, pathutils, rights, storage, types, xmlutils
+from radicale import config, httputils, pathutils, rights, storage, types, xmlutils
 from radicale.app.base import Access, ApplicationBase
 from radicale.log import logger
 
@@ -34,7 +34,8 @@ from radicale.log import logger
 def xml_propfind(base_prefix: str, path: str,
                  xml_request: Optional[ET.Element],
                  allowed_items: Iterable[Tuple[types.CollectionOrItem, str]],
-                 user: str, encoding: str, max_resource_size: int) -> Optional[ET.Element]:
+                 user: str, encoding: str, max_resource_size: int,
+                 configuration: 'config.Configuration') -> Optional[ET.Element]:
     """Read and answer PROPFIND requests.
 
     Read rfc4918-9.1 for info.
@@ -70,15 +71,17 @@ def xml_propfind(base_prefix: str, path: str,
     for item, permission in allowed_items:
         write = permission == "w"
         multistatus.append(xml_propfind_response(
-            base_prefix, path, item, props, user, encoding, write=write,
-            allprop=allprop, propname=propname, max_resource_size=max_resource_size))
+            base_prefix, path, item, props, user, encoding, max_resource_size,
+            configuration, write=write,
+            allprop=allprop, propname=propname))
 
     return multistatus
 
 
 def xml_propfind_response(
         base_prefix: str, path: str, item: types.CollectionOrItem,
-        props: Sequence[str], user: str, encoding: str, max_resource_size: int, write: bool = False,
+        props: Sequence[str], user: str, encoding: str, max_resource_size: int,
+        configuration: 'config.Configuration', write: bool = False,
         propname: bool = False, allprop: bool = False) -> ET.Element:
     """Build and return a PROPFIND response."""
     if propname and allprop or (props and (propname or allprop)):
@@ -171,8 +174,25 @@ def xml_propfind_response(
             child_element = ET.Element(xmlutils.make_clark("D:href"))
             child_element.text = xmlutils.make_href(base_prefix, "/")
             element.append(child_element)
-        elif (tag in (xmlutils.make_clark("C:calendar-user-address-set"),
-                      xmlutils.make_clark("D:principal-URL"),
+        elif tag == xmlutils.make_clark("C:calendar-user-address-set") and is_collection:
+            # RFC 6638: Return mailto: URI for calendar user address
+            # Works for both principals and calendar collections
+            if collection.is_principal:
+                # Direct principal request: /alice/
+                username = path.strip("/")
+            else:
+                # Calendar collection: /alice/calendar/ -> extract "alice"
+                path_parts = path.strip("/").split("/")
+                username = path_parts[0] if path_parts else None
+
+            if username:
+                internal_domain = configuration.get("scheduling", "internal_domain")
+                child_element = ET.Element(xmlutils.make_clark("D:href"))
+                child_element.text = f"mailto:{username}@{internal_domain}"
+                element.append(child_element)
+            else:
+                is404 = True
+        elif (tag in (xmlutils.make_clark("D:principal-URL"),
                       xmlutils.make_clark("CR:addressbook-home-set"),
                       xmlutils.make_clark("C:calendar-home-set")) and
               is_collection and collection.is_principal):
@@ -180,25 +200,46 @@ def xml_propfind_response(
             child_element.text = xmlutils.make_href(base_prefix, path)
             element.append(child_element)
         # RFC 6638 scheduling property handlers
-        elif (tag == xmlutils.make_clark("C:schedule-inbox-URL") and
-              is_collection and collection.is_principal):
-            child_element = ET.Element(xmlutils.make_clark("D:href"))
-            child_element.text = xmlutils.make_href(base_prefix, path + "schedule-inbox/")
-            element.append(child_element)
-        elif (tag == xmlutils.make_clark("C:schedule-outbox-URL") and
-              is_collection and collection.is_principal):
-            child_element = ET.Element(xmlutils.make_clark("D:href"))
-            child_element.text = xmlutils.make_href(base_prefix, path + "schedule-outbox/")
-            element.append(child_element)
+        elif tag == xmlutils.make_clark("C:schedule-inbox-URL") and is_collection:
+            # Works for both principals and calendar collections
+            if collection.is_principal:
+                # Direct principal request: /alice/
+                principal_path = path
+            else:
+                # Calendar collection: /alice/calendar/ -> /alice/
+                path_parts = path.strip("/").split("/")
+                principal_path = f"/{path_parts[0]}/" if path_parts else None
+
+            if principal_path:
+                child_element = ET.Element(xmlutils.make_clark("D:href"))
+                child_element.text = xmlutils.make_href(base_prefix, principal_path + "schedule-inbox/")
+                element.append(child_element)
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("C:schedule-outbox-URL") and is_collection:
+            # Works for both principals and calendar collections
+            if collection.is_principal:
+                # Direct principal request: /alice/
+                principal_path = path
+            else:
+                # Calendar collection: /alice/calendar/ -> /alice/
+                path_parts = path.strip("/").split("/")
+                principal_path = f"/{path_parts[0]}/" if path_parts else None
+
+            if principal_path:
+                child_element = ET.Element(xmlutils.make_clark("D:href"))
+                child_element.text = xmlutils.make_href(base_prefix, principal_path + "schedule-outbox/")
+                element.append(child_element)
+            else:
+                is404 = True
         elif (tag == xmlutils.make_clark("C:schedule-default-calendar-URL") and
               is_collection and collection.is_principal):
             # Point to the principal's default calendar if it exists
             # For now, we'll leave this empty - clients will use their own defaults
             pass
-        elif (tag == xmlutils.make_clark("C:calendar-user-type") and
-              is_collection and collection.is_principal):
+        elif tag == xmlutils.make_clark("C:calendar-user-type") and is_collection:
             # RFC 6638 Section 2.4.2: INDIVIDUAL, GROUP, RESOURCE, ROOM, UNKNOWN
-            # Default to INDIVIDUAL for user principals
+            # Default to INDIVIDUAL for user principals and their calendars
             element.text = "INDIVIDUAL"
         elif tag == xmlutils.make_clark("C:supported-calendar-component-set"):
             human_tag = xmlutils.make_human_tag(tag)
@@ -452,10 +493,11 @@ class ApplicationPartPropfind(ApplicationBase):
             # put item back
             items_iter = itertools.chain([item], items_iter)
             allowed_items = self._collect_allowed_items(items_iter, user)
-            headers = {"DAV": httputils.DAV_HEADERS,
+            headers = {"DAV": httputils.get_dav_headers(self.configuration),
                        "Content-Type": "text/xml; charset=%s" % self._encoding}
             xml_answer = xml_propfind(base_prefix, path, xml_content,
-                                      allowed_items, user, self._encoding, max_resource_size=self._max_resource_size)
+                                      allowed_items, user, self._encoding, max_resource_size=self._max_resource_size,
+                                      configuration=self.configuration)
             if xml_answer is None:
                 return httputils.NOT_ALLOWED
             return client.MULTI_STATUS, headers, self._xml_response(xml_answer), xmlutils.pretty_xml(xml_content)

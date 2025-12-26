@@ -1,34 +1,34 @@
-# This file is intended to be used apart from the containing source code tree.
+FROM python:3.12-slim
 
-FROM python:3-alpine AS builder
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Version of Radicale (e.g. v3)
-ARG VERSION=master
+# Create radicale user
+RUN useradd --system --user-group --home-dir /data --shell /bin/false radicale
 
-# Optional dependencies (e.g. bcrypt or ldap)
-ARG DEPENDENCIES=bcrypt
-
-RUN apk add --no-cache --virtual gcc libffi-dev musl-dev \
-    && python -m venv /app/venv \
-    && /app/venv/bin/pip install --no-cache-dir "Radicale[${DEPENDENCIES}] @ https://github.com/Kozea/Radicale/archive/${VERSION}.tar.gz"
-
-
-FROM python:3-alpine
-
+# Copy our Radicale code WITH RFC 6638 support
 WORKDIR /app
+COPY radicale/ /app/radicale/
+COPY pyproject.toml /app/
+COPY README.md /app/
 
-RUN addgroup -g 1000 radicale \
-    && adduser radicale --home /var/lib/radicale --system --uid 1000 --disabled-password -G radicale \
-    && apk add --no-cache ca-certificates openssl
+# Install our Radicale
+RUN pip install --no-cache-dir .
 
-COPY --chown=radicale:radicale --from=builder /app/venv /app
+# Create data directory
+RUN mkdir -p /data /config && chown -R radicale:radicale /data
 
-# Persistent storage for data
-VOLUME /var/lib/radicale
-# TCP port of Radicale
-EXPOSE 5232
-# Run Radicale
-ENTRYPOINT [ "/app/bin/python", "/app/bin/radicale"]
-CMD ["--hosts", "0.0.0.0:5232,[::]:5232"]
-
+# Switch to radicale user
 USER radicale
+
+# Expose port
+EXPOSE 5232
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:5232/ || exit 1
+
+# Run Radicale
+CMD ["radicale", "--config", "/config/config"]

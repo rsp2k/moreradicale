@@ -88,6 +88,15 @@ INTERNAL_SERVER_ERROR: types.WSGIResponse = (
 
 DAV_HEADERS: str = "1, 2, 3, calendar-access, addressbook, extended-mkcol"
 
+
+def get_dav_headers(configuration) -> str:
+    """Get DAV headers with optional scheduling support."""
+    headers = DAV_HEADERS
+    if configuration.get("scheduling", "enabled"):
+        headers += ", calendar-schedule"
+    return headers
+
+
 MIMETYPES: Mapping[str, str] = {
     ".css": "text/css",
     ".eot": "application/vnd.ms-fontobject",
