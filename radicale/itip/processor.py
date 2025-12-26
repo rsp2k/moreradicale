@@ -372,14 +372,15 @@ class ITIPProcessor:
 
     def process_outbox_post(self, user: str, ical_text: str, base_prefix: str):
         """
-        Process iTIP REPLY message POSTed to schedule-outbox.
+        Process iTIP message POSTed to schedule-outbox.
 
-        This handles attendees responding to meeting invitations (ACCEPT/DECLINE/TENTATIVE).
-        The REPLY is processed and the organizer's event is updated with the new PARTSTAT.
+        Handles:
+        - REPLY: Attendees responding to invitations (ACCEPT/DECLINE/TENTATIVE)
+        - REFRESH: Attendees requesting latest event version from organizer
 
         Args:
-            user: User posting the REPLY (attendee)
-            ical_text: iTIP REPLY message
+            user: User posting the message (attendee)
+            ical_text: iTIP message
             base_prefix: Base URL prefix for responses
 
         Returns:
@@ -394,10 +395,43 @@ class ITIPProcessor:
             vcal = vobject.readOne(ical_text)
             validate_itip_message(vcal)
 
-            # Verify it's a REPLY
-            if not hasattr(vcal, 'method') or vcal.method.value != 'REPLY':
-                logger.warning(f"Non-REPLY method posted to schedule-outbox: {vcal.method.value if hasattr(vcal, 'method') else 'NO METHOD'}")
+            # Check METHOD
+            if not hasattr(vcal, 'method'):
+                logger.warning("iTIP message missing METHOD")
                 return httputils.BAD_REQUEST
+
+            method = vcal.method.value.upper()
+
+            # Route to appropriate handler
+            if method == 'REPLY':
+                return self._process_reply(vcal, user, base_prefix)
+            elif method == 'REFRESH':
+                return self._process_refresh(vcal, user, base_prefix)
+            else:
+                logger.warning(f"Unsupported METHOD posted to schedule-outbox: {method}")
+                return httputils.BAD_REQUEST
+
+        except Exception as e:
+            logger.error(f"Error processing iTIP message: {e}", exc_info=True)
+            return self._build_schedule_response_error(base_prefix, str(e))
+
+    def _process_reply(self, vcal: vobject.base.Component, user: str, base_prefix: str):
+        """
+        Process iTIP REPLY message.
+
+        Updates organizer's event with attendee's response.
+
+        Args:
+            vcal: Parsed VCALENDAR with METHOD:REPLY
+            user: User posting the REPLY (attendee)
+            base_prefix: Base URL prefix for responses
+
+        Returns:
+            HTTP response with schedule-response XML
+        """
+        from radicale import httputils
+
+        try:
 
             # Get the component (VEVENT/VTODO/VJOURNAL)
             component = None
@@ -472,6 +506,141 @@ class ITIPProcessor:
 
         except Exception as e:
             logger.error(f"Error processing REPLY: {e}", exc_info=True)
+            return httputils.INTERNAL_SERVER_ERROR
+
+    def _process_refresh(self, vcal: vobject.base.Component, user: str, base_prefix: str):
+        """
+        Process iTIP REFRESH message.
+
+        When an attendee requests the latest version of an event, we find the
+        organizer's current event and send a fresh REQUEST to the attendee's inbox.
+
+        Args:
+            vcal: Parsed VCALENDAR with METHOD:REFRESH
+            user: User posting the REFRESH (attendee)
+            base_prefix: Base URL prefix for responses
+
+        Returns:
+            HTTP response with schedule-response XML
+        """
+        from radicale import httputils
+
+        try:
+            # Get the component (VEVENT/VTODO/VJOURNAL)
+            component = None
+            for comp_type in ('vevent', 'vtodo', 'vjournal'):
+                if hasattr(vcal, comp_type):
+                    component = getattr(vcal, comp_type)
+                    break
+
+            if not component:
+                logger.warning("No schedulable component in REFRESH")
+                return httputils.BAD_REQUEST
+
+            # Extract UID and ORGANIZER
+            if not hasattr(component, 'uid'):
+                logger.warning("REFRESH missing UID")
+                return httputils.BAD_REQUEST
+
+            uid = component.uid.value
+
+            if not hasattr(component, 'organizer'):
+                logger.warning("REFRESH missing ORGANIZER")
+                return httputils.BAD_REQUEST
+
+            organizer_uri = component.organizer.value
+            organizer_email = extract_email(organizer_uri)
+
+            if not organizer_email:
+                logger.warning(f"Invalid ORGANIZER email: {organizer_uri}")
+                return httputils.BAD_REQUEST
+
+            # Extract ATTENDEE (should be the user requesting refresh)
+            attendee_email = f"{user}@localhost"  # Simplified - assumes internal domain
+
+            logger.info(f"Processing REFRESH from {attendee_email} for {uid}")
+
+            # Route organizer (must be internal)
+            is_internal, organizer_principal = route_attendee(organizer_email, self.storage)
+
+            if not is_internal:
+                logger.warning(f"REFRESH for external organizer {organizer_email} - not supported")
+                return self._build_schedule_response_error(
+                    base_prefix, "External organizers not supported")
+
+            # Find organizer's event
+            event_found, event_path, event_collection = self._find_organizer_event(
+                organizer_principal, uid)
+
+            if not event_found:
+                logger.warning(f"Organizer event not found for UID {uid}")
+                return self._build_schedule_response_error(
+                    base_prefix, "Event not found")
+
+            # Get the current event
+            item_href = event_path.split('/')[-1]
+            current_item = event_collection._get(item_href)
+
+            if not current_item:
+                logger.warning(f"Could not retrieve event {item_href}")
+                return self._build_schedule_response_error(
+                    base_prefix, "Event not accessible")
+
+            # Generate fresh REQUEST for this attendee
+            current_vcal = current_item.vobject_item
+            current_component = None
+            for comp_type in ('vevent', 'vtodo', 'vjournal'):
+                if hasattr(current_vcal, comp_type):
+                    current_component = getattr(current_vcal, comp_type)
+                    break
+
+            if not current_component:
+                logger.warning(f"Could not parse event component")
+                return self._build_schedule_response_error(
+                    base_prefix, "Invalid event data")
+
+            # Create iTIP REQUEST message
+            request_ical = self._generate_itip_request(current_vcal, current_component)
+
+            # Deliver to requesting attendee's inbox
+            is_internal_attendee, attendee_principal = route_attendee(attendee_email, self.storage)
+
+            if not is_internal_attendee:
+                logger.warning(f"REFRESH from external attendee {attendee_email} - not supported")
+                return self._build_schedule_response_error(
+                    base_prefix, "External attendees not supported")
+
+            # Deliver to attendee's inbox
+            inbox_path = get_inbox_path(attendee_principal)
+            discovered = list(self.storage.discover(inbox_path, depth="0"))
+
+            if not discovered:
+                logger.warning(f"Schedule-inbox not found: {inbox_path}")
+                return self._build_schedule_response_error(
+                    base_prefix, "Inbox not found")
+
+            inbox = discovered[0]
+
+            # Create item
+            request_vobject = vobject.readOne(request_ical)
+            request_item = radicale_item.Item(collection_path=inbox.path, vobject_item=request_vobject)
+            request_item.prepare()
+
+            # Generate filename with timestamp to avoid overwriting
+            import time
+            timestamp = int(time.time())
+            filename = f"{uid}-refresh-{timestamp}.ics"
+
+            # Upload to inbox
+            inbox.upload(filename, request_item)
+
+            logger.info(f"Delivered fresh REQUEST to {attendee_email} in response to REFRESH")
+
+            # Return success schedule-response
+            return self._build_schedule_response_success(base_prefix, attendee_email)
+
+        except Exception as e:
+            logger.error(f"Error processing REFRESH: {e}", exc_info=True)
             return httputils.INTERNAL_SERVER_ERROR
 
     def _find_organizer_event(self, organizer_principal: str, uid: str):
