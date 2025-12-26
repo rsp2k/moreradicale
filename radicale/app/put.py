@@ -346,7 +346,7 @@ class ApplicationPartPut(ApplicationBase):
                     # Process iTIP scheduling if this is a calendar item
                     if parent_item.tag == "VCALENDAR":
                         try:
-                            itip_processor = ITIPProcessor(self._storage)
+                            itip_processor = ITIPProcessor(self._storage, self.configuration)
                             itip_processor.process_put(prepared_item.serialize(), user, path)
                         except Exception as e:
                             logger.warning("iTIP processing failed for %r: %s", path, e, exc_info=True)

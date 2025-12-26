@@ -3,12 +3,15 @@ iTIP message processor for implicit scheduling.
 """
 
 import logging
+import re
 import vobject
+from datetime import datetime
 from typing import List, Optional
 from radicale.itip.models import ITIPMethod, ITIPAttendee, ITIPMessage, AttendeePartStat
 from radicale.itip.router import extract_email, route_attendee, get_inbox_path
 from radicale.itip.validator import needs_scheduling
 from radicale import item as radicale_item
+from radicale import email_utils
 
 
 logger = logging.getLogger(__name__)
@@ -16,15 +19,31 @@ logger = logging.getLogger(__name__)
 
 class ITIPProcessor:
     """Processes iTIP messages for implicit scheduling."""
-    
-    def __init__(self, storage):
+
+    def __init__(self, storage, configuration=None):
         """
         Initialize processor.
-        
+
         Args:
             storage: Radicale storage backend
+            configuration: Radicale configuration (optional, for email delivery)
         """
         self.storage = storage
+        self.configuration = configuration
+        self.email_config = None
+
+        # Load email configuration if enabled
+        if configuration:
+            scheduling_enabled = configuration.get("scheduling", "enabled")
+            email_enabled = configuration.get("scheduling", "email_enabled")
+
+            if scheduling_enabled and email_enabled:
+                try:
+                    self.email_config = email_utils.load_email_config_from_radicale_config(configuration)
+                    logger.info(f"Email delivery enabled for external attendees: {self.email_config}")
+                except Exception as e:
+                    logger.error(f"Failed to load email configuration: {e}")
+                    logger.warning("Email delivery for external attendees will be disabled")
     
     def process_put(self, vcal_text: str, user: str, path: str) -> None:
         """
@@ -139,7 +158,13 @@ class ITIPProcessor:
             
             # Deliver to internal attendees
             self._deliver_internal(itip_msg)
-            
+
+            # Deliver to external attendees via email
+            try:
+                self._deliver_external(itip_msg)
+            except Exception as e:
+                logger.error(f"External delivery failed: {e}", exc_info=True)
+
             logger.info(f"Processed iTIP scheduling for {uid}: {len([a for a in itip_attendees if a.is_internal])} internal, {len([a for a in itip_attendees if not a.is_internal])} external")
             
         except Exception as e:
@@ -260,6 +285,12 @@ class ITIPProcessor:
             # Deliver CANCEL to internal attendees
             self._deliver_internal(itip_msg)
 
+            # Deliver CANCEL to external attendees via email
+            try:
+                self._deliver_external(itip_msg)
+            except Exception as e:
+                logger.error(f"External CANCEL delivery failed: {e}", exc_info=True)
+
             logger.info(f"Processed iTIP CANCEL for {uid}: {len([a for a in itip_attendees if a.is_internal])} internal, {len([a for a in itip_attendees if not a.is_internal])} external")
 
         except Exception as e:
@@ -369,6 +400,260 @@ class ITIPProcessor:
 
             except Exception as e:
                 logger.error(f"Failed to deliver to {attendee.email}: {e}", exc_info=True)
+
+    def _deliver_external(self, itip_msg: ITIPMessage) -> None:
+        """
+        Deliver iTIP message to external attendees via RFC 6047 email.
+
+        Sends calendar invitations, updates, cancellations, and counter-proposals
+        to attendees who are not on this Radicale server.
+
+        Args:
+            itip_msg: iTIP message to deliver
+
+        Note:
+            Email failures are logged but do not raise exceptions to prevent
+            blocking event creation when email delivery fails.
+        """
+        if not self.email_config:
+            # Email not configured - skip external delivery
+            return
+
+        # Filter for external attendees only
+        external_attendees = [a for a in itip_msg.attendees if not a.is_internal]
+
+        if not external_attendees:
+            logger.debug("No external attendees - skipping email delivery")
+            return
+
+        logger.info(f"Delivering iTIP {itip_msg.method.value} to {len(external_attendees)} external attendee(s)")
+
+        for attendee in external_attendees:
+            try:
+                # Build email components
+                subject = self._build_email_subject(itip_msg, attendee)
+                body = self._build_email_body(itip_msg, attendee)
+                from_email = self._get_from_email(itip_msg)
+
+                # Send via SMTP
+                success = email_utils.send_itip_email(
+                    email_config=self.email_config,
+                    from_email=from_email,
+                    to_email=attendee.email,
+                    subject=subject,
+                    body_text=body,
+                    icalendar_text=itip_msg.icalendar_text,
+                    method=itip_msg.method.value
+                )
+
+                if success:
+                    logger.info(f"Sent iTIP {itip_msg.method.value} email to {attendee.email}")
+                else:
+                    logger.warning(f"Failed to send iTIP {itip_msg.method.value} email to {attendee.email}")
+
+            except Exception as e:
+                # Log but don't block event creation
+                logger.error(f"Email delivery to {attendee.email} failed: {e}", exc_info=True)
+
+    def _build_email_subject(self, itip_msg: ITIPMessage, attendee: ITIPAttendee) -> str:
+        """
+        Build email subject line for iTIP message.
+
+        Args:
+            itip_msg: iTIP message
+            attendee: Target attendee
+
+        Returns:
+            Email subject with optional prefix
+        """
+        # Extract event title
+        summary = self._extract_field(itip_msg.icalendar_text, "SUMMARY") or "Calendar Event"
+
+        # Get subject prefix from config
+        prefix = ""
+        if self.configuration:
+            prefix = self.configuration.get("scheduling", "email_subject_prefix") or ""
+
+        # Build subject based on method
+        method = itip_msg.method.value
+
+        if method == "REQUEST":
+            subject = f"Invitation: {summary}"
+        elif method == "CANCEL":
+            subject = f"Cancelled: {summary}"
+        elif method == "COUNTER":
+            subject = f"Counter-proposal: {summary}"
+        elif method == "DECLINECOUNTER":
+            subject = f"Counter-proposal declined: {summary}"
+        elif method == "REFRESH":
+            subject = f"Refresh request: {summary}"
+        else:
+            subject = f"{method}: {summary}"
+
+        return f"{prefix}{subject}"
+
+    def _build_email_body(self, itip_msg: ITIPMessage, attendee: ITIPAttendee) -> str:
+        """
+        Build email body text from template with variable substitution.
+
+        Renders the configured template for the iTIP method, replacing
+        template variables with actual event data.
+
+        Args:
+            itip_msg: iTIP message
+            attendee: Target attendee
+
+        Returns:
+            Rendered email body text
+        """
+        if not self.configuration:
+            return "Please see attached calendar invitation."
+
+        # Get template for this method
+        method = itip_msg.method.value.lower()
+        template_key = f"{method}_template"
+        template = self.configuration.get("scheduling", template_key)
+
+        if not template:
+            # Fallback to generic message
+            return f"Please see attached {method.upper()} message."
+
+        # Extract event fields
+        summary = self._extract_field(itip_msg.icalendar_text, "SUMMARY") or "No Title"
+        location = self._extract_field(itip_msg.icalendar_text, "LOCATION") or "No Location"
+        description = self._extract_field(itip_msg.icalendar_text, "DESCRIPTION") or ""
+        dtstart = self._extract_field(itip_msg.icalendar_text, "DTSTART")
+        dtend = self._extract_field(itip_msg.icalendar_text, "DTEND")
+        organizer_raw = self._extract_field(itip_msg.icalendar_text, "ORGANIZER") or ""
+
+        # Extract organizer name/email
+        organizer_email = extract_email(organizer_raw) or "Unknown"
+        organizer_cn_match = re.search(r'CN=([^:;]+)', organizer_raw)
+        organizer_name = organizer_cn_match.group(1).strip('"') if organizer_cn_match else organizer_email
+
+        # Extract attendee name
+        attendee_name = attendee.cn or attendee.email
+
+        # Format datetimes
+        start_time = self._format_datetime(dtstart)
+        end_time = self._format_datetime(dtend)
+
+        # Build context for template substitution
+        context = {
+            "$event_title": summary,
+            "$event_start_time": start_time,
+            "$event_end_time": end_time,
+            "$event_location": location,
+            "$event_description": description,
+            "$organizer_name": organizer_name,
+            "$attendee_name": attendee_name
+        }
+
+        # Perform variable substitution
+        body = template
+        for key, value in context.items():
+            body = body.replace(key, value)
+
+        return body
+
+    def _get_from_email(self, itip_msg: ITIPMessage) -> str:
+        """
+        Determine from address for email.
+
+        Can send from organizer address (requires SPF/DKIM) or
+        use configured from_email address.
+
+        Args:
+            itip_msg: iTIP message
+
+        Returns:
+            From email address
+        """
+        if not self.configuration:
+            return self.email_config.from_email
+
+        # Check if we should send from organizer
+        smtp_from_organizer = self.configuration.get("scheduling", "smtp_from_organizer")
+
+        if smtp_from_organizer:
+            # Extract organizer email from iTIP message
+            organizer_raw = self._extract_field(itip_msg.icalendar_text, "ORGANIZER")
+            if organizer_raw:
+                organizer_email = extract_email(organizer_raw)
+                if organizer_email:
+                    logger.debug(f"Sending from organizer address: {organizer_email}")
+                    return organizer_email
+
+        # Fallback to configured from_email
+        return self.email_config.from_email
+
+    def _extract_field(self, ical_text: str, field_name: str) -> Optional[str]:
+        """
+        Extract field value from iCalendar text.
+
+        Handles RFC 5545 line folding (CRLF + space/tab continuation).
+
+        Args:
+            ical_text: iCalendar text
+            field_name: Field name (e.g., "SUMMARY", "LOCATION")
+
+        Returns:
+            Field value or None if not found
+        """
+        # Unfold lines (RFC 5545: continuation lines start with space or tab)
+        unfolded = ical_text.replace('\r\n ', '').replace('\r\n\t', '')
+        unfolded = unfolded.replace('\n ', '').replace('\n\t', '')
+
+        # Search for field (case-insensitive)
+        pattern = rf'^{field_name}[:;](.*)$'
+        match = re.search(pattern, unfolded, re.MULTILINE | re.IGNORECASE)
+
+        if match:
+            value = match.group(1)
+            # Remove parameters (e.g., "SUMMARY;LANGUAGE=en:Title" -> "Title")
+            if ':' in value:
+                value = value.split(':', 1)[1]
+            return value.strip()
+
+        return None
+
+    def _format_datetime(self, dt_value: Optional[str]) -> str:
+        """
+        Format iCalendar datetime to human-readable string.
+
+        Args:
+            dt_value: iCalendar datetime (e.g., "20250115T140000Z")
+
+        Returns:
+            Formatted string (e.g., "January 15, 2025 at 2:00 PM")
+        """
+        if not dt_value:
+            return "No Time Specified"
+
+        try:
+            # Remove VALUE=DATE parameter if present
+            if ':' in dt_value:
+                dt_value = dt_value.split(':', 1)[1]
+
+            # Parse different formats
+            if 'T' in dt_value:
+                # DateTime format: 20250115T140000Z or 20250115T140000
+                dt_str = dt_value.replace('Z', '')
+                if len(dt_str) == 15:  # YYYYMMDDTHHmmss
+                    dt = datetime.strptime(dt_str, '%Y%m%dT%H%M%S')
+                    return dt.strftime('%B %d, %Y at %I:%M %p')
+            else:
+                # Date-only format: 20250115
+                if len(dt_value) == 8:  # YYYYMMDD
+                    dt = datetime.strptime(dt_value, '%Y%m%d')
+                    return dt.strftime('%B %d, %Y')
+
+            # Fallback: return as-is
+            return dt_value
+
+        except Exception as e:
+            logger.debug(f"Failed to parse datetime '{dt_value}': {e}")
+            return dt_value
 
     def process_outbox_post(self, user: str, ical_text: str, base_prefix: str):
         """
@@ -706,13 +991,47 @@ class ITIPProcessor:
 
             logger.info(f"Processing COUNTER from {attendee_email} for {uid}")
 
-            # Route organizer (must be internal for now)
+            # Route organizer
             is_internal, organizer_principal = route_attendee(organizer_email, self.storage)
 
             if not is_internal:
-                logger.warning(f"COUNTER for external organizer {organizer_email} - not supported yet")
-                return self._build_schedule_response_error(
-                    base_prefix, "External organizers not supported")
+                # External organizer - send COUNTER via email
+                logger.info(f"COUNTER for external organizer {organizer_email} - sending via email")
+
+                if self.email_config:
+                    try:
+                        # Build iTIP COUNTER message for email
+                        itip_attendee = ITIPAttendee(
+                            email=organizer_email,
+                            is_internal=False,
+                            principal_path=None,
+                            cn=None
+                        )
+
+                        itip_msg = ITIPMessage(
+                            method=ITIPMethod.COUNTER,
+                            uid=uid,
+                            sequence=0,  # COUNTER doesn't increment sequence
+                            organizer=organizer_email,
+                            attendees=[itip_attendee],
+                            component_type=component.name.upper(),
+                            icalendar_text=vcal.serialize()
+                        )
+
+                        # Send via email
+                        self._deliver_external(itip_msg)
+
+                        # Return success schedule-response
+                        return self._build_schedule_response_success(base_prefix, organizer_email)
+
+                    except Exception as e:
+                        logger.error(f"Failed to send COUNTER email to {organizer_email}: {e}", exc_info=True)
+                        return self._build_schedule_response_error(
+                            base_prefix, "Email delivery failed")
+                else:
+                    logger.warning("Email not configured - cannot send COUNTER to external organizer")
+                    return self._build_schedule_response_error(
+                        base_prefix, "Email not configured")
 
             # Deliver COUNTER to organizer's schedule-inbox
             inbox_path = get_inbox_path(organizer_principal)
@@ -801,16 +1120,25 @@ class ITIPProcessor:
 
             # Deliver to each attendee's inbox
             delivered_count = 0
+            external_attendees = []
+
             for attendee in attendees:
                 attendee_email = extract_email(attendee.value)
                 if not attendee_email:
                     continue
 
-                # Route attendee (must be internal for now)
+                # Route attendee
                 is_internal, attendee_principal = route_attendee(attendee_email, self.storage)
 
                 if not is_internal:
-                    logger.warning(f"DECLINECOUNTER for external attendee {attendee_email} - skipping")
+                    # External attendee - collect for email delivery
+                    logger.info(f"DECLINECOUNTER for external attendee {attendee_email} - will send via email")
+                    external_attendees.append(ITIPAttendee(
+                        email=attendee_email,
+                        is_internal=False,
+                        principal_path=None,
+                        cn=attendee.params.get('CN', [None])[0] if hasattr(attendee, 'params') else None
+                    ))
                     continue
 
                 # Deliver DECLINECOUNTER to attendee's schedule-inbox
@@ -837,6 +1165,25 @@ class ITIPProcessor:
 
                 logger.info(f"Delivered DECLINECOUNTER to {attendee_email} inbox")
                 delivered_count += 1
+
+            # Send DECLINECOUNTER to external attendees via email
+            if external_attendees and self.email_config:
+                try:
+                    itip_msg = ITIPMessage(
+                        method=ITIPMethod.DECLINECOUNTER,
+                        uid=uid,
+                        sequence=0,  # DECLINECOUNTER doesn't increment sequence
+                        organizer=organizer_email,
+                        attendees=external_attendees,
+                        component_type=component.name.upper(),
+                        icalendar_text=vcal.serialize()
+                    )
+
+                    self._deliver_external(itip_msg)
+                    delivered_count += len(external_attendees)
+
+                except Exception as e:
+                    logger.error(f"Failed to send DECLINECOUNTER emails: {e}", exc_info=True)
 
             if delivered_count == 0:
                 logger.warning("DECLINECOUNTER not delivered to any attendees")

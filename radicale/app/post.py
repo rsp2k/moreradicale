@@ -89,7 +89,7 @@ class ApplicationPartPost(ApplicationBase):
 
         # Process the iTIP message
         try:
-            itip_processor = processor.ITIPProcessor(self._storage)
+            itip_processor = processor.ITIPProcessor(self._storage, self.configuration)
             return itip_processor.process_outbox_post(user, text, base_prefix)
         except Exception as e:
             logger.error("Failed to process iTIP message: %s", e, exc_info=True)

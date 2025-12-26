@@ -100,7 +100,7 @@ class ApplicationPartDelete(ApplicationBase):
                 if self.configuration.get("scheduling", "enabled"):
                     try:
                         from radicale.itip import processor
-                        itip_processor = processor.ITIPProcessor(self._storage)
+                        itip_processor = processor.ITIPProcessor(self._storage, self.configuration)
                         itip_processor.process_delete(item, user)
                     except Exception as e:
                         logger.warning("Failed to process iTIP CANCEL: %s", e)

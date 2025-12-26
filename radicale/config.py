@@ -566,7 +566,111 @@ This is an automated message. Please do not reply.""",
         ("internal_domain", {
             "value": "",
             "help": "internal domain for routing attendees (e.g., example.com)",
-            "type": str})
+            "type": str}),
+        # Email delivery for external attendees
+        ("email_enabled", {
+            "value": "False",
+            "help": "enable email delivery for external attendees (requires SMTP in [hook] section)",
+            "type": bool}),
+        ("email_dryrun", {
+            "value": "False",
+            "help": "log email operations without actually sending (for testing)",
+            "type": bool}),
+        ("smtp_from_organizer", {
+            "value": "False",
+            "help": "send emails from organizer address (requires SPF/DKIM configuration)",
+            "type": bool}),
+        ("email_subject_prefix", {
+            "value": "",
+            "help": "prefix for email subjects (e.g., '[Calendar] ')",
+            "type": str}),
+        # Email templates with variable substitution
+        ("request_template", {
+            "value": """You have been invited to: $event_title
+
+When: $event_start_time - $event_end_time
+Where: $event_location
+Organizer: $organizer_name
+
+Please open the attached invitation in your calendar application to accept or decline.
+
+$event_description""",
+            "help": "template for REQUEST (invitation) emails. Variables: $event_title, $event_start_time, $event_end_time, $event_location, $organizer_name, $attendee_name, $event_description",
+            "type": str}),
+        ("cancel_template", {
+            "value": """The following event has been cancelled: $event_title
+
+When: $event_start_time - $event_end_time
+Where: $event_location
+Organizer: $organizer_name
+
+This event has been removed from your calendar.
+
+$event_description""",
+            "help": "template for CANCEL emails",
+            "type": str}),
+        ("counter_template", {
+            "value": """$attendee_name has proposed changes to: $event_title
+
+Original time: $event_start_time - $event_end_time
+Proposed time: (see attached counter-proposal)
+Location: $event_location
+
+Please review the counter-proposal in your calendar application.
+
+$event_description""",
+            "help": "template for COUNTER (counter-proposal) emails",
+            "type": str}),
+        ("declinecounter_template", {
+            "value": """Your counter-proposal for '$event_title' has been declined.
+
+Event: $event_title
+Time: $event_start_time - $event_end_time
+Location: $event_location
+Organizer: $organizer_name
+
+The original invitation remains unchanged.
+
+$event_description""",
+            "help": "template for DECLINECOUNTER emails",
+            "type": str}),
+        ("refresh_template", {
+            "value": """Please refresh your calendar for: $event_title
+
+When: $event_start_time - $event_end_time
+Where: $event_location
+Organizer: $organizer_name
+
+Your calendar application should update with the latest event details.
+
+$event_description""",
+            "help": "template for REFRESH (refresh request) emails",
+            "type": str}),
+        # Webhook configuration for inbound iTIP
+        ("webhook_enabled", {
+            "value": "False",
+            "help": "enable webhook endpoint for receiving iTIP responses from external attendees",
+            "type": bool}),
+        ("webhook_path", {
+            "value": "/scheduling/webhook",
+            "help": "URL path for webhook endpoint (e.g., /scheduling/webhook)",
+            "type": str}),
+        ("webhook_secret", {
+            "value": "",
+            "help": "shared secret for HMAC authentication (required for webhook security)",
+            "type": str}),
+        ("webhook_allowed_ips", {
+            "value": "",
+            "help": "comma-separated list of allowed IP addresses/CIDR ranges (e.g., 167.89.0.0/17, 192.168.1.0/24)",
+            "type": str}),
+        ("webhook_provider", {
+            "value": "generic",
+            "help": "webhook provider format: generic, sendgrid, mailgun, postmark",
+            "type": str}),
+        ("webhook_max_size", {
+            "value": "10485760",
+            "help": "maximum webhook request size in bytes (default: 10MB)",
+            "type": positive_int})
     ])),
     ("web", OrderedDict([
         ("type", {
