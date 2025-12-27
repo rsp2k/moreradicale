@@ -1,4 +1,17 @@
 services:
+  maildev:
+    image: maildev/maildev:latest
+    container_name: maildev-smtp-test
+    ports:
+      - "8025:1080"  # Web UI
+      - "1025:1025"  # SMTP
+    networks:
+      - default
+    restart: unless-stopped
+    environment:
+      - MAILDEV_WEB_PORT=1080
+      - MAILDEV_SMTP_PORT=1025
+
   radicale:
     build:
       context: .
@@ -26,6 +39,8 @@ services:
     restart: unless-stopped
     environment:
       - TZ=UTC
+    depends_on:
+      - maildev
 
 networks:
   caddy:
