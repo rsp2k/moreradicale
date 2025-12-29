@@ -89,11 +89,18 @@ INTERNAL_SERVER_ERROR: types.WSGIResponse = (
 DAV_HEADERS: str = "1, 2, 3, calendar-access, addressbook, extended-mkcol"
 
 
+NOT_IMPLEMENTED: types.WSGIResponse = (
+    client.NOT_IMPLEMENTED, (("Content-Type", "text/plain"),),
+    "Feature not implemented.", None)
+
+
 def get_dav_headers(configuration) -> str:
-    """Get DAV headers with optional scheduling support."""
+    """Get DAV headers with optional feature support."""
     headers = DAV_HEADERS
     if configuration.get("scheduling", "enabled"):
         headers += ", calendar-schedule"
+    if configuration.get("attachments", "enabled"):
+        headers += ", calendar-managed-attachments"
     return headers
 
 

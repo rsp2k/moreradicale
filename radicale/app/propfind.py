@@ -20,6 +20,7 @@
 
 import collections
 import itertools
+import json
 import posixpath
 import socket
 import xml.etree.ElementTree as ET
@@ -29,6 +30,74 @@ from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 from radicale import config, httputils, pathutils, rights, storage, types, xmlutils
 from radicale.app.base import Access, ApplicationBase
 from radicale.log import logger
+from radicale.sharing import (SHARES_PROPERTY, PROXY_READ_PROPERTY,
+                               PROXY_WRITE_PROPERTY, InviteStatus, ShareAccess)
+
+
+def _add_proxy_for_elements(element: ET.Element, user: str, proxy_type: str,
+                            base_prefix: str, storage_module,
+                            configuration: 'config.Configuration') -> None:
+    """Add D:href elements for principals that user can proxy for.
+
+    This scans all principals to find those who have granted the user
+    proxy access (read or write).
+
+    Args:
+        element: Parent XML element to append hrefs to
+        user: Username to check proxy access for
+        proxy_type: "read" or "write"
+        base_prefix: URL base prefix
+        storage_module: Storage module for discovering principals
+        configuration: Radicale configuration
+    """
+    import os
+    from radicale import pathutils
+
+    prop_name = PROXY_READ_PROPERTY if proxy_type == "read" else PROXY_WRITE_PROPERTY
+
+    # Get the storage folder path
+    filesystem_folder = configuration.get("storage", "filesystem_folder")
+    collection_root = os.path.join(filesystem_folder, "collection-root")
+
+    if not os.path.isdir(collection_root):
+        return
+
+    try:
+        for entry in os.scandir(collection_root):
+            if not entry.is_dir():
+                continue
+
+            principal_name = entry.name
+            if not pathutils.is_safe_filesystem_path_component(principal_name):
+                continue
+
+            # Skip user's own principal
+            if principal_name == user:
+                continue
+
+            # Check if this principal has granted us proxy access
+            props_path = os.path.join(entry.path, ".Radicale.props")
+            if not os.path.isfile(props_path):
+                continue
+
+            try:
+                with open(props_path, encoding="utf-8") as f:
+                    props = json.load(f)
+
+                proxy_json = props.get(prop_name)
+                if proxy_json:
+                    proxies = json.loads(proxy_json)
+                    if user in proxies:
+                        # User has proxy access to this principal
+                        href_elem = ET.Element(xmlutils.make_clark("D:href"))
+                        href_elem.text = xmlutils.make_href(
+                            base_prefix, f"/{principal_name}/")
+                        element.append(href_elem)
+            except (OSError, json.JSONDecodeError):
+                continue
+
+    except OSError:
+        pass
 
 
 def xml_propfind(base_prefix: str, path: str,
@@ -129,6 +198,10 @@ def xml_propfind_response(
             props.append(xmlutils.make_clark("C:schedule-outbox-URL"))
             props.append(xmlutils.make_clark("C:schedule-default-calendar-URL"))
             props.append(xmlutils.make_clark("C:calendar-user-type"))
+            # RFC 8607 managed attachments properties
+            if configuration.get("attachments", "enabled"):
+                props.append(xmlutils.make_clark("C:max-attachment-size"))
+                props.append(xmlutils.make_clark("C:max-attachments-per-resource"))
 
         if not is_collection or is_leaf:
             props.append(xmlutils.make_clark("D:getetag"))
@@ -346,6 +419,19 @@ def xml_propfind_response(
         elif tag == xmlutils.make_clark("C:max-resource-size"):
             # RFC4791#5.2.5
             element.text = str(max_resource_size)
+        # RFC 8607 managed attachment properties
+        elif tag == xmlutils.make_clark("C:max-attachment-size"):
+            # RFC8607: Maximum size of a single managed attachment
+            if configuration.get("attachments", "enabled"):
+                element.text = str(configuration.get("attachments", "max_size"))
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("C:max-attachments-per-resource"):
+            # RFC8607: Maximum managed attachments per calendar object
+            if configuration.get("attachments", "enabled"):
+                element.text = str(configuration.get("attachments", "max_per_resource"))
+            else:
+                is404 = True
         elif is_collection:
             if tag == xmlutils.make_clark("D:getcontenttype"):
                 if is_leaf:
@@ -410,6 +496,110 @@ def xml_propfind_response(
             elif tag == xmlutils.make_clark("D:sync-token"):
                 if is_leaf:
                     element.text, _ = collection.sync()
+                else:
+                    is404 = True
+            # Calendar sharing properties (CalendarServer extension)
+            elif tag == xmlutils.make_clark("CS:invite"):
+                # Returns share invitations for this calendar
+                if is_leaf and collection.tag == "VCALENDAR":
+                    sharing_enabled = configuration.get("sharing", "enabled")
+                    if sharing_enabled:
+                        shares_json = collection.get_meta(SHARES_PROPERTY)
+                        if shares_json:
+                            try:
+                                shares = json.loads(shares_json)
+                                for sharee, share_data in shares.items():
+                                    # Build CS:user element for each sharee
+                                    user_elem = ET.Element(xmlutils.make_clark("CS:user"))
+
+                                    # CS:href - user's principal URL
+                                    href_elem = ET.Element(xmlutils.make_clark("D:href"))
+                                    href_elem.text = xmlutils.make_href(base_prefix, f"/{sharee}/")
+                                    user_elem.append(href_elem)
+
+                                    # CS:common-name (optional)
+                                    cn = share_data.get("cn")
+                                    if cn:
+                                        cn_elem = ET.Element(xmlutils.make_clark("CS:common-name"))
+                                        cn_elem.text = cn
+                                        user_elem.append(cn_elem)
+
+                                    # CS:invite-accepted, CS:invite-noresponse, or CS:invite-declined
+                                    status = share_data.get("status", "pending")
+                                    if status == InviteStatus.ACCEPTED.value:
+                                        status_elem = ET.Element(xmlutils.make_clark("CS:invite-accepted"))
+                                    elif status == InviteStatus.DECLINED.value:
+                                        status_elem = ET.Element(xmlutils.make_clark("CS:invite-declined"))
+                                    else:
+                                        status_elem = ET.Element(xmlutils.make_clark("CS:invite-noresponse"))
+                                    user_elem.append(status_elem)
+
+                                    # CS:access - read-only or read-write
+                                    access = share_data.get("access", "read")
+                                    access_elem = ET.Element(xmlutils.make_clark("CS:access"))
+                                    if access == ShareAccess.READ_WRITE.value:
+                                        access_elem.append(ET.Element(xmlutils.make_clark("CS:read-write")))
+                                    else:
+                                        access_elem.append(ET.Element(xmlutils.make_clark("CS:read")))
+                                    user_elem.append(access_elem)
+
+                                    element.append(user_elem)
+                            except json.JSONDecodeError:
+                                pass
+                    # Empty element if no shares (valid per CalendarServer extension)
+                else:
+                    is404 = True
+            elif tag == xmlutils.make_clark("CS:allowed-sharing-modes"):
+                # Indicates what sharing modes the server supports
+                if is_leaf and collection.tag == "VCALENDAR":
+                    sharing_enabled = configuration.get("sharing", "enabled")
+                    if sharing_enabled:
+                        # Server supports both read and read-write sharing
+                        can_read = ET.Element(xmlutils.make_clark("CS:can-be-shared"))
+                        element.append(can_read)
+                    else:
+                        is404 = True
+                else:
+                    is404 = True
+            elif tag == xmlutils.make_clark("CS:shared-url"):
+                # For shared calendars, returns the URL of the original calendar
+                # Only present on calendars that were shared TO the current user
+                if is_leaf and collection.tag == "VCALENDAR":
+                    sharing_enabled = configuration.get("sharing", "enabled")
+                    if sharing_enabled and user:
+                        # Check if current user is NOT the owner (i.e., viewing shared calendar)
+                        if collection.owner and collection.owner != user:
+                            # This is a shared calendar - return the canonical URL
+                            child_element = ET.Element(xmlutils.make_clark("D:href"))
+                            child_element.text = xmlutils.make_href(base_prefix, uri)
+                            element.append(child_element)
+                        else:
+                            # User is the owner, property not applicable
+                            is404 = True
+                    else:
+                        is404 = True
+                else:
+                    is404 = True
+            elif tag == xmlutils.make_clark("CS:calendar-proxy-read-for"):
+                # Returns principals that the current user can proxy-read for
+                if is_collection and collection.is_principal and user:
+                    delegation_enabled = configuration.get("sharing", "delegation_enabled")
+                    if delegation_enabled:
+                        # Scan all principals to find who has granted us read proxy
+                        _add_proxy_for_elements(element, user, "read",
+                                               base_prefix, storage, configuration)
+                    # Empty element is valid if no proxies
+                else:
+                    is404 = True
+            elif tag == xmlutils.make_clark("CS:calendar-proxy-write-for"):
+                # Returns principals that the current user can proxy-write for
+                if is_collection and collection.is_principal and user:
+                    delegation_enabled = configuration.get("sharing", "delegation_enabled")
+                    if delegation_enabled:
+                        # Scan all principals to find who has granted us write proxy
+                        _add_proxy_for_elements(element, user, "write",
+                                               base_prefix, storage, configuration)
+                    # Empty element is valid if no proxies
                 else:
                     is404 = True
             elif tag == xmlutils.make_clark("CS:source"):

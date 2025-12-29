@@ -20,8 +20,10 @@
 # along with Radicale.  If not, see <http://www.gnu.org/licenses/>.
 
 import socket
+import xml.etree.ElementTree as ET
+from urllib.parse import parse_qs
 
-from radicale import httputils, storage, types
+from radicale import httputils, storage, types, xmlutils
 from radicale.app.base import ApplicationBase
 from radicale.log import logger
 
@@ -35,10 +37,15 @@ class ApplicationPartPost(ApplicationBase):
         if path == "/.web" or path.startswith("/.web/"):
             return self._web.post(environ, base_prefix, path, user)
 
-        # RFC 6638 Scheduling: POST to schedule-outbox
-        # Check if scheduling is enabled
-        if not self.configuration.get("scheduling", "enabled"):
-            return httputils.METHOD_NOT_ALLOWED
+        # RFC 8607: Check for managed attachment operations via query string
+        query_string = environ.get("QUERY_STRING", "")
+        if query_string:
+            from radicale.attachments.handler import is_attachment_request
+            action = is_attachment_request(query_string)
+            if action:
+                return self._handle_attachment_post(
+                    environ, base_prefix, path, user, action, query_string
+                )
 
         # Discover the target collection
         with self._storage.acquire_lock("r", user):
@@ -46,20 +53,79 @@ class ApplicationPartPost(ApplicationBase):
             if not item or not isinstance(item, storage.BaseCollection):
                 return httputils.NOT_FOUND
 
-            # POST only valid on schedule-outbox
-            if item.tag != "SCHEDULING-OUTBOX":
-                logger.debug("POST attempted on non-outbox collection: %s (tag=%s)",
-                           path, item.tag)
-                return httputils.METHOD_NOT_ALLOWED
+        # Check content type to determine request type
+        content_type = environ.get("CONTENT_TYPE", "")
 
-            # Verify this is the user's own outbox (security check)
-            if not item.owner or item.owner != user:
-                logger.warning("User %s attempted to POST to %s's outbox",
-                             user, item.owner)
-                return httputils.FORBIDDEN
+        # XML requests may be sharing operations
+        if "xml" in content_type.lower():
+            return self._handle_xml_post(environ, base_prefix, path, user, item)
+
+        # RFC 6638 Scheduling: POST to schedule-outbox
+        # Check if scheduling is enabled
+        if not self.configuration.get("scheduling", "enabled"):
+            return httputils.METHOD_NOT_ALLOWED
+
+        # POST only valid on schedule-outbox for iTIP
+        if item.tag != "SCHEDULING-OUTBOX":
+            logger.debug("POST attempted on non-outbox collection: %s (tag=%s)",
+                       path, item.tag)
+            return httputils.METHOD_NOT_ALLOWED
+
+        # Verify this is the user's own outbox (security check)
+        if not item.owner or item.owner != user:
+            logger.warning("User %s attempted to POST to %s's outbox",
+                         user, item.owner)
+            return httputils.FORBIDDEN
 
         # Handle the iTIP POST
         return self._handle_scheduling_post(environ, base_prefix, path, user)
+
+    def _handle_xml_post(self, environ: types.WSGIEnviron, base_prefix: str,
+                        path: str, user: str,
+                        collection: storage.BaseCollection) -> types.WSGIResponse:
+        """Handle XML POST requests (sharing operations)."""
+        from radicale.sharing.handler import SharingHandler, is_sharing_request
+
+        # Read and parse XML body
+        try:
+            text = httputils.read_request_body(self.configuration, environ)
+        except RuntimeError as e:
+            logger.warning("Failed to read XML request body: %s", e)
+            return httputils.BAD_REQUEST
+        except socket.timeout:
+            logger.warning("XML request body read timeout")
+            return httputils.REQUEST_TIMEOUT
+
+        if not text:
+            logger.warning("Empty XML POST request")
+            return httputils.BAD_REQUEST
+
+        try:
+            xml_content = ET.fromstring(text)
+        except ET.ParseError as e:
+            logger.warning("Failed to parse XML POST request: %s", e)
+            return httputils.BAD_REQUEST
+
+        # Check if this is a sharing request
+        if is_sharing_request(xml_content):
+            # Verify sharing is enabled
+            if not self.configuration.get("sharing", "enabled"):
+                logger.debug("Sharing request received but sharing is disabled")
+                return httputils.METHOD_NOT_ALLOWED
+
+            # Handle sharing request
+            handler = SharingHandler(self._storage, self.configuration)
+            with self._storage.acquire_lock("w", user):
+                # Re-discover collection with write lock
+                item = next(iter(self._storage.discover(path)), None)
+                if not item or not isinstance(item, storage.BaseCollection):
+                    return httputils.NOT_FOUND
+
+                return handler.handle_sharing_post(user, xml_content, item, base_prefix)
+
+        # Unknown XML POST type
+        logger.debug("Unknown XML POST request type: %s", xml_content.tag)
+        return httputils.METHOD_NOT_ALLOWED
 
     def _handle_scheduling_post(self, environ: types.WSGIEnviron,
                                base_prefix: str, path: str,
@@ -94,3 +160,35 @@ class ApplicationPartPost(ApplicationBase):
         except Exception as e:
             logger.error("Failed to process iTIP message: %s", e, exc_info=True)
             return httputils.INTERNAL_SERVER_ERROR
+
+    def _handle_attachment_post(self, environ: types.WSGIEnviron,
+                                base_prefix: str, path: str, user: str,
+                                action: str, query_string: str) -> types.WSGIResponse:
+        """Handle RFC 8607 managed attachment POST requests.
+
+        Args:
+            environ: WSGI environment
+            base_prefix: Server base URL prefix
+            path: Path to calendar object (e.g., /alice/calendar/event.ics)
+            user: Authenticated username
+            action: Attachment action (attachment-add, attachment-update, attachment-remove)
+            query_string: Raw query string
+
+        Returns:
+            WSGI response tuple
+        """
+        from radicale.attachments.handler import AttachmentHandler
+
+        # Check if attachments are enabled
+        if not self.configuration.get("attachments", "enabled"):
+            logger.debug("Attachment request received but attachments are disabled")
+            return httputils.NOT_IMPLEMENTED
+
+        # Parse query parameters
+        query_params = parse_qs(query_string)
+
+        # Handle the attachment operation
+        handler = AttachmentHandler(self._storage, self.configuration)
+        return handler.handle_attachment_post(
+            environ, base_prefix, path, user, action, query_params
+        )

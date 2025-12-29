@@ -267,9 +267,9 @@ class ITIPProcessor:
                 return
 
             # RFC 6638 Implicit Scheduling: Verify user is authorized as organizer
-            # Only the organizer should trigger implicit scheduling on PUT
+            # Only the organizer (or their delegate) should trigger implicit scheduling on PUT
             from radicale.itip.router import validate_organizer_permission
-            if not validate_organizer_permission(organizer_email, user, self.configuration):
+            if not validate_organizer_permission(organizer_email, user, self.configuration, self.storage):
                 logger.debug(f"User {user} is not organizer {organizer_email}, skipping implicit scheduling")
                 return
 
@@ -412,9 +412,9 @@ class ITIPProcessor:
                 return
 
             # RFC 6638 Implicit Scheduling: Verify user is authorized as organizer
-            # Only the organizer should trigger implicit CANCEL on DELETE
+            # Only the organizer (or their delegate) should trigger implicit CANCEL on DELETE
             from radicale.itip.router import validate_organizer_permission
-            if not validate_organizer_permission(organizer_email, user, self.configuration):
+            if not validate_organizer_permission(organizer_email, user, self.configuration, self.storage):
                 logger.debug(f"User {user} is not organizer {organizer_email}, skipping implicit CANCEL")
                 return
 
@@ -2054,9 +2054,9 @@ class ITIPProcessor:
                 logger.warning(f"Invalid ORGANIZER email: {organizer_uri}")
                 return httputils.BAD_REQUEST
 
-            # Verify user is authorized as organizer
+            # Verify user is authorized as organizer (or is their delegate)
             from radicale.itip.router import validate_organizer_permission
-            if not validate_organizer_permission(organizer_email, user, self.configuration):
+            if not validate_organizer_permission(organizer_email, user, self.configuration, self.storage):
                 logger.warning(f"User {user} not authorized as organizer {organizer_email}")
                 return httputils.FORBIDDEN
 

@@ -17,12 +17,14 @@
 # along with Radicale.  If not, see <http://www.gnu.org/licenses/>.
 
 import base64
+import json
 import os
 import posixpath
 from typing import Callable, ContextManager, Iterator, Optional, Set, cast
 
 from radicale import pathutils, types
 from radicale.log import logger
+from radicale.sharing import SHARES_PROPERTY, InviteStatus
 from radicale.storage import multifilesystem
 from radicale.storage.multifilesystem.base import StorageBase
 
@@ -123,6 +125,17 @@ class StoragePartDiscover(StorageBase):
                 yield self._collection_class(
                     cast(multifilesystem.Storage, self), child_path)
 
+        # Discover shared calendars (if sharing is enabled and this is a principal)
+        if collection.is_principal:
+            sharing_enabled = self.configuration.get("sharing", "enabled")
+            if sharing_enabled:
+                # The username is the principal path (first component)
+                username = sane_path.split("/")[0] if sane_path else ""
+                if username:
+                    for shared_collection in self._discover_shared_calendars(
+                            username, folder, child_context_manager):
+                        yield shared_collection
+
     def _ensure_scheduling_collections(self, principal_collection, folder: str,
                                       sane_path: str) -> None:
         """Ensure schedule-inbox and schedule-outbox exist for principal.
@@ -165,3 +178,126 @@ class StoragePartDiscover(StorageBase):
                            child_path, tag)
             except Exception as e:
                 logger.warning("Failed to create %s: %s", collection_name, e)
+
+    def _discover_shared_calendars(
+            self, username: str, folder: str,
+            child_context_manager: Callable[[str, Optional[str]], ContextManager[None]]
+            ) -> Iterator[types.CollectionOrItem]:
+        """Discover calendars shared with the given user.
+
+        This method scans all users' collections to find calendars that have
+        been shared with the given username. It yields collection objects for
+        any shared calendars where the user has accepted the share.
+
+        Args:
+            username: The user to find shared calendars for
+            folder: The storage root folder
+            child_context_manager: Context manager for child operations
+
+        Yields:
+            Collection objects for shared calendars
+        """
+        # Track which paths we've already yielded to avoid duplicates
+        yielded_paths: Set[str] = set()
+
+        logger.debug("Discovering shared calendars for user: %s", username)
+
+        # Scan all user folders in collection-root
+        try:
+            for owner_entry in os.scandir(folder):
+                if not owner_entry.is_dir():
+                    continue
+
+                owner = owner_entry.name
+                # Skip the user's own collections (already discovered)
+                if owner == username:
+                    continue
+
+                # Skip system folders and hidden folders
+                if not pathutils.is_safe_filesystem_path_component(owner):
+                    continue
+
+                # Scan this owner's collections for shares
+                owner_path = pathutils.path_to_filesystem(folder, owner)
+                try:
+                    for collection_entry in os.scandir(owner_path):
+                        if not collection_entry.is_dir():
+                            continue
+
+                        collection_name = collection_entry.name
+                        if not pathutils.is_safe_filesystem_path_component(collection_name):
+                            continue
+
+                        # Check if this collection is shared with username
+                        sane_collection_path = f"{owner}/{collection_name}"
+                        if sane_collection_path in yielded_paths:
+                            continue
+
+                        share_access = self._check_collection_shared_with(
+                            folder, sane_collection_path, username)
+
+                        if share_access:
+                            logger.debug(
+                                "Found shared calendar: %s shared with %s (access=%s)",
+                                sane_collection_path, username, share_access)
+
+                            child_path = pathutils.unstrip_path(
+                                sane_collection_path, True)
+                            yielded_paths.add(sane_collection_path)
+
+                            with child_context_manager(sane_collection_path, None):
+                                yield self._collection_class(
+                                    cast(multifilesystem.Storage, self), child_path)
+
+                except (OSError, PermissionError) as e:
+                    logger.debug("Cannot scan owner folder %s: %s", owner, e)
+                    continue
+
+        except (OSError, PermissionError) as e:
+            logger.warning("Cannot scan storage folder for shared calendars: %s", e)
+
+    def _check_collection_shared_with(
+            self, folder: str, sane_path: str, username: str) -> Optional[str]:
+        """Check if a collection is shared with the given user.
+
+        Args:
+            folder: Storage root folder
+            sane_path: Sanitized collection path (e.g., "alice/calendar")
+            username: User to check for sharing
+
+        Returns:
+            Access level ("read" or "read-write") if shared and accepted, None otherwise
+        """
+        # Build path to .Radicale.props file
+        collection_fs_path = pathutils.path_to_filesystem(folder, sane_path)
+        props_path = os.path.join(collection_fs_path, ".Radicale.props")
+
+        if not os.path.isfile(props_path):
+            return None
+
+        try:
+            with open(props_path, encoding="utf-8") as f:
+                props = json.load(f)
+
+            shares_json = props.get(SHARES_PROPERTY)
+            if not shares_json:
+                return None
+
+            shares = json.loads(shares_json)
+            user_share = shares.get(username)
+            if not user_share:
+                return None
+
+            # Only return access if share is accepted
+            status = user_share.get("status", "pending")
+            if status != InviteStatus.ACCEPTED.value:
+                logger.debug(
+                    "Share for %s on %s not accepted (status=%s)",
+                    username, sane_path, status)
+                return None
+
+            return user_share.get("access", "read")
+
+        except (OSError, json.JSONDecodeError, KeyError) as e:
+            logger.debug("Error reading shares for %s: %s", sane_path, e)
+            return None

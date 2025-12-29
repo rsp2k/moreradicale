@@ -15,6 +15,8 @@ This guide explains how to configure and use the RFC 6638 CalDAV Scheduling feat
 9. [RFC 7986 Extended Properties](#rfc-7986-extended-properties)
 10. [Client Compatibility](#client-compatibility)
 11. [Troubleshooting](#troubleshooting)
+12. [Calendar Sharing and Delegation](#calendar-sharing-and-delegation)
+13. [Managed Attachments (RFC 8607)](#managed-attachments-rfc-8607)
 
 ---
 
@@ -835,6 +837,334 @@ groups_file = /etc/radicale/groups.json
 
 [logging]
 level = info
+```
+
+---
+
+## Calendar Sharing and Delegation
+
+Radicale supports two collaboration features beyond basic scheduling:
+
+### Calendar Sharing
+
+Share your calendar with other users, granting read or read-write access.
+
+#### Configuration
+
+```ini
+[sharing]
+enabled = True
+delegation_enabled = True
+auto_accept_same_domain = False
+
+[rights]
+type = owner_only_shared
+```
+
+#### How Sharing Works
+
+1. **Owner shares calendar**: Alice shares `/alice/calendar/` with Bob
+2. **Invitation pending**: Share appears in Bob's calendar list as pending
+3. **Bob accepts**: Share becomes active
+4. **Access granted**: Bob can now read (or read-write) Alice's calendar
+
+#### Sharing via POST Request
+
+To share a calendar, send a POST request with XML body:
+
+```xml
+<?xml version="1.0"?>
+<CS:share-resource xmlns:CS="http://calendarserver.org/ns/"
+                   xmlns:D="DAV:">
+    <CS:set>
+        <D:href>/bob/</D:href>
+        <CS:common-name>Bob Smith</CS:common-name>
+        <CS:read-write/>
+    </CS:set>
+</CS:share-resource>
+```
+
+To accept a share invitation:
+
+```xml
+<?xml version="1.0"?>
+<CS:share-reply xmlns:CS="http://calendarserver.org/ns/">
+    <CS:invite-accepted/>
+</CS:share-reply>
+```
+
+#### PROPFIND Properties
+
+| Property | Description |
+|----------|-------------|
+| `CS:invite` | List of share invitations on a calendar |
+| `CS:shared-url` | Original URL when viewing shared calendar |
+| `CS:allowed-sharing-modes` | Indicates sharing is supported |
+
+### Scheduling Delegation
+
+Allow a delegate (e.g., assistant) to send meeting invitations on behalf of another user.
+
+#### How Delegation Works
+
+1. **Boss configures delegate**: Boss adds Secretary to their schedule-delegates
+2. **Secretary creates meeting**: Secretary creates event with Boss as ORGANIZER
+3. **Radicale validates**: Secretary is authorized as Boss's delegate
+4. **Invitations sent**: Meeting requests go out from Boss
+
+#### Delegate Properties
+
+Stored in principal's `.Radicale.props`:
+
+```json
+{
+    "RADICALE:schedule-delegates": "[\"secretary\"]",
+    "RADICALE:calendar-proxy-write": "[\"secretary\"]",
+    "RADICALE:calendar-proxy-read": "[\"assistant\"]"
+}
+```
+
+#### PROPFIND Properties
+
+| Property | Description |
+|----------|-------------|
+| `CS:calendar-proxy-read-for` | Principals the user can proxy-read |
+| `CS:calendar-proxy-write-for` | Principals the user can proxy-write |
+
+### Rights Backend: owner_only_shared
+
+The `owner_only_shared` rights backend extends `owner_only` to check:
+
+1. **Owner access** (standard owner_only behavior)
+2. **Shared calendar access** via `RADICALE:shares` property
+3. **Proxy access** via `RADICALE:calendar-proxy-*` properties
+
+Permission levels:
+- **r**: Read-only access to calendar items
+- **rw**: Read-write access to calendar items
+- **R**: Read access to principal/collection metadata
+- **RW**: Full access including write to metadata
+
+---
+
+## Managed Attachments (RFC 8607)
+
+Radicale supports RFC 8607 CalDAV Managed Attachments, enabling server-side storage of event attachments. Instead of embedding large files as base64 in calendar events, attachments are stored separately and referenced by URL. This reduces calendar synchronization bandwidth and improves performance.
+
+### Overview
+
+| Feature | Benefit |
+|---------|---------|
+| Server-side storage | Attachments don't bloat calendar files |
+| URL references | Efficient sync—only download when needed |
+| Size limits | Configurable per-attachment and per-event limits |
+| Access control | Only calendar owners can access their attachments |
+
+### Configuration
+
+Add to your Radicale configuration:
+
+```ini
+[attachments]
+enabled = True
+filesystem_folder = /var/lib/radicale/attachments
+max_size = 10000000
+max_per_resource = 20
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `False` | Enable managed attachments |
+| `filesystem_folder` | `/var/lib/radicale/attachments` | Directory for attachment storage |
+| `max_size` | `10000000` | Maximum attachment size in bytes (default 10MB) |
+| `max_per_resource` | `20` | Maximum attachments per calendar event |
+| `base_url` | `""` | Base URL for attachment serving (auto-detected if empty) |
+
+### Storage Layout
+
+```
+/var/lib/radicale/attachments/
+├── alice/
+│   ├── abc123-def4-5678-90ab-cdef12345678
+│   ├── .metadata/
+│   │   └── abc123-def4-5678-90ab-cdef12345678.json
+└── bob/
+    └── ...
+```
+
+Each user has their own directory containing:
+- **Binary files**: Attachment data stored by managed ID
+- **Metadata**: JSON files with filename, content type, size, and ownership info
+
+### HTTP Operations
+
+All attachment operations use POST requests with query parameters:
+
+#### Add Attachment
+
+```bash
+curl -X POST \
+  -u alice:password \
+  -H "Content-Type: application/pdf" \
+  -H 'Content-Disposition: attachment; filename="report.pdf"' \
+  --data-binary @report.pdf \
+  "https://server/alice/calendar/event.ics?action=attachment-add"
+```
+
+**Response:**
+```
+HTTP/1.1 201 Created
+Cal-Managed-ID: abc123-def4-5678-90ab-cdef12345678
+```
+
+#### Update Attachment
+
+```bash
+curl -X POST \
+  -u alice:password \
+  -H "Content-Type: application/pdf" \
+  --data-binary @updated-report.pdf \
+  "https://server/alice/calendar/event.ics?action=attachment-update&managed-id=abc123-def4-5678-90ab-cdef12345678"
+```
+
+**Response:** `204 No Content`
+
+#### Remove Attachment
+
+```bash
+curl -X POST \
+  -u alice:password \
+  "https://server/alice/calendar/event.ics?action=attachment-remove&managed-id=abc123-def4-5678-90ab-cdef12345678"
+```
+
+**Response:** `204 No Content`
+
+#### Retrieve Attachment
+
+```bash
+curl -u alice:password \
+  "https://server/.attachments/alice/abc123-def4-5678-90ab-cdef12345678"
+```
+
+### iCalendar ATTACH Property
+
+When you add a managed attachment, Radicale updates the event's ATTACH property:
+
+```
+BEGIN:VEVENT
+UID:meeting@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T140000Z
+SUMMARY:Team Meeting
+ATTACH;MANAGED-ID=abc123-def4;FILENAME=report.pdf;SIZE=2048;
+ FMTTYPE=application/pdf:https://server/.attachments/alice/abc123-def4
+END:VEVENT
+```
+
+ATTACH parameters:
+- **MANAGED-ID**: Server-generated unique identifier
+- **FILENAME**: Original filename
+- **SIZE**: File size in bytes
+- **FMTTYPE**: MIME content type
+
+### PROPFIND Properties
+
+Discover attachment capabilities via PROPFIND:
+
+```xml
+<?xml version="1.0"?>
+<propfind xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <prop>
+    <C:max-attachment-size/>
+    <C:max-attachments-per-resource/>
+  </prop>
+</propfind>
+```
+
+Response includes configured limits:
+
+```xml
+<C:max-attachment-size>10000000</C:max-attachment-size>
+<C:max-attachments-per-resource>20</C:max-attachments-per-resource>
+```
+
+### DAV Header
+
+When attachments are enabled, the DAV header includes:
+
+```
+DAV: 1, 2, 3, calendar-access, calendar-managed-attachments
+```
+
+### Client Compatibility
+
+| Client | Support | Notes |
+|--------|---------|-------|
+| Apple Calendar | Full | Native support for managed attachments |
+| Thunderbird | Full | Recent versions support RFC 8607 |
+| DAVx⁵ | Full | Android sync app |
+| Evolution | Partial | May require manual URL handling |
+
+### Security Considerations
+
+1. **Access Control**: Only the attachment owner can retrieve their files
+2. **Path Sanitization**: Managed IDs are validated to prevent path traversal
+3. **Size Limits**: Configurable per-attachment and per-event limits prevent abuse
+4. **Atomic Storage**: Files are written atomically (temp file + rename) to prevent corruption
+
+### Error Responses
+
+| Status | Cause |
+|--------|-------|
+| `201 Created` | Attachment added successfully |
+| `204 No Content` | Attachment updated/removed successfully |
+| `400 Bad Request` | Missing managed-id parameter for update/remove |
+| `403 Forbidden` | User doesn't own the attachment |
+| `404 Not Found` | Event or attachment not found |
+| `413 Request Entity Too Large` | Attachment exceeds max_size |
+| `507 Insufficient Storage` | Event already has max_per_resource attachments |
+| `501 Not Implemented` | Attachments not enabled |
+
+### Example: Complete Workflow
+
+```bash
+# 1. Create a calendar and event
+curl -X MKCALENDAR -u alice:password https://server/alice/work/
+
+curl -X PUT -u alice:password \
+  -H "Content-Type: text/calendar" \
+  --data-binary @- https://server/alice/work/meeting.ics << 'EOF'
+BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:meeting@example.com
+DTSTART:20251230T140000Z
+DTEND:20251230T150000Z
+SUMMARY:Quarterly Review
+END:VEVENT
+END:VCALENDAR
+EOF
+
+# 2. Add an attachment
+MANAGED_ID=$(curl -s -D - -o /dev/null -X POST -u alice:password \
+  -H "Content-Type: application/pdf" \
+  -H 'Content-Disposition: attachment; filename="Q4-report.pdf"' \
+  --data-binary @Q4-report.pdf \
+  "https://server/alice/work/meeting.ics?action=attachment-add" | \
+  grep -i "Cal-Managed-ID" | cut -d: -f2 | tr -d ' \r')
+
+echo "Attachment ID: $MANAGED_ID"
+
+# 3. Verify ATTACH property in event
+curl -s -u alice:password https://server/alice/work/meeting.ics | grep ATTACH
+
+# 4. Download attachment
+curl -u alice:password \
+  "https://server/.attachments/alice/${MANAGED_ID}" > downloaded.pdf
+
+# 5. Remove attachment when done
+curl -X POST -u alice:password \
+  "https://server/alice/work/meeting.ics?action=attachment-remove&managed-id=${MANAGED_ID}"
 ```
 
 ---

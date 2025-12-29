@@ -117,16 +117,20 @@ def get_principal_email(principal_path: str, configuration) -> str:
 
 
 def validate_organizer_permission(organizer_email: str, user: str,
-                                  configuration) -> bool:
+                                  configuration, storage=None) -> bool:
     """
     Check if user is authorized to send iTIP as organizer.
 
     This prevents users from spoofing invitations from other users.
+    Authorization is granted if:
+    1. The organizer email matches the user's email (direct match)
+    2. The user is a scheduling delegate for the organizer (delegation)
 
     Args:
         organizer_email: Email in ORGANIZER property
         user: Authenticated username
         configuration: Radicale configuration instance
+        storage: Optional storage backend (required for delegation checks)
 
     Returns:
         True if user is authorized to send as this organizer
@@ -136,6 +140,9 @@ def validate_organizer_permission(organizer_email: str, user: str,
         True
         >>> validate_organizer_permission("bob@example.com", "alice", config)
         False
+        >>> # If alice is a delegate for bob:
+        >>> validate_organizer_permission("bob@example.com", "alice", config, storage)
+        True
     """
     from radicale.log import logger
 
@@ -143,10 +150,70 @@ def validate_organizer_permission(organizer_email: str, user: str,
     principal_path = f"/{user}/"
     user_email = get_principal_email(principal_path, configuration)
 
-    # Check if organizer email matches user
-    if organizer_email.lower() != user_email.lower():
-        logger.warning("User %s attempted to send iTIP as organizer %s",
-                      user, organizer_email)
-        return False
+    # Check if organizer email matches user (direct authorization)
+    if organizer_email.lower() == user_email.lower():
+        return True
 
-    return True
+    # Check delegation if storage is provided and delegation is enabled
+    delegation_enabled = configuration.get("sharing", "delegation_enabled")
+    if storage and delegation_enabled:
+        # Extract organizer username from email
+        organizer_username = organizer_email.split('@')[0]
+
+        if _check_delegation(user, organizer_username, storage, logger):
+            logger.info("User %s authorized as delegate for organizer %s",
+                       user, organizer_email)
+            return True
+
+    logger.warning("User %s attempted to send iTIP as organizer %s (not authorized)",
+                  user, organizer_email)
+    return False
+
+
+def _check_delegation(delegate_user: str, organizer_user: str,
+                      storage, logger) -> bool:
+    """
+    Check if delegate_user can act on behalf of organizer_user.
+
+    Args:
+        delegate_user: User claiming to be a delegate
+        organizer_user: Principal username to check delegation for
+        storage: Radicale storage backend
+        logger: Logger instance
+
+    Returns:
+        True if delegate_user is in organizer's schedule-delegates
+    """
+    import json
+    from radicale.sharing import SCHEDULE_DELEGATES_PROPERTY
+
+    # Get organizer's principal collection
+    organizer_principal_path = f"/{organizer_user}/"
+
+    try:
+        discovered = list(storage.discover(organizer_principal_path, depth="0"))
+        if not discovered:
+            logger.debug("Organizer principal %s not found", organizer_principal_path)
+            return False
+
+        principal = discovered[0]
+        if not hasattr(principal, 'get_meta'):
+            logger.debug("Principal %s has no get_meta method", organizer_principal_path)
+            return False
+
+        # Get schedule-delegates property
+        delegates_json = principal.get_meta(SCHEDULE_DELEGATES_PROPERTY)
+        if not delegates_json:
+            return False
+
+        delegates = json.loads(delegates_json)
+        if delegate_user in delegates:
+            logger.debug("User %s is a schedule-delegate for %s",
+                        delegate_user, organizer_user)
+            return True
+
+    except Exception as e:
+        logger.debug("Error checking delegation for %s -> %s: %s",
+                    delegate_user, organizer_user, e)
+
+    return False

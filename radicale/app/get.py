@@ -24,6 +24,7 @@ from urllib.parse import quote
 
 from radicale import httputils, pathutils, storage, types, xmlutils
 from radicale.app.base import Access, ApplicationBase
+from radicale.attachments import ATTACHMENTS_PATH
 from radicale.log import logger
 
 
@@ -76,6 +77,11 @@ class ApplicationPartGet(ApplicationBase):
                 return httputils.redirect(location, client.MOVED_PERMANENTLY)
             # Dispatch /.web path to web module
             return self._web.get(environ, base_prefix, path, user)
+
+        # RFC 8607: Serve managed attachments
+        if path.startswith(ATTACHMENTS_PATH + "/"):
+            return self._serve_attachment(path, user)
+
         access = Access(self._rights, user, path)
         if not access.check("r") and "i" not in access.permissions:
             return httputils.NOT_ALLOWED
@@ -110,3 +116,62 @@ class ApplicationPartGet(ApplicationBase):
                 headers["Content-Disposition"] = content_disposition
             answer = item.serialize()
             return client.OK, headers, answer, None
+
+    def _serve_attachment(self, path: str, user: str) -> types.WSGIResponse:
+        """Serve a managed attachment file.
+
+        Path format: /.attachments/{owner}/{managed_id}
+
+        Args:
+            path: Request path
+            user: Authenticated username
+
+        Returns:
+            WSGI response with attachment data
+        """
+        from radicale.attachments import ATTACHMENTS_PATH
+        from radicale.attachments.storage import AttachmentStorage
+
+        # Check if attachments are enabled
+        if not self.configuration.get("attachments", "enabled"):
+            return httputils.NOT_FOUND
+
+        # Parse path: /.attachments/{owner}/{managed_id}
+        parts = path[len(ATTACHMENTS_PATH) + 1:].split("/")
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            logger.warning("Invalid attachment path: %s", path)
+            return httputils.NOT_FOUND
+
+        owner, managed_id = parts[0], parts[1]
+
+        # Access control: user must be the owner or have calendar access
+        # For simplicity, we currently only allow owners to access their attachments
+        # TODO: Check if user has access to the calendar containing this attachment
+        if owner != user:
+            logger.warning("User %s attempted to access %s's attachment %s",
+                          user, owner, managed_id)
+            return httputils.NOT_ALLOWED
+
+        # Retrieve the attachment
+        try:
+            storage = AttachmentStorage(self.configuration)
+            data, metadata = storage.retrieve(owner, managed_id)
+        except Exception as e:
+            logger.debug("Attachment %s not found: %s", managed_id, e)
+            return httputils.NOT_FOUND
+
+        # Build response headers
+        headers = {
+            "Content-Type": metadata.content_type,
+            "Content-Length": str(len(data)),
+        }
+
+        # Add Content-Disposition with filename if available
+        if metadata.filename:
+            disposition = self._content_disposition_attachment(metadata.filename)
+            headers["Content-Disposition"] = disposition
+
+        logger.debug("Serving attachment %s for %s (size=%d, type=%s)",
+                    managed_id, owner, len(data), metadata.content_type)
+
+        return client.OK, headers, data, None

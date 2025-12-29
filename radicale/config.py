@@ -677,6 +677,42 @@ $event_description""",
             "help": "maximum webhook request size in bytes (default: 10MB)",
             "type": positive_int})
     ])),
+    ("sharing", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable calendar sharing support (share calendars between users)",
+            "type": bool}),
+        ("delegation_enabled", {
+            "value": "False",
+            "help": "enable scheduling delegation (allow users to send invites on behalf of others)",
+            "type": bool}),
+        ("auto_accept_same_domain", {
+            "value": "False",
+            "help": "automatically accept share invitations from users on the same domain",
+            "type": bool})
+    ])),
+    ("attachments", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable RFC 8607 managed attachments (server-side attachment storage)",
+            "type": bool}),
+        ("filesystem_folder", {
+            "value": "/var/lib/radicale/attachments",
+            "help": "directory for attachment storage",
+            "type": filepath}),
+        ("max_size", {
+            "value": "10000000",
+            "help": "maximum attachment size in bytes (default: 10MB)",
+            "type": positive_int}),
+        ("max_per_resource", {
+            "value": "20",
+            "help": "maximum number of attachments per calendar object",
+            "type": positive_int}),
+        ("base_url", {
+            "value": "",
+            "help": "base URL for attachment serving (auto-detected if empty)",
+            "type": str})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",
