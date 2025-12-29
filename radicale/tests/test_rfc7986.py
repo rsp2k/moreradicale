@@ -661,3 +661,465 @@ END:VCALENDAR"""
                 "GET", inbox_items[0], login="bob:")
             if status == 200:
                 assert "CONFERENCE" in invite_content or "zoom.us" in invite_content
+
+
+class TestRFC7986CalendarLevel(BaseTest):
+    """Test RFC 7986 calendar-level properties (on VCALENDAR component)."""
+
+    def test_calendar_name_property(self):
+        """Test NAME property on VCALENDAR is preserved."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/work-calendar/", login="alice:")
+        assert status == 201
+
+        # Create calendar with NAME property
+        calendar_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:My Work Calendar
+BEGIN:VEVENT
+UID:name-test-001@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T100000Z
+DTEND:20251230T110000Z
+SUMMARY:Work Meeting
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/work-calendar/event.ics",
+            calendar_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        # Retrieve and verify NAME is preserved
+        status, _, content = self.request(
+            "GET", "/alice/work-calendar/event.ics", login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(content)
+        # Note: vcal.name returns component type ("VCALENDAR")
+        # Access RFC 7986 NAME property via contents dict
+        assert 'name' in vcal.contents
+        assert vcal.contents['name'][0].value == 'My Work Calendar'
+
+    def test_calendar_description_property(self):
+        """Test DESCRIPTION property on VCALENDAR is preserved."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/calendar/", login="alice:")
+        assert status == 201
+
+        calendar_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:Team Calendar
+DESCRIPTION:Shared calendar for team meetings and events
+BEGIN:VEVENT
+UID:desc-test-001@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T100000Z
+DTEND:20251230T110000Z
+SUMMARY:Team Standup
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/calendar/event.ics",
+            calendar_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        status, _, content = self.request(
+            "GET", "/alice/calendar/event.ics", login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(content)
+        assert hasattr(vcal, 'description')
+        assert 'team meetings' in vcal.description.value.lower()
+
+    def test_calendar_color_property(self):
+        """Test COLOR property on VCALENDAR (not just VEVENT)."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/calendar/", login="alice:")
+        assert status == 201
+
+        calendar_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:Blue Calendar
+COLOR:steelblue
+BEGIN:VEVENT
+UID:cal-color-001@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T100000Z
+DTEND:20251230T110000Z
+SUMMARY:Blue Event
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/calendar/event.ics",
+            calendar_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        status, _, content = self.request(
+            "GET", "/alice/calendar/event.ics", login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(content)
+        assert hasattr(vcal, 'color')
+        assert vcal.color.value == 'steelblue'
+
+    def test_refresh_interval_property(self):
+        """Test REFRESH-INTERVAL property with VALUE=DURATION."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/calendar/", login="alice:")
+        assert status == 201
+
+        # P1D = poll once per day
+        calendar_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:Subscribed Calendar
+REFRESH-INTERVAL;VALUE=DURATION:P1D
+BEGIN:VEVENT
+UID:refresh-001@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T100000Z
+DTEND:20251230T110000Z
+SUMMARY:Daily Sync
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/calendar/event.ics",
+            calendar_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        status, _, content = self.request(
+            "GET", "/alice/calendar/event.ics", login="alice:")
+        assert status == 200
+
+        # Verify the property is preserved
+        vcal = vobject.readOne(content)
+        assert hasattr(vcal, 'refresh_interval')
+        # Check VALUE param is preserved
+        params = getattr(vcal.refresh_interval, 'params', {})
+        assert 'VALUE' in params
+        assert 'DURATION' in params['VALUE']
+
+    def test_source_property(self):
+        """Test SOURCE property with VALUE=URI."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/calendar/", login="alice:")
+        assert status == 201
+
+        calendar_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:External Calendar
+SOURCE;VALUE=URI:https://example.com/cal.ics
+BEGIN:VEVENT
+UID:source-001@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T100000Z
+DTEND:20251230T110000Z
+SUMMARY:Sourced Event
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/calendar/event.ics",
+            calendar_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        status, _, content = self.request(
+            "GET", "/alice/calendar/event.ics", login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(content)
+        assert hasattr(vcal, 'source')
+        assert 'example.com' in vcal.source.value
+
+    def test_calendar_url_property(self):
+        """Test URL property on VCALENDAR."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/calendar/", login="alice:")
+        assert status == 201
+
+        calendar_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:Project Calendar
+URL:https://example.com/project
+BEGIN:VEVENT
+UID:url-001@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T100000Z
+DTEND:20251230T110000Z
+SUMMARY:Project Review
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/calendar/event.ics",
+            calendar_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        status, _, content = self.request(
+            "GET", "/alice/calendar/event.ics", login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(content)
+        assert hasattr(vcal, 'url')
+        assert 'project' in vcal.url.value
+
+    def test_calendar_last_modified_property(self):
+        """Test LAST-MODIFIED property on VCALENDAR."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/calendar/", login="alice:")
+        assert status == 201
+
+        calendar_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:Tracked Calendar
+LAST-MODIFIED:20251228T150000Z
+BEGIN:VEVENT
+UID:lastmod-001@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T100000Z
+DTEND:20251230T110000Z
+SUMMARY:Tracked Event
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/calendar/event.ics",
+            calendar_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        status, _, content = self.request(
+            "GET", "/alice/calendar/event.ics", login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(content)
+        assert hasattr(vcal, 'last_modified')
+
+    def test_calendar_image_property(self):
+        """Test IMAGE property on VCALENDAR level."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/calendar/", login="alice:")
+        assert status == 201
+
+        calendar_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:Branded Calendar
+IMAGE;VALUE=URI;DISPLAY=BADGE:https://ex.co/logo.png
+BEGIN:VEVENT
+UID:calimg-001@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T100000Z
+DTEND:20251230T110000Z
+SUMMARY:Branded Event
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/calendar/event.ics",
+            calendar_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        status, _, content = self.request(
+            "GET", "/alice/calendar/event.ics", login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(content)
+        assert hasattr(vcal, 'image')
+        params = getattr(vcal.image, 'params', {})
+        assert 'DISPLAY' in params
+        assert 'BADGE' in params['DISPLAY']
+
+    def test_all_calendar_level_properties_combined(self):
+        """Test multiple RFC 7986 calendar-level properties together."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/calendar/", login="alice:")
+        assert status == 201
+
+        calendar_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:Complete Calendar
+DESCRIPTION:A fully featured calendar with all RFC 7986 properties
+COLOR:teal
+REFRESH-INTERVAL;VALUE=DURATION:PT12H
+SOURCE;VALUE=URI:https://example.com/complete.ics
+URL:https://example.com/calendar-page
+LAST-MODIFIED:20251229T090000Z
+IMAGE;VALUE=URI;DISPLAY=THUMBNAIL:https://ex.co/thumb.png
+BEGIN:VEVENT
+UID:complete-001@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T100000Z
+DTEND:20251230T110000Z
+SUMMARY:Complete Event
+COLOR:coral
+CONFERENCE;VALUE=URI;FEATURE=VIDEO:https://meet.ex.co/123
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/calendar/event.ics",
+            calendar_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        status, _, content = self.request(
+            "GET", "/alice/calendar/event.ics", login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(content)
+
+        # Verify calendar-level properties
+        # Note: vcal.name returns "VCALENDAR", use contents for NAME property
+        assert 'name' in vcal.contents
+        assert vcal.contents['name'][0].value == 'Complete Calendar'
+        assert hasattr(vcal, 'description')
+        assert 'RFC 7986' in vcal.description.value
+        assert hasattr(vcal, 'color')
+        assert vcal.color.value == 'teal'
+        assert hasattr(vcal, 'refresh_interval')
+        assert hasattr(vcal, 'source')
+        assert hasattr(vcal, 'url')
+        assert hasattr(vcal, 'last_modified')
+        assert hasattr(vcal, 'image')
+
+        # Verify event-level properties still work
+        assert hasattr(vcal.vevent, 'color')
+        assert vcal.vevent.color.value == 'coral'
+        assert hasattr(vcal.vevent, 'conference')
+
+
+class TestRFC7986CalendarIntegration(BaseTest):
+    """Integration tests for RFC 7986 calendar-level properties with CalDAV."""
+
+    def test_calendar_properties_with_multiple_events(self):
+        """Verify calendar-level properties persist across multiple events."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/shared-calendar/", login="alice:")
+        assert status == 201
+
+        # First event with calendar properties
+        event1_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:Shared Team Calendar
+COLOR:mediumseagreen
+REFRESH-INTERVAL;VALUE=DURATION:PT6H
+BEGIN:VEVENT
+UID:multi-001@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T090000Z
+DTEND:20251230T100000Z
+SUMMARY:Morning Meeting
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/shared-calendar/event1.ics",
+            event1_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        # Second event in same calendar
+        event2_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//RFC7986//EN
+NAME:Shared Team Calendar
+COLOR:mediumseagreen
+BEGIN:VEVENT
+UID:multi-002@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T140000Z
+DTEND:20251230T150000Z
+SUMMARY:Afternoon Meeting
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/shared-calendar/event2.ics",
+            event2_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        # Retrieve both and verify calendar properties
+        for path in ["/alice/shared-calendar/event1.ics",
+                     "/alice/shared-calendar/event2.ics"]:
+            status, _, content = self.request("GET", path, login="alice:")
+            assert status == 200
+            vcal = vobject.readOne(content)
+            assert 'name' in vcal.contents
+            assert vcal.contents['name'][0].value == 'Shared Team Calendar'
+            assert hasattr(vcal, 'color')
+            assert vcal.color.value == 'mediumseagreen'
+
+    def test_subscribed_calendar_simulation(self):
+        """Test properties typical of subscribed/external calendars."""
+        self.configure({"auth": {"type": "none"}})
+
+        status, _, _ = self.request(
+            "MKCALENDAR", "/alice/holidays/", login="alice:")
+        assert status == 201
+
+        # Simulates an imported calendar with SOURCE and REFRESH-INTERVAL
+        # Note: Radicale stores one item per file, so single event here
+        holiday_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Holiday Provider//EN
+NAME:US Holidays 2025
+DESCRIPTION:Official US federal holidays
+COLOR:crimson
+SOURCE;VALUE=URI:https://holidays.example.com/us.ics
+REFRESH-INTERVAL;VALUE=DURATION:P7D
+BEGIN:VEVENT
+UID:holiday-001@holidays.example.com
+DTSTAMP:20251001T000000Z
+DTSTART;VALUE=DATE:20251225
+SUMMARY:Christmas Day
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/alice/holidays/christmas.ics",
+            holiday_ics, CONTENT_TYPE="text/calendar", login="alice:")
+        assert status == 201
+
+        status, _, content = self.request(
+            "GET", "/alice/holidays/christmas.ics", login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(content)
+        assert vcal.contents['name'][0].value == 'US Holidays 2025'
+        assert 'federal holidays' in vcal.description.value.lower()
+        assert vcal.color.value == 'crimson'
+        assert hasattr(vcal, 'source')
+        assert 'holidays.example.com' in vcal.source.value
+        assert hasattr(vcal, 'refresh_interval')
+        # Should have P7D (weekly refresh)
+        assert 'P7D' in vcal.refresh_interval.value or '7' in str(vcal.refresh_interval.value)

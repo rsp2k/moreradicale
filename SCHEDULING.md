@@ -564,6 +564,48 @@ END:VEVENT
 - Most modern calendar clients (Thunderbird, Apple Calendar, etc.) can display these properties
 - The vobject library provides native support for these properties
 
+### Calendar-Level Properties
+
+RFC 7986 also defines properties at the VCALENDAR level for self-describing calendars:
+
+| Property | Description | Example |
+|----------|-------------|---------|
+| `NAME` | Calendar display name | `NAME:My Work Calendar` |
+| `DESCRIPTION` | Calendar description | `DESCRIPTION:Team meetings` |
+| `COLOR` | Calendar color (CSS3) | `COLOR:steelblue` |
+| `REFRESH-INTERVAL` | Polling interval | `REFRESH-INTERVAL;VALUE=DURATION:P1D` |
+| `SOURCE` | Source URL for subscribed calendars | `SOURCE;VALUE=URI:https://example.com/cal.ics` |
+| `URL` | Associated URL | `URL:https://example.com/calendar` |
+| `LAST-MODIFIED` | Last modification time | `LAST-MODIFIED:20251229T100000Z` |
+| `IMAGE` | Calendar logo/icon | `IMAGE;VALUE=URI;DISPLAY=BADGE:https://example.com/logo.png` |
+
+#### Subscribed Calendar Example
+
+For imported/subscribed calendars, these properties provide metadata with the calendar data:
+
+```
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Holiday Provider//EN
+NAME:US Holidays 2025
+DESCRIPTION:Official US federal holidays
+COLOR:crimson
+SOURCE;VALUE=URI:https://holidays.example.com/us.ics
+REFRESH-INTERVAL;VALUE=DURATION:P7D
+BEGIN:VEVENT
+UID:christmas@holidays.example.com
+DTSTAMP:20251001T000000Z
+DTSTART;VALUE=DATE:20251225
+SUMMARY:Christmas Day
+END:VEVENT
+END:VCALENDAR
+```
+
+This enables:
+- **Self-describing calendars**: Name, color, and description travel with the data
+- **Subscription management**: SOURCE and REFRESH-INTERVAL guide clients on updates
+- **Branding**: IMAGE provides visual identity for calendars
+
 ---
 
 ## Client Compatibility
