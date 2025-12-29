@@ -6,8 +6,11 @@ import logging
 import re
 import vobject
 from datetime import datetime
-from typing import List, Optional
-from radicale.itip.models import ITIPMethod, ITIPAttendee, ITIPMessage, AttendeePartStat
+from typing import List, Optional, Tuple
+from radicale.itip.models import (
+    ITIPMethod, ITIPAttendee, ITIPMessage, AttendeePartStat,
+    ScheduleStatus, ScheduleAgent
+)
 from radicale.itip.router import extract_email, route_attendee, get_inbox_path
 from radicale.itip.validator import needs_scheduling
 from radicale import item as radicale_item
@@ -33,6 +36,9 @@ class ITIPProcessor:
         self.email_config = None
 
         # Load email configuration if enabled
+        # Group definitions for CUTYPE=GROUP expansion
+        self.groups = {}
+
         if configuration:
             scheduling_enabled = configuration.get("scheduling", "enabled")
             email_enabled = configuration.get("scheduling", "email_enabled")
@@ -44,7 +50,176 @@ class ITIPProcessor:
                 except Exception as e:
                     logger.error(f"Failed to load email configuration: {e}")
                     logger.warning("Email delivery for external attendees will be disabled")
-    
+
+            # Load group definitions for CUTYPE=GROUP expansion
+            groups_file = configuration.get("scheduling", "groups_file")
+            if groups_file:
+                self.groups = self._load_groups(groups_file)
+
+    def _load_groups(self, groups_file: str) -> dict:
+        """
+        Load group definitions from a JSON file.
+
+        The JSON file should have the format:
+        {
+            "engineering@example.com": {
+                "members": ["alice@example.com", "bob@example.com", "charlie@example.com"],
+                "name": "Engineering Team"
+            },
+            "all-hands@example.com": {
+                "members": ["engineering@example.com", "marketing@example.com"],
+                "name": "All Hands"
+            }
+        }
+
+        Groups can reference other groups (recursive expansion supported).
+
+        Args:
+            groups_file: Path to the JSON file
+
+        Returns:
+            Dictionary mapping group emails to group definitions
+        """
+        import json
+        import os
+
+        if not os.path.exists(groups_file):
+            logger.warning(f"Groups file not found: {groups_file}")
+            return {}
+
+        try:
+            with open(groups_file, 'r', encoding='utf-8') as f:
+                groups = json.load(f)
+                logger.info(f"Loaded {len(groups)} group definitions from {groups_file}")
+                return groups
+        except Exception as e:
+            logger.error(f"Failed to load groups from {groups_file}: {e}")
+            return {}
+
+    def _expand_groups(self, component: vobject.base.Component) -> bool:
+        """
+        Expand CUTYPE=GROUP attendees into individual members.
+
+        This modifies the component in-place, replacing GROUP attendees
+        with individual member attendees.
+
+        Args:
+            component: VEVENT/VTODO component to modify
+
+        Returns:
+            True if any groups were expanded, False otherwise
+        """
+        if not self.groups:
+            return False
+
+        if not hasattr(component, 'attendee'):
+            return False
+
+        # Get existing attendees
+        attendees_raw = component.contents.get('attendee', [])
+        if not isinstance(attendees_raw, list):
+            attendees_raw = [attendees_raw]
+
+        expanded = False
+        new_attendees = []
+        existing_emails = set()
+
+        for att in attendees_raw:
+            att_email = extract_email(att.value)
+            if not att_email:
+                new_attendees.append(att)
+                continue
+
+            # Check if this is a GROUP with CUTYPE=GROUP
+            cutype = 'INDIVIDUAL'
+            if hasattr(att, 'params') and 'CUTYPE' in att.params:
+                cutype = att.params['CUTYPE'][0].upper()
+
+            if cutype == 'GROUP' and att_email.lower() in [g.lower() for g in self.groups]:
+                # Expand this group
+                group_key = next(g for g in self.groups if g.lower() == att_email.lower())
+                group_def = self.groups[group_key]
+                members = self._get_group_members(group_key, set())
+
+                logger.info(f"Expanding group {att_email} into {len(members)} members")
+
+                for member_email in members:
+                    if member_email.lower() in existing_emails:
+                        continue  # Skip duplicates
+
+                    # Create new attendee for this member
+                    member_att = component.add('attendee')
+                    member_att.value = f"mailto:{member_email}"
+
+                    # Copy relevant parameters from group, but change CUTYPE
+                    if hasattr(att, 'params'):
+                        for param, value in att.params.items():
+                            if param.upper() != 'CUTYPE':
+                                member_att.params[param] = value
+                    member_att.params['CUTYPE'] = ['INDIVIDUAL']
+                    member_att.params['PARTSTAT'] = ['NEEDS-ACTION']
+
+                    # Track expanded attendee
+                    new_attendees.append(member_att)
+                    existing_emails.add(member_email.lower())
+                    expanded = True
+            else:
+                # Keep non-group attendees as-is
+                if att_email.lower() not in existing_emails:
+                    new_attendees.append(att)
+                    existing_emails.add(att_email.lower())
+
+        if expanded:
+            # Replace component's attendee list with expanded list
+            component.contents['attendee'] = new_attendees
+            logger.info(f"Group expansion complete: {len(new_attendees)} total attendees")
+
+        return expanded
+
+    def _get_group_members(self, group_email: str, visited: set) -> List[str]:
+        """
+        Recursively get all members of a group, handling nested groups.
+
+        Args:
+            group_email: The group email to expand
+            visited: Set of already-visited groups (prevents infinite loops)
+
+        Returns:
+            List of member email addresses
+        """
+        if group_email.lower() in visited:
+            logger.warning(f"Circular group reference detected: {group_email}")
+            return []
+
+        visited.add(group_email.lower())
+
+        group_key = None
+        for g in self.groups:
+            if g.lower() == group_email.lower():
+                group_key = g
+                break
+
+        if not group_key:
+            return []
+
+        group_def = self.groups[group_key]
+        members = group_def.get('members', [])
+
+        result = []
+        for member in members:
+            # Check if this member is also a group
+            member_lower = member.lower()
+            is_nested_group = any(g.lower() == member_lower for g in self.groups)
+
+            if is_nested_group:
+                # Recursively expand nested group
+                nested_members = self._get_group_members(member, visited)
+                result.extend(nested_members)
+            else:
+                result.append(member)
+
+        return result
+
     def process_put(self, vcal_text: str, user: str, path: str) -> None:
         """
         Process a PUT request that may need scheduling.
@@ -83,57 +258,75 @@ class ITIPProcessor:
             if not hasattr(component, 'organizer'):
                 logger.debug("No organizer, skipping scheduling")
                 return
-            
+
             organizer_uri = component.organizer.value
             organizer_email = extract_email(organizer_uri)
-            
+
             if not organizer_email:
                 logger.warning(f"Invalid organizer email: {organizer_uri}")
                 return
-            
+
+            # RFC 6638 Implicit Scheduling: Verify user is authorized as organizer
+            # Only the organizer should trigger implicit scheduling on PUT
+            from radicale.itip.router import validate_organizer_permission
+            if not validate_organizer_permission(organizer_email, user, self.configuration):
+                logger.debug(f"User {user} is not organizer {organizer_email}, skipping implicit scheduling")
+                return
+
             # Extract attendees
             if not hasattr(component, 'attendee'):
                 logger.debug("No attendees, skipping scheduling")
                 return
-            
+
             attendees = component.attendee_list if hasattr(component, 'attendee_list') else [component.attendee]
-            
+
             # Parse each attendee
             itip_attendees = []
             for att in attendees:
                 att_email = extract_email(att.value)
                 if not att_email:
                     continue
-                
+
                 # Get participation status
                 partstat_str = att.params.get('PARTSTAT', ['NEEDS-ACTION'])[0]
                 try:
                     partstat = AttendeePartStat(partstat_str)
                 except ValueError:
                     partstat = AttendeePartStat.NEEDS_ACTION
-                
+
                 # Get common name
                 cn = att.params.get('CN', [None])[0]
-                
+
                 # Get role
                 role = att.params.get('ROLE', ['REQ-PARTICIPANT'])[0]
-                
+
                 # Get calendar user type
                 cutype = att.params.get('CUTYPE', ['INDIVIDUAL'])[0]
-                
+
+                # RFC 6638: Get SCHEDULE-AGENT parameter
+                schedule_agent = ScheduleAgent.SERVER  # Default
+                if hasattr(att, 'params') and 'SCHEDULE-AGENT' in att.params:
+                    agent_str = att.params['SCHEDULE-AGENT'][0].upper()
+                    try:
+                        schedule_agent = ScheduleAgent(agent_str)
+                    except ValueError:
+                        logger.warning(f"Unknown SCHEDULE-AGENT: {agent_str}, using SERVER")
+                        schedule_agent = ScheduleAgent.SERVER
+
                 itip_attendee = ITIPAttendee(
                     email=att_email,
                     partstat=partstat,
                     cn=cn,
                     role=role,
-                    cutype=cutype
+                    cutype=cutype,
+                    schedule_agent=schedule_agent
                 )
-                
+
                 # Check if internal
                 is_internal, principal_path = route_attendee(att_email, self.storage)
                 itip_attendee.is_internal = is_internal
                 itip_attendee.principal_path = principal_path
-                
+
                 itip_attendees.append(itip_attendee)
             
             if not itip_attendees:
@@ -218,6 +411,13 @@ class ITIPProcessor:
                 logger.warning(f"Invalid organizer email: {organizer_uri}")
                 return
 
+            # RFC 6638 Implicit Scheduling: Verify user is authorized as organizer
+            # Only the organizer should trigger implicit CANCEL on DELETE
+            from radicale.itip.router import validate_organizer_permission
+            if not validate_organizer_permission(organizer_email, user, self.configuration):
+                logger.debug(f"User {user} is not organizer {organizer_email}, skipping implicit CANCEL")
+                return
+
             # Extract attendees
             if not hasattr(component, 'attendee'):
                 logger.debug("No attendees, skipping CANCEL")
@@ -248,12 +448,23 @@ class ITIPProcessor:
                 # Get calendar user type
                 cutype = att.params.get('CUTYPE', ['INDIVIDUAL'])[0]
 
+                # RFC 6638: Get SCHEDULE-AGENT parameter
+                schedule_agent = ScheduleAgent.SERVER  # Default
+                if hasattr(att, 'params') and 'SCHEDULE-AGENT' in att.params:
+                    agent_str = att.params['SCHEDULE-AGENT'][0].upper()
+                    try:
+                        schedule_agent = ScheduleAgent(agent_str)
+                    except ValueError:
+                        logger.warning(f"Unknown SCHEDULE-AGENT: {agent_str}, using SERVER")
+                        schedule_agent = ScheduleAgent.SERVER
+
                 itip_attendee = ITIPAttendee(
                     email=att_email,
                     partstat=partstat,
                     cn=cn,
                     role=role,
-                    cutype=cutype
+                    cutype=cutype,
+                    schedule_agent=schedule_agent
                 )
 
                 # Check if internal
@@ -363,14 +574,30 @@ class ITIPProcessor:
     def _deliver_internal(self, itip_msg: ITIPMessage) -> None:
         """
         Deliver iTIP message to internal attendees' schedule-inbox.
-        
+
+        Updates attendee.schedule_status with RFC 6638 status codes:
+        - 1.2 (DELIVERED): Successfully delivered to inbox
+        - 3.7 (INVALID_USER): Inbox not found (invalid user)
+        - 3.8 (NO_SCHEDULING): SCHEDULE-AGENT is CLIENT or NONE
+        - 5.1 (DELIVERY_FAILED): Delivery error
+
         Args:
             itip_msg: iTIP message to deliver
         """
         for attendee in itip_msg.attendees:
             if not attendee.is_internal or not attendee.principal_path:
                 continue
-            
+
+            # RFC 6638: Check SCHEDULE-AGENT - skip if CLIENT or NONE
+            if attendee.schedule_agent != ScheduleAgent.SERVER:
+                logger.debug(
+                    f"Skipping delivery to {attendee.email}: "
+                    f"SCHEDULE-AGENT={attendee.schedule_agent.value}"
+                )
+                # RFC 6638 3.8: No scheduling privileges (client handles it)
+                attendee.schedule_status = ScheduleStatus.NO_SCHEDULING
+                continue
+
             try:
                 inbox_path = get_inbox_path(attendee.principal_path)
 
@@ -384,6 +611,8 @@ class ITIPProcessor:
                 discovered = list(self.storage.discover(inbox_path, depth="0"))
                 if not discovered:
                     logger.warning(f"Schedule-inbox not found: {inbox_path}")
+                    # RFC 6638 3.7: Invalid calendar user
+                    attendee.schedule_status = ScheduleStatus.INVALID_USER
                     continue
 
                 inbox = discovered[0]
@@ -396,9 +625,13 @@ class ITIPProcessor:
                 # Upload iTIP message
                 inbox.upload(filename, itip_item)
 
+                # RFC 6638 1.2: Delivered to calendar user
+                attendee.schedule_status = ScheduleStatus.DELIVERED
                 logger.info(f"Delivered iTIP {itip_msg.method.value} to {attendee.email} inbox: {item_path}")
 
             except Exception as e:
+                # RFC 6638 5.1: Could not be delivered
+                attendee.schedule_status = ScheduleStatus.DELIVERY_FAILED
                 logger.error(f"Failed to deliver to {attendee.email}: {e}", exc_info=True)
 
     def _deliver_external(self, itip_msg: ITIPMessage) -> None:
@@ -408,6 +641,12 @@ class ITIPProcessor:
         Sends calendar invitations, updates, cancellations, and counter-proposals
         to attendees who are not on this Radicale server.
 
+        Updates attendee.schedule_status with RFC 6638 status codes:
+        - 1.1 (PENDING): Email not configured, cannot track delivery
+        - 1.2 (DELIVERED): Email sent to SMTP server
+        - 3.8 (NO_SCHEDULING): SCHEDULE-AGENT is CLIENT or NONE
+        - 5.1 (DELIVERY_FAILED): SMTP delivery failed
+
         Args:
             itip_msg: iTIP message to deliver
 
@@ -415,27 +654,57 @@ class ITIPProcessor:
             Email failures are logged but do not raise exceptions to prevent
             blocking event creation when email delivery fails.
         """
-        if not self.email_config:
-            # Email not configured - skip external delivery
-            return
-
-        # Filter for external attendees only
+        # Filter for external attendees only (respecting SCHEDULE-AGENT)
         external_attendees = [a for a in itip_msg.attendees if not a.is_internal]
 
         if not external_attendees:
             logger.debug("No external attendees - skipping email delivery")
             return
 
-        logger.info(f"Delivering iTIP {itip_msg.method.value} to {len(external_attendees)} external attendee(s)")
-
+        # Check SCHEDULE-AGENT for external attendees too
         for attendee in external_attendees:
+            if attendee.schedule_agent != ScheduleAgent.SERVER:
+                logger.debug(
+                    f"Skipping email to {attendee.email}: "
+                    f"SCHEDULE-AGENT={attendee.schedule_agent.value}"
+                )
+                attendee.schedule_status = ScheduleStatus.NO_SCHEDULING
+
+        # Filter to only those with SERVER schedule-agent
+        deliverable = [a for a in external_attendees
+                       if a.schedule_agent == ScheduleAgent.SERVER]
+
+        if not deliverable:
+            logger.debug("No external attendees with SCHEDULE-AGENT=SERVER")
+            return
+
+        if not self.email_config:
+            # Email not configured - mark as pending (unknown status)
+            for attendee in deliverable:
+                # RFC 6638 1.1: Pending - no way to deliver
+                attendee.schedule_status = ScheduleStatus.PENDING
+            logger.debug("Email not configured - external attendees marked as PENDING")
+            return
+
+        logger.info(f"Delivering iTIP {itip_msg.method.value} to {len(deliverable)} external attendee(s)")
+
+        # Extract attachments from the event (shared across all recipients)
+        attachments = []
+        try:
+            attachments = email_utils.extract_attachments_from_icalendar(itip_msg.icalendar_text)
+            if attachments:
+                logger.info(f"Extracted {len(attachments)} attachment(s) from event")
+        except Exception as e:
+            logger.warning(f"Failed to extract attachments: {e}")
+
+        for attendee in deliverable:
             try:
                 # Build email components
                 subject = self._build_email_subject(itip_msg, attendee)
                 body = self._build_email_body(itip_msg, attendee)
                 from_email = self._get_from_email(itip_msg)
 
-                # Send via SMTP
+                # Send via SMTP with attachments
                 success = email_utils.send_itip_email(
                     email_config=self.email_config,
                     from_email=from_email,
@@ -443,17 +712,280 @@ class ITIPProcessor:
                     subject=subject,
                     body_text=body,
                     icalendar_text=itip_msg.icalendar_text,
-                    method=itip_msg.method.value
+                    method=itip_msg.method.value,
+                    attachments=attachments if attachments else None
                 )
 
                 if success:
+                    # RFC 6638 1.2: Delivered (to SMTP server)
+                    attendee.schedule_status = ScheduleStatus.DELIVERED
                     logger.info(f"Sent iTIP {itip_msg.method.value} email to {attendee.email}")
                 else:
+                    # RFC 6638 5.1: Delivery failed
+                    attendee.schedule_status = ScheduleStatus.DELIVERY_FAILED
                     logger.warning(f"Failed to send iTIP {itip_msg.method.value} email to {attendee.email}")
 
             except Exception as e:
+                # RFC 6638 5.1: Could not be delivered
+                attendee.schedule_status = ScheduleStatus.DELIVERY_FAILED
                 # Log but don't block event creation
                 logger.error(f"Email delivery to {attendee.email} failed: {e}", exc_info=True)
+
+    def _process_resource_auto_accept(self, itip_msg: ITIPMessage,
+                                       vcal: vobject.base.Component,
+                                       component: vobject.base.Component) -> None:
+        """
+        Auto-accept/decline for resource attendees (CUTYPE=ROOM or CUTYPE=RESOURCE).
+
+        Resources automatically accept meeting invitations if they're available
+        (no conflicting events). If conflicts exist, the resource declines.
+
+        For each resource attendee:
+        1. Check for scheduling conflicts in the resource's calendar
+        2. If no conflicts: Create event in resource's calendar with PARTSTAT=ACCEPTED
+        3. If conflicts: Update PARTSTAT to DECLINED (don't create event)
+        4. Update the organizer's copy with the resource's response
+
+        Args:
+            itip_msg: iTIP REQUEST message
+            vcal: Full VCALENDAR object
+            component: VEVENT/VTODO component
+        """
+        from datetime import datetime
+        from vobject.icalendar import utc as vobj_utc
+
+        for attendee in itip_msg.attendees:
+            # Only process ROOM and RESOURCE types
+            if attendee.cutype not in ('ROOM', 'RESOURCE'):
+                continue
+
+            # Only internal resources can auto-accept
+            if not attendee.is_internal or not attendee.principal_path:
+                continue
+
+            # Skip if SCHEDULE-AGENT is not SERVER
+            if attendee.schedule_agent != ScheduleAgent.SERVER:
+                logger.debug(f"Resource {attendee.email} skipped: SCHEDULE-AGENT={attendee.schedule_agent.value}")
+                continue
+
+            try:
+                # Get event time range for conflict check
+                dtstart = getattr(component, 'dtstart', None)
+                dtend = getattr(component, 'dtend', None)
+
+                if not dtstart:
+                    logger.warning(f"Cannot auto-accept for {attendee.email}: missing DTSTART")
+                    continue
+
+                event_start = dtstart.value
+                event_end = dtend.value if dtend else event_start
+
+                # Check for conflicts in the resource's calendar
+                has_conflict = self._check_resource_conflict(
+                    attendee.principal_path, attendee.email,
+                    event_start, event_end, itip_msg.uid
+                )
+
+                if has_conflict:
+                    # Resource has a conflict - decline
+                    attendee.partstat = AttendeePartStat.DECLINED
+                    logger.info(f"Resource {attendee.email} DECLINED (conflict detected)")
+                else:
+                    # No conflict - auto-accept and add to resource's calendar
+                    self._add_event_to_resource_calendar(
+                        attendee.principal_path, vcal, component, attendee.email, itip_msg.uid
+                    )
+                    attendee.partstat = AttendeePartStat.ACCEPTED
+                    logger.info(f"Resource {attendee.email} ACCEPTED (no conflict)")
+
+                # Update organizer's copy with the resource's response
+                is_internal, organizer_principal = route_attendee(itip_msg.organizer, self.storage)
+                if is_internal:
+                    event_found, event_path, event_collection = self._find_organizer_event(
+                        organizer_principal, itip_msg.uid)
+                    if event_found:
+                        self._update_attendee_partstat(
+                            event_path, event_collection, attendee.email, attendee.partstat.value
+                        )
+
+            except Exception as e:
+                logger.error(f"Error processing resource auto-accept for {attendee.email}: {e}",
+                           exc_info=True)
+
+    def _check_resource_conflict(self, principal_path: str, resource_email: str,
+                                  event_start, event_end, exclude_uid: str) -> bool:
+        """
+        Check if a resource has conflicting events in the specified time range.
+
+        Args:
+            principal_path: Resource's principal path
+            resource_email: Resource's email address
+            event_start: Event start time
+            event_end: Event end time
+            exclude_uid: UID to exclude (the event being scheduled)
+
+        Returns:
+            True if conflicts exist, False otherwise
+        """
+        from datetime import datetime, timedelta
+
+        try:
+            # Discover all calendar collections under resource's principal
+            discovered = list(self.storage.discover(principal_path, depth="1"))
+
+            for collection in discovered:
+                # Skip non-calendar collections
+                if not hasattr(collection, 'tag') or collection.tag != 'VCALENDAR':
+                    continue
+
+                # Skip schedule-inbox
+                if 'schedule-inbox' in collection.path.lower():
+                    continue
+
+                # Check all items in calendar
+                try:
+                    hrefs = list(collection._list())
+
+                    for href in hrefs:
+                        item = collection._get(href)
+                        if not item:
+                            continue
+
+                        vcal = item.vobject_item
+
+                        for subcomp in vcal.getChildren():
+                            if subcomp.name != 'VEVENT':
+                                continue
+
+                            # Skip the event being scheduled (same UID)
+                            if hasattr(subcomp, 'uid') and subcomp.uid.value == exclude_uid:
+                                continue
+
+                            # Skip cancelled events
+                            status = getattr(subcomp, 'status', None)
+                            if status and status.value.upper() == 'CANCELLED':
+                                continue
+
+                            # Skip transparent events
+                            transp = getattr(subcomp, 'transp', None)
+                            if transp and transp.value.upper() == 'TRANSPARENT':
+                                continue
+
+                            # Get event times
+                            if not hasattr(subcomp, 'dtstart'):
+                                continue
+
+                            existing_start = subcomp.dtstart.value
+                            existing_end = subcomp.dtend.value if hasattr(subcomp, 'dtend') else existing_start
+
+                            # Check for overlap
+                            if self._times_overlap(event_start, event_end, existing_start, existing_end):
+                                logger.debug(
+                                    f"Conflict found for {resource_email}: "
+                                    f"existing event {getattr(subcomp, 'uid', 'unknown').value} "
+                                    f"overlaps with new event"
+                                )
+                                return True
+
+                except Exception as e:
+                    logger.warning(f"Error reading calendar {collection.path}: {e}")
+                    continue
+
+            return False
+
+        except Exception as e:
+            logger.error(f"Error checking resource conflict: {e}", exc_info=True)
+            # On error, assume conflict to be safe
+            return True
+
+    def _times_overlap(self, start1, end1, start2, end2) -> bool:
+        """Check if two time ranges overlap."""
+        from datetime import date, datetime
+
+        # Normalize to comparable types
+        def to_datetime(dt):
+            if isinstance(dt, date) and not isinstance(dt, datetime):
+                return datetime.combine(dt, datetime.min.time())
+            return dt
+
+        s1, e1 = to_datetime(start1), to_datetime(end1)
+        s2, e2 = to_datetime(start2), to_datetime(end2)
+
+        # Overlap if: start1 < end2 AND start2 < end1
+        return s1 < e2 and s2 < e1
+
+    def _add_event_to_resource_calendar(self, principal_path: str,
+                                         vcal: vobject.base.Component,
+                                         component: vobject.base.Component,
+                                         resource_email: str,
+                                         uid: str) -> bool:
+        """
+        Add an event to the resource's default calendar with PARTSTAT=ACCEPTED.
+
+        Args:
+            principal_path: Resource's principal path
+            vcal: Full VCALENDAR object
+            component: VEVENT/VTODO component
+            resource_email: Resource's email
+            uid: Event UID
+
+        Returns:
+            True if event was added successfully
+        """
+        try:
+            # Find resource's default calendar
+            discovered = list(self.storage.discover(principal_path, depth="1"))
+            calendar_collection = None
+
+            for collection in discovered:
+                if hasattr(collection, 'tag') and collection.tag == 'VCALENDAR':
+                    if 'schedule-inbox' not in collection.path.lower():
+                        if 'schedule-outbox' not in collection.path.lower():
+                            calendar_collection = collection
+                            break
+
+            if not calendar_collection:
+                logger.warning(f"No calendar found for resource {resource_email}")
+                return False
+
+            # Clone the event and update the resource's PARTSTAT to ACCEPTED
+            new_vcal = vobject.iCalendar()
+
+            # Copy the component
+            for child in vcal.getChildren():
+                if child.name in ('VEVENT', 'VTODO', 'VJOURNAL'):
+                    new_comp = new_vcal.add(child.name.lower())
+
+                    # Copy all properties
+                    for prop in child.getChildren():
+                        new_prop = new_comp.add(prop.name.lower())
+                        new_prop.value = prop.value
+                        if hasattr(prop, 'params'):
+                            for k, v in prop.params.items():
+                                new_prop.params[k] = list(v) if isinstance(v, list) else [v]
+
+                        # Update PARTSTAT for the resource attendee
+                        if prop.name.upper() == 'ATTENDEE':
+                            prop_email = extract_email(prop.value) or ''
+                            if prop_email.lower() == resource_email.lower():
+                                new_prop.params['PARTSTAT'] = ['ACCEPTED']
+
+            # Create item and upload
+            event_item = radicale_item.Item(
+                collection_path=calendar_collection.path,
+                vobject_item=new_vcal
+            )
+            event_item.prepare()
+
+            filename = f"{uid}.ics"
+            calendar_collection.upload(filename, event_item)
+
+            logger.info(f"Added event {uid} to resource {resource_email}'s calendar")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error adding event to resource calendar: {e}", exc_info=True)
+            return False
 
     def _build_email_subject(self, itip_msg: ITIPMessage, attendee: ITIPAttendee) -> str:
         """
@@ -698,6 +1230,18 @@ class ITIPProcessor:
                 return self._process_counter(vcal, user, base_prefix)
             elif method == 'DECLINECOUNTER':
                 return self._process_declinecounter(vcal, user, base_prefix)
+            elif method == 'REQUEST':
+                # REQUEST can be either:
+                # 1. VFREEBUSY REQUEST - free/busy query
+                # 2. VEVENT/VTODO/VJOURNAL REQUEST - meeting invitation
+                if hasattr(vcal, 'vfreebusy'):
+                    return self._process_freebusy_request(vcal, user, base_prefix)
+                else:
+                    # VEVENT/VTODO/VJOURNAL REQUEST - deliver to attendee inboxes
+                    return self._process_vevent_request(vcal, user, base_prefix, ical_text)
+            elif method == 'ADD':
+                # RFC 5546 §3.2.4: ADD method adds new instances to recurring events
+                return self._process_add(vcal, user, base_prefix, ical_text)
             else:
                 logger.warning(f"Unsupported METHOD posted to schedule-outbox: {method}")
                 return httputils.BAD_REQUEST
@@ -762,7 +1306,39 @@ class ITIPProcessor:
             attendee_email = extract_email(attendee.value)
             new_partstat = attendee.params.get('PARTSTAT', ['NEEDS-ACTION'])[0]
 
-            logger.info(f"Processing REPLY from {attendee_email} for {uid}: PARTSTAT={new_partstat}")
+            # RFC 5546 Delegation: Extract DELEGATED-TO if present
+            delegated_to = None
+            delegated_to_list = attendee.params.get('DELEGATED-TO', [])
+            if delegated_to_list:
+                # Extract email from mailto: URI
+                delegated_to = extract_email(delegated_to_list[0])
+                if delegated_to:
+                    logger.info(
+                        f"Delegation detected: {attendee_email} delegating to {delegated_to}"
+                    )
+
+            # RFC 5546 Delegation: Extract DELEGATED-FROM if present
+            # This indicates the replier is a delegate responding to a delegated invitation
+            delegated_from = None
+            delegated_from_list = attendee.params.get('DELEGATED-FROM', [])
+            if delegated_from_list:
+                delegated_from = extract_email(delegated_from_list[0])
+                if delegated_from:
+                    logger.info(
+                        f"Delegate response: {attendee_email} responding "
+                        f"(delegated from {delegated_from})"
+                    )
+
+            # Extract RECURRENCE-ID for recurring event support
+            recurrence_id = None
+            if hasattr(component, 'recurrence_id'):
+                recurrence_id = component.recurrence_id.value
+                logger.info(
+                    f"Processing REPLY from {attendee_email} for {uid} "
+                    f"(RECURRENCE-ID: {recurrence_id}): PARTSTAT={new_partstat}"
+                )
+            else:
+                logger.info(f"Processing REPLY from {attendee_email} for {uid}: PARTSTAT={new_partstat}")
 
             # Route organizer (must be internal)
             is_internal, organizer_principal = route_attendee(organizer_email, self.storage)
@@ -781,16 +1357,73 @@ class ITIPProcessor:
                 return self._build_schedule_response_error(
                     base_prefix, "Event not found")
 
+            # RFC 5546 §2.1.4: Check sequence ordering to reject stale messages
+            incoming_sequence = 0
+            if hasattr(component, 'sequence'):
+                try:
+                    incoming_sequence = int(component.sequence.value)
+                except (ValueError, TypeError):
+                    incoming_sequence = 0
+
+            is_valid_sequence, stored_sequence = self._check_sequence_ordering(
+                event_path, event_collection, incoming_sequence, recurrence_id
+            )
+
+            if not is_valid_sequence:
+                logger.warning(
+                    f"Rejecting REPLY from {attendee_email}: stale SEQUENCE "
+                    f"{incoming_sequence} < stored {stored_sequence}"
+                )
+                return self._build_schedule_response_error(
+                    base_prefix,
+                    f"Stale message: SEQUENCE {incoming_sequence} < {stored_sequence}",
+                    schedule_status="5.3"  # Invalid date/time (closest to stale sequence)
+                )
+
+            # RFC 5546 Delegation handling
+            if new_partstat == "DELEGATED" and delegated_to:
+                # Handle delegation workflow
+                delegation_result = self._handle_delegation(
+                    event_path, event_collection, attendee_email,
+                    delegated_to, component, base_prefix,
+                    recurrence_id=recurrence_id
+                )
+                if delegation_result:
+                    return delegation_result
+                # If delegation handling returned None, fall through to regular update
+
             # Update the PARTSTAT for this attendee
             updated = self._update_attendee_partstat(
-                event_path, event_collection, attendee_email, new_partstat)
+                event_path, event_collection, attendee_email, new_partstat,
+                recurrence_id=recurrence_id,
+                delegated_to=delegated_to if new_partstat == "DELEGATED" else None
+            )
 
             if not updated:
                 logger.warning(f"Failed to update PARTSTAT for {attendee_email} in {event_path}")
                 return self._build_schedule_response_error(
                     base_prefix, "Failed to update event")
 
-            logger.info(f"Updated PARTSTAT for {attendee_email} to {new_partstat} in {event_path}")
+            log_msg = f"Updated PARTSTAT for {attendee_email} to {new_partstat} in {event_path}"
+            if recurrence_id:
+                log_msg += f" (RECURRENCE-ID: {recurrence_id})"
+            if delegated_to:
+                log_msg += f" (DELEGATED-TO: {delegated_to})"
+            if delegated_from:
+                log_msg += f" (DELEGATED-FROM: {delegated_from})"
+            logger.info(log_msg)
+
+            # RFC 5546: When a delegate declines, notify the original delegator
+            # The delegator needs to know so they can attend themselves or find another delegate
+            if new_partstat == "DECLINED" and delegated_from:
+                self._notify_delegator_of_decline(
+                    event_path, event_collection, vcal, component,
+                    delegate_email=attendee_email,
+                    delegator_email=delegated_from,
+                    organizer_email=organizer_email,
+                    base_prefix=base_prefix,
+                    recurrence_id=recurrence_id
+                )
 
             # Return success schedule-response
             return self._build_schedule_response_success(base_prefix, attendee_email)
@@ -1197,6 +1830,735 @@ class ITIPProcessor:
             logger.error(f"Error processing DECLINECOUNTER: {e}", exc_info=True)
             return httputils.INTERNAL_SERVER_ERROR
 
+    def _process_add(self, vcal: vobject.base.Component, user: str,
+                     base_prefix: str, ical_text: str):
+        """
+        Process iTIP ADD message for adding instances to recurring events.
+
+        RFC 5546 §3.2.4: The ADD method is used to add one or more new
+        instances to an existing recurring event. The component in the ADD
+        message contains only the new instance with its RECURRENCE-ID.
+
+        Args:
+            vcal: Parsed VCALENDAR with METHOD:ADD
+            user: User posting the ADD (organizer)
+            base_prefix: Base URL prefix for responses
+            ical_text: Original iCalendar text
+
+        Returns:
+            HTTP response with schedule-response XML
+        """
+        from radicale import httputils, xmlutils
+        from http import client
+        import xml.etree.ElementTree as ET
+
+        try:
+            # Get the component (VEVENT/VTODO/VJOURNAL)
+            component = None
+            comp_type_name = None
+            for comp_type in ('vevent', 'vtodo', 'vjournal'):
+                if hasattr(vcal, comp_type):
+                    component = getattr(vcal, comp_type)
+                    comp_type_name = comp_type.upper()
+                    break
+
+            if not component:
+                logger.warning("No schedulable component in ADD")
+                return httputils.BAD_REQUEST
+
+            # Extract UID - must reference existing recurring event
+            if not hasattr(component, 'uid'):
+                logger.warning("ADD missing UID")
+                return httputils.BAD_REQUEST
+
+            uid = component.uid.value
+
+            # RFC 5546 §3.2.4: ADD MUST have RECURRENCE-ID to identify the new instance
+            if not hasattr(component, 'recurrence_id'):
+                logger.warning("ADD missing required RECURRENCE-ID")
+                return httputils.BAD_REQUEST
+
+            recurrence_id = str(component.recurrence_id.value)
+
+            # Extract ORGANIZER
+            if not hasattr(component, 'organizer'):
+                logger.warning("ADD missing ORGANIZER")
+                return httputils.BAD_REQUEST
+
+            organizer_uri = component.organizer.value
+            organizer_email = extract_email(organizer_uri)
+
+            if not organizer_email:
+                logger.warning(f"Invalid ORGANIZER email: {organizer_uri}")
+                return httputils.BAD_REQUEST
+
+            # Verify user is the organizer
+            # Compare the local part of organizer email with the authenticated user
+            org_local = organizer_email.split('@')[0] if '@' in organizer_email else organizer_email
+            user_local = user.split('@')[0] if '@' in user else user
+            if org_local.lower() != user_local.lower():
+                logger.warning(f"ADD posted by {user} but organizer is {organizer_email}")
+                return self._build_schedule_response_error(
+                    base_prefix, "Only organizer can send ADD")
+
+            # Extract ATTENDEE(s)
+            if not hasattr(component, 'attendee'):
+                logger.warning("ADD missing ATTENDEE")
+                return httputils.BAD_REQUEST
+
+            attendees_raw = component.attendee_list if hasattr(component, 'attendee_list') else [component.attendee]
+
+            logger.info(
+                f"Processing ADD from {organizer_email} for {uid} "
+                f"(RECURRENCE-ID: {recurrence_id}) with {len(attendees_raw)} attendees"
+            )
+
+            # Build ITIPAttendee list with routing info
+            attendees = []
+            for att in attendees_raw:
+                att_email = extract_email(att.value)
+                if not att_email:
+                    continue
+
+                # Check SCHEDULE-AGENT parameter
+                schedule_agent = ScheduleAgent.SERVER  # Default
+                if hasattr(att, 'params'):
+                    agent_param = att.params.get('SCHEDULE-AGENT', ['SERVER'])[0].upper()
+                    try:
+                        schedule_agent = ScheduleAgent(agent_param)
+                    except ValueError:
+                        schedule_agent = ScheduleAgent.SERVER
+
+                # Route attendee
+                is_internal, principal_path = route_attendee(att_email, self.storage)
+
+                # Extract optional parameters
+                cn = att.params.get('CN', [None])[0] if hasattr(att, 'params') else None
+                partstat_str = att.params.get('PARTSTAT', ['NEEDS-ACTION'])[0] if hasattr(att, 'params') else 'NEEDS-ACTION'
+                try:
+                    partstat = AttendeePartStat(partstat_str.upper())
+                except ValueError:
+                    partstat = AttendeePartStat.NEEDS_ACTION
+
+                attendees.append(ITIPAttendee(
+                    email=att_email,
+                    partstat=partstat,
+                    cn=cn,
+                    is_internal=is_internal,
+                    principal_path=principal_path,
+                    schedule_agent=schedule_agent
+                ))
+
+            # Build ITIPMessage
+            itip_msg = ITIPMessage(
+                method=ITIPMethod.ADD,
+                uid=uid,
+                sequence=int(component.sequence.value) if hasattr(component, 'sequence') else 0,
+                organizer=organizer_email,
+                attendees=attendees,
+                component_type=comp_type_name,
+                icalendar_text=ical_text,
+                recurrence_id=recurrence_id
+            )
+
+            # Deliver ADD to internal attendees
+            self._deliver_internal(itip_msg)
+
+            # Deliver ADD to external attendees via email
+            self._deliver_external(itip_msg)
+
+            # Build schedule-response XML
+            root = ET.Element(f"{{{xmlutils.NAMESPACES['C']}}}schedule-response")
+
+            for attendee in attendees:
+                response_elem = ET.SubElement(root, f"{{{xmlutils.NAMESPACES['C']}}}response")
+
+                # Recipient
+                recipient = ET.SubElement(response_elem, f"{{{xmlutils.NAMESPACES['C']}}}recipient")
+                href = ET.SubElement(recipient, f"{{{xmlutils.NAMESPACES['D']}}}href")
+                href.text = f"mailto:{attendee.email}"
+
+                # Request status based on schedule_status
+                status_elem = ET.SubElement(response_elem, f"{{{xmlutils.NAMESPACES['C']}}}request-status")
+                if attendee.schedule_status:
+                    status_elem.text = attendee.schedule_status.value
+                elif attendee.schedule_agent != ScheduleAgent.SERVER:
+                    status_elem.text = ScheduleStatus.NO_SCHEDULING.value
+                elif attendee.is_internal:
+                    status_elem.text = ScheduleStatus.DELIVERED.value
+                else:
+                    status_elem.text = ScheduleStatus.PENDING.value
+
+            # Create response
+            headers = {"Content-Type": "application/xml; charset=utf-8"}
+            xml_response = ET.tostring(root, encoding='utf-8')
+            return client.MULTI_STATUS, headers, xml_response, None
+
+        except Exception as e:
+            logger.error(f"Error processing ADD: {e}", exc_info=True)
+            return 500, {}, b"Internal Server Error", None
+
+    def _process_vevent_request(self, vcal: vobject.base.Component, user: str,
+                                 base_prefix: str, ical_text: str):
+        """
+        Process iTIP REQUEST message for meeting invitations.
+
+        When an organizer posts a VEVENT/VTODO/VJOURNAL REQUEST to their
+        schedule-outbox, we deliver the invitation to all attendees:
+        - Internal attendees: Deliver to their schedule-inbox
+        - External attendees: Send via email (if configured)
+
+        Args:
+            vcal: Parsed VCALENDAR with METHOD:REQUEST
+            user: User posting the REQUEST (organizer)
+            base_prefix: Base URL prefix for responses
+            ical_text: Original iCalendar text
+
+        Returns:
+            HTTP response with schedule-response XML
+        """
+        from radicale import httputils, xmlutils
+        from http import client
+        import xml.etree.ElementTree as ET
+
+        try:
+            # Get the component (VEVENT/VTODO/VJOURNAL)
+            component = None
+            comp_type_name = None
+            for comp_type in ('vevent', 'vtodo', 'vjournal'):
+                if hasattr(vcal, comp_type):
+                    component = getattr(vcal, comp_type)
+                    comp_type_name = comp_type.upper()
+                    break
+
+            if not component:
+                logger.warning("No schedulable component in REQUEST")
+                return httputils.BAD_REQUEST
+
+            # Extract UID, SEQUENCE, and ORGANIZER
+            if not hasattr(component, 'uid'):
+                logger.warning("REQUEST missing UID")
+                return httputils.BAD_REQUEST
+
+            uid = component.uid.value
+            sequence = component.sequence.value if hasattr(component, 'sequence') else 0
+
+            if not hasattr(component, 'organizer'):
+                logger.warning("REQUEST missing ORGANIZER")
+                return httputils.BAD_REQUEST
+
+            organizer_uri = component.organizer.value
+            organizer_email = extract_email(organizer_uri)
+
+            if not organizer_email:
+                logger.warning(f"Invalid ORGANIZER email: {organizer_uri}")
+                return httputils.BAD_REQUEST
+
+            # Verify user is authorized as organizer
+            from radicale.itip.router import validate_organizer_permission
+            if not validate_organizer_permission(organizer_email, user, self.configuration):
+                logger.warning(f"User {user} not authorized as organizer {organizer_email}")
+                return httputils.FORBIDDEN
+
+            # Expand CUTYPE=GROUP attendees into individual members
+            self._expand_groups(component)
+
+            # Extract and route attendees
+            if not hasattr(component, 'attendee'):
+                logger.warning("REQUEST has no attendees")
+                return httputils.BAD_REQUEST
+
+            # Handle single or multiple attendees
+            attendees_raw = component.contents.get('attendee', [])
+            if not isinstance(attendees_raw, list):
+                attendees_raw = [attendees_raw]
+
+            # Check max attendees limit
+            max_attendees = self.configuration.get("scheduling", "max_attendees")
+            if len(attendees_raw) > max_attendees:
+                logger.warning(f"Too many attendees: {len(attendees_raw)} > {max_attendees}")
+                return httputils.FORBIDDEN
+
+            # Build attendee list with routing
+            itip_attendees = []
+            for att in attendees_raw:
+                att_email = extract_email(att.value)
+                if not att_email:
+                    continue
+
+                # Get PARTSTAT
+                partstat_str = 'NEEDS-ACTION'
+                if hasattr(att, 'params') and 'PARTSTAT' in att.params:
+                    partstat_str = att.params['PARTSTAT'][0]
+
+                # RFC 6638: Get SCHEDULE-AGENT parameter
+                schedule_agent = ScheduleAgent.SERVER  # Default
+                if hasattr(att, 'params') and 'SCHEDULE-AGENT' in att.params:
+                    agent_str = att.params['SCHEDULE-AGENT'][0].upper()
+                    try:
+                        schedule_agent = ScheduleAgent(agent_str)
+                    except ValueError:
+                        logger.warning(f"Unknown SCHEDULE-AGENT value: {agent_str}, using SERVER")
+                        schedule_agent = ScheduleAgent.SERVER
+
+                # Extract CUTYPE (INDIVIDUAL, ROOM, RESOURCE, GROUP, etc.)
+                cutype = 'INDIVIDUAL'
+                if hasattr(att, 'params') and 'CUTYPE' in att.params:
+                    cutype = att.params['CUTYPE'][0].upper()
+
+                # Create ITIPAttendee
+                itip_attendee = ITIPAttendee(
+                    email=att_email,
+                    partstat=AttendeePartStat(partstat_str),
+                    schedule_agent=schedule_agent,
+                    cutype=cutype
+                )
+
+                # Route attendee
+                is_internal, principal_path = route_attendee(att_email, self.storage)
+                itip_attendee.is_internal = is_internal
+                itip_attendee.principal_path = principal_path
+
+                itip_attendees.append(itip_attendee)
+
+            if not itip_attendees:
+                logger.warning("No valid attendees in REQUEST")
+                return httputils.BAD_REQUEST
+
+            # Create ITIPMessage
+            itip_msg = ITIPMessage(
+                method=ITIPMethod.REQUEST,
+                uid=uid,
+                sequence=sequence,
+                organizer=organizer_email,
+                attendees=itip_attendees,
+                component_type=comp_type_name,
+                icalendar_text=ical_text
+            )
+
+            # Deliver to internal attendees
+            self._deliver_internal(itip_msg)
+
+            # Process resource auto-accept for ROOM/RESOURCE attendees
+            # This checks for conflicts and auto-accepts if available
+            self._process_resource_auto_accept(itip_msg, vcal, component)
+
+            # Deliver to external attendees via email
+            try:
+                self._deliver_external(itip_msg)
+            except Exception as e:
+                logger.error(f"External delivery failed: {e}", exc_info=True)
+
+            # Update organizer's calendar with SCHEDULE-STATUS for each attendee
+            self._update_organizer_calendar_schedule_status(
+                organizer_email, uid, itip_attendees
+            )
+
+            # Build schedule-response with status for each attendee
+            response = ET.Element(xmlutils.make_clark("C:schedule-response"))
+
+            for attendee in itip_attendees:
+                response_elem = ET.SubElement(response, xmlutils.make_clark("C:response"))
+
+                # Recipient
+                recipient = ET.SubElement(response_elem, xmlutils.make_clark("C:recipient"))
+                href = ET.SubElement(recipient, xmlutils.make_clark("D:href"))
+                href.text = f"mailto:{attendee.email}"
+
+                # Request status - use tracked schedule_status if available
+                request_status = ET.SubElement(response_elem,
+                                               xmlutils.make_clark("C:request-status"))
+                if attendee.schedule_status:
+                    status = attendee.schedule_status
+                    if status == ScheduleStatus.DELIVERED:
+                        request_status.text = "2.0;Success"
+                    elif status == ScheduleStatus.PENDING:
+                        request_status.text = "2.8;NoAuthorization (external delivery not configured)"
+                    elif status == ScheduleStatus.INVALID_USER:
+                        request_status.text = "3.7;Invalid calendar user"
+                    elif status == ScheduleStatus.DELIVERY_FAILED:
+                        request_status.text = "5.1;Could not deliver"
+                    else:
+                        request_status.text = f"{status.value};Scheduling status"
+                else:
+                    # Fallback for any attendees without status
+                    request_status.text = "1.0;Unknown status"
+
+            logger.info(
+                f"Processed REQUEST for {uid}: "
+                f"{len([a for a in itip_attendees if a.is_internal])} internal, "
+                f"{len([a for a in itip_attendees if not a.is_internal])} external"
+            )
+
+            headers = (
+                ("Content-Type", "application/xml; charset=utf-8"),
+            )
+            return client.OK, headers, ET.tostring(response, encoding="utf-8"), None
+
+        except Exception as e:
+            logger.error(f"Error processing REQUEST: {e}", exc_info=True)
+            return httputils.INTERNAL_SERVER_ERROR
+
+    def _process_freebusy_request(self, vcal: vobject.base.Component, user: str, base_prefix: str):
+        """
+        Process iTIP VFREEBUSY REQUEST message.
+
+        When a user wants to check attendees' availability before scheduling,
+        they POST a VFREEBUSY REQUEST with the time range and attendee list.
+        We query each internal attendee's calendars and return their busy times.
+
+        RFC 6638 Section 5.3 - Free/Busy Scheduling
+
+        Args:
+            vcal: Parsed VCALENDAR with METHOD:REQUEST and VFREEBUSY component
+            user: User posting the request (organizer)
+            base_prefix: Base URL prefix for responses
+
+        Returns:
+            HTTP response with schedule-response containing VFREEBUSY for each attendee
+        """
+        from radicale import httputils, xmlutils
+        from radicale.item import filter as radicale_filter
+        from http import client
+        import xml.etree.ElementTree as ET
+        from datetime import datetime, timezone
+
+        try:
+            # Get the VFREEBUSY component
+            vfreebusy = vcal.vfreebusy
+
+            # Extract ORGANIZER
+            if not hasattr(vfreebusy, 'organizer'):
+                logger.warning("VFREEBUSY REQUEST missing ORGANIZER")
+                return httputils.BAD_REQUEST
+
+            organizer_uri = vfreebusy.organizer.value
+            organizer_email = extract_email(organizer_uri)
+
+            # Extract time range
+            if not hasattr(vfreebusy, 'dtstart') or not hasattr(vfreebusy, 'dtend'):
+                logger.warning("VFREEBUSY REQUEST missing DTSTART/DTEND")
+                return httputils.BAD_REQUEST
+
+            dtstart = vfreebusy.dtstart.value
+            dtend = vfreebusy.dtend.value
+
+            logger.info(f"Processing VFREEBUSY REQUEST from {organizer_email} "
+                       f"for {dtstart} to {dtend}")
+
+            # Extract ATTENDEEs
+            if not hasattr(vfreebusy, 'attendee'):
+                logger.warning("VFREEBUSY REQUEST missing ATTENDEE")
+                return httputils.BAD_REQUEST
+
+            attendees = vfreebusy.attendee_list if hasattr(vfreebusy, 'attendee_list') else [vfreebusy.attendee]
+
+            # Build schedule-response with VFREEBUSY for each attendee
+            response = ET.Element(xmlutils.make_clark("C:schedule-response"))
+
+            for attendee in attendees:
+                attendee_email = extract_email(attendee.value)
+                if not attendee_email:
+                    continue
+
+                # Create response element for this attendee
+                response_elem = ET.SubElement(response, xmlutils.make_clark("C:response"))
+
+                # Add recipient
+                recipient = ET.SubElement(response_elem, xmlutils.make_clark("C:recipient"))
+                href = ET.SubElement(recipient, xmlutils.make_clark("D:href"))
+                href.text = f"mailto:{attendee_email}"
+
+                # Route attendee
+                is_internal, attendee_principal = route_attendee(attendee_email, self.storage)
+
+                if not is_internal:
+                    # External attendee - return request-status indicating unavailable
+                    request_status = ET.SubElement(response_elem,
+                                                   xmlutils.make_clark("C:request-status"))
+                    request_status.text = "3.7;Invalid calendar user"
+                    logger.info(f"VFREEBUSY: External attendee {attendee_email} - no data available")
+                    continue
+
+                # Calculate busy times for internal attendee
+                try:
+                    freebusy_ical = self._calculate_freebusy(
+                        attendee_principal, attendee_email, organizer_email,
+                        dtstart, dtend
+                    )
+
+                    # Success - add calendar-data with VFREEBUSY REPLY
+                    request_status = ET.SubElement(response_elem,
+                                                   xmlutils.make_clark("C:request-status"))
+                    request_status.text = "2.0;Success"
+
+                    calendar_data = ET.SubElement(response_elem,
+                                                  xmlutils.make_clark("C:calendar-data"))
+                    calendar_data.text = freebusy_ical
+
+                    logger.info(f"VFREEBUSY: Returned busy times for {attendee_email}")
+
+                except Exception as e:
+                    logger.error(f"Failed to calculate free/busy for {attendee_email}: {e}",
+                               exc_info=True)
+                    request_status = ET.SubElement(response_elem,
+                                                   xmlutils.make_clark("C:request-status"))
+                    request_status.text = "5.3;No scheduling support for user"
+
+            headers = (
+                ("Content-Type", "application/xml; charset=utf-8"),
+            )
+
+            return client.OK, headers, ET.tostring(response, encoding="unicode"), None
+
+        except Exception as e:
+            logger.error(f"Error processing VFREEBUSY REQUEST: {e}", exc_info=True)
+            return httputils.INTERNAL_SERVER_ERROR
+
+    def _calculate_freebusy(self, principal_path: str, attendee_email: str,
+                            organizer_email: str, dtstart, dtend) -> str:
+        """
+        Calculate free/busy times for a user within a time range.
+
+        Scans all calendars under the user's principal and returns busy periods.
+
+        Args:
+            principal_path: User's principal path (e.g., /alice/)
+            attendee_email: Attendee's email address
+            organizer_email: Organizer's email address
+            dtstart: Start of time range
+            dtend: End of time range
+
+        Returns:
+            iCalendar text with METHOD:REPLY and VFREEBUSY component
+        """
+        from radicale.item import filter as radicale_filter
+        from vobject.icalendar import utc as vobj_utc
+        from datetime import datetime, timedelta
+        import xml.etree.ElementTree as ET
+        from radicale import xmlutils
+
+        # Build time-range filter element for the query
+        # Convert datetime to ISO format strings
+        if hasattr(dtstart, 'strftime'):
+            start_str = dtstart.strftime('%Y%m%dT%H%M%SZ')
+        else:
+            start_str = str(dtstart).replace('-', '').replace(':', '')
+
+        if hasattr(dtend, 'strftime'):
+            end_str = dtend.strftime('%Y%m%dT%H%M%SZ')
+        else:
+            end_str = str(dtend).replace('-', '').replace(':', '')
+
+        # Collect all busy periods
+        busy_periods = []
+
+        # Discover all calendar collections under user's principal
+        discovered = list(self.storage.discover(principal_path, depth="1"))
+
+        for collection in discovered:
+            # Skip non-calendar collections
+            if not hasattr(collection, 'tag') or collection.tag != 'VCALENDAR':
+                continue
+
+            # Skip schedule-inbox (not real events)
+            if 'schedule-inbox' in collection.path.lower():
+                continue
+
+            # Get all items in calendar
+            try:
+                hrefs = list(collection._list())
+
+                for href in hrefs:
+                    item = collection._get(href)
+                    if not item:
+                        continue
+
+                    # Process each component in the item
+                    vcal = item.vobject_item
+
+                    for subcomp in vcal.getChildren():
+                        if subcomp.name != 'VEVENT':
+                            continue
+
+                        # Check TRANSP - ignore TRANSPARENT events
+                        transp = getattr(subcomp, 'transp', None)
+                        if transp and transp.value.upper() == 'TRANSPARENT':
+                            continue
+
+                        # Determine FBTYPE based on STATUS
+                        status = getattr(subcomp, 'status', None)
+                        if status:
+                            status_val = status.value.upper()
+                            if status_val == 'CANCELLED':
+                                continue  # Skip cancelled events
+                            elif status_val == 'TENTATIVE':
+                                fbtype = 'BUSY-TENTATIVE'
+                            else:
+                                fbtype = 'BUSY'
+                        else:
+                            fbtype = 'BUSY'
+
+                        # Get occurrences within time range
+                        occurrences = self._get_event_occurrences(
+                            subcomp, dtstart, dtend
+                        )
+
+                        for occ_start, occ_end in occurrences:
+                            busy_periods.append((occ_start, occ_end, fbtype))
+
+            except Exception as e:
+                logger.warning(f"Error reading calendar {collection.path}: {e}")
+                continue
+
+        # Sort and merge overlapping periods (optional optimization)
+        busy_periods.sort(key=lambda x: x[0])
+
+        # Build VFREEBUSY REPLY
+        reply = vobject.iCalendar()
+        reply.add('method').value = 'REPLY'
+
+        vfb = reply.add('vfreebusy')
+
+        # Set required properties
+        vfb.add('dtstamp').value = datetime.now(vobj_utc)
+        vfb.add('dtstart').value = dtstart if hasattr(dtstart, 'tzinfo') else dtstart
+        vfb.add('dtend').value = dtend if hasattr(dtend, 'tzinfo') else dtend
+
+        # Add organizer and attendee
+        vfb.add('organizer').value = f"mailto:{organizer_email}"
+        att = vfb.add('attendee')
+        att.value = f"mailto:{attendee_email}"
+
+        # Add busy periods
+        for start, end, fbtype in busy_periods:
+            fb = vfb.add('freebusy')
+            # Format as PERIOD: start/end
+            if hasattr(start, 'strftime'):
+                start_str = start.strftime('%Y%m%dT%H%M%SZ')
+            else:
+                start_str = str(start)
+            if hasattr(end, 'strftime'):
+                end_str = end.strftime('%Y%m%dT%H%M%SZ')
+            else:
+                end_str = str(end)
+
+            fb.value = [(start, end)]
+            fb.params['FBTYPE'] = [fbtype]
+
+        return reply.serialize()
+
+    def _get_event_occurrences(self, vevent, range_start, range_end) -> list:
+        """
+        Get all occurrences of an event within a time range.
+
+        Handles both single events and recurring events with RRULE.
+
+        Args:
+            vevent: VEVENT vobject component
+            range_start: Start of time range
+            range_end: End of time range
+
+        Returns:
+            List of (start, end) tuples for each occurrence
+        """
+        from datetime import datetime, timedelta
+        from vobject.icalendar import utc as vobj_utc
+
+        occurrences = []
+
+        # Get event start/end
+        if not hasattr(vevent, 'dtstart'):
+            return occurrences
+
+        event_start = vevent.dtstart.value
+        event_end = vevent.dtend.value if hasattr(vevent, 'dtend') else None
+
+        # Calculate duration
+        if event_end:
+            if hasattr(event_start, 'hour') and hasattr(event_end, 'hour'):
+                duration = event_end - event_start
+            else:
+                # All-day event
+                duration = timedelta(days=1)
+        else:
+            # Default 1 hour duration
+            duration = timedelta(hours=1)
+
+        # Normalize range to datetime for comparison
+        if hasattr(range_start, 'hour'):
+            range_start_dt = range_start
+        else:
+            range_start_dt = datetime.combine(range_start, datetime.min.time())
+
+        if hasattr(range_end, 'hour'):
+            range_end_dt = range_end
+        else:
+            range_end_dt = datetime.combine(range_end, datetime.max.time())
+
+        # Make timezone-aware if needed
+        if hasattr(range_start_dt, 'tzinfo') and range_start_dt.tzinfo is None:
+            range_start_dt = range_start_dt.replace(tzinfo=vobj_utc)
+        if hasattr(range_end_dt, 'tzinfo') and range_end_dt.tzinfo is None:
+            range_end_dt = range_end_dt.replace(tzinfo=vobj_utc)
+
+        # Check for RRULE (recurring event)
+        if hasattr(vevent, 'rrule'):
+            try:
+                # Use dateutil for RRULE expansion
+                from dateutil import rrule as dateutil_rrule
+
+                # Get the rruleset from vobject
+                if hasattr(vevent, 'rruleset'):
+                    rruleset = vevent.rruleset
+                else:
+                    # Build rruleset manually
+                    rruleset = vevent.getrruleset(addRDate=True)
+
+                if rruleset:
+                    # Limit occurrences to prevent runaway expansion
+                    max_occurrences = 1000
+                    count = 0
+
+                    for occ_start in rruleset:
+                        if count >= max_occurrences:
+                            break
+
+                        # Make timezone-aware for comparison
+                        if hasattr(occ_start, 'tzinfo') and occ_start.tzinfo is None:
+                            occ_start = occ_start.replace(tzinfo=vobj_utc)
+
+                        occ_end = occ_start + duration
+
+                        # Check if occurrence is in range
+                        if occ_end <= range_start_dt:
+                            continue  # Before range
+                        if occ_start >= range_end_dt:
+                            break  # Past range, stop
+
+                        occurrences.append((occ_start, occ_end))
+                        count += 1
+
+            except Exception as e:
+                logger.warning(f"Error expanding RRULE: {e}")
+                # Fall back to single occurrence
+                if hasattr(event_start, 'tzinfo') and event_start.tzinfo is None:
+                    event_start = event_start.replace(tzinfo=vobj_utc)
+                event_end_dt = event_start + duration
+                if event_end_dt > range_start_dt and event_start < range_end_dt:
+                    occurrences.append((event_start, event_end_dt))
+
+        else:
+            # Single occurrence - check if in range
+            if hasattr(event_start, 'tzinfo') and event_start.tzinfo is None:
+                event_start = event_start.replace(tzinfo=vobj_utc)
+            event_end_dt = event_start + duration
+
+            if event_end_dt > range_start_dt and event_start < range_end_dt:
+                occurrences.append((event_start, event_end_dt))
+
+        return occurrences
+
     def _find_organizer_event(self, organizer_principal: str, uid: str):
         """
         Find the organizer's calendar event by UID.
@@ -1246,16 +2608,111 @@ class ITIPProcessor:
         logger.warning(f"UID {uid} not found in any calendar under {organizer_principal}")
         return False, None, None
 
+    def _check_sequence_ordering(
+            self,
+            event_path: str,
+            collection,
+            incoming_sequence: int,
+            recurrence_id: Optional[str] = None
+    ) -> Tuple[bool, int]:
+        """
+        Check if incoming message has valid sequence ordering per RFC 5546 §2.1.4.
+
+        Messages with SEQUENCE less than the stored event's SEQUENCE should be
+        rejected as stale/outdated to prevent processing out-of-order messages.
+
+        Args:
+            event_path: Path to the stored event
+            collection: Calendar collection containing the event
+            incoming_sequence: SEQUENCE number from incoming iTIP message
+            recurrence_id: Optional RECURRENCE-ID for specific occurrence
+
+        Returns:
+            Tuple of (is_valid, stored_sequence):
+            - is_valid: True if incoming sequence is >= stored sequence
+            - stored_sequence: The current stored SEQUENCE value
+        """
+        try:
+            href = event_path.split('/')[-1]
+            item = collection._get(href)
+
+            if not item:
+                # Event doesn't exist, any sequence is valid
+                return True, 0
+
+            vcal = item.vobject_item
+            stored_sequence = 0
+
+            # Find the appropriate component
+            for subcomp in vcal.getChildren():
+                if subcomp.name not in ('VEVENT', 'VTODO', 'VJOURNAL'):
+                    continue
+
+                # If recurrence_id specified, look for that specific occurrence
+                if recurrence_id:
+                    if hasattr(subcomp, 'recurrence_id'):
+                        comp_recur_id = self._normalize_recurrence_id(
+                            subcomp.recurrence_id.value
+                        )
+                        target_recur_id = self._normalize_recurrence_id(recurrence_id)
+                        if comp_recur_id != target_recur_id:
+                            continue
+                    else:
+                        continue
+                else:
+                    # For non-recurring or master component
+                    if hasattr(subcomp, 'recurrence_id'):
+                        continue  # Skip exception components when looking for master
+
+                # Found target component, get its SEQUENCE
+                if hasattr(subcomp, 'sequence'):
+                    try:
+                        stored_sequence = int(subcomp.sequence.value)
+                    except (ValueError, TypeError):
+                        stored_sequence = 0
+                break
+
+            # RFC 5546 §2.1.4: Incoming SEQUENCE must be >= stored SEQUENCE
+            is_valid = incoming_sequence >= stored_sequence
+
+            if not is_valid:
+                logger.warning(
+                    f"Rejecting stale iTIP message: incoming SEQUENCE {incoming_sequence} "
+                    f"< stored SEQUENCE {stored_sequence} for {event_path}"
+                )
+            else:
+                logger.debug(
+                    f"Sequence check passed: incoming {incoming_sequence} >= stored {stored_sequence}"
+                )
+
+            return is_valid, stored_sequence
+
+        except Exception as e:
+            logger.error(f"Error checking sequence ordering: {e}", exc_info=True)
+            # On error, allow processing to continue
+            return True, 0
+
     def _update_attendee_partstat(self, event_path: str, collection,
-                                  attendee_email: str, new_partstat: str) -> bool:
+                                  attendee_email: str, new_partstat: str,
+                                  recurrence_id: Optional[str] = None,
+                                  delegated_to: Optional[str] = None) -> bool:
         """
         Update the PARTSTAT of an attendee in an event.
+
+        For recurring events, if recurrence_id is specified, only the matching
+        occurrence is updated. If no exception component exists for that
+        occurrence, one is created from the master template.
+
+        RFC 5546 Delegation: When delegated_to is specified, also adds the
+        DELEGATED-TO parameter to the attendee line.
 
         Args:
             event_path: Full path to event (e.g., /alice/calendar.ics/meeting.ics)
             collection: Calendar collection containing the event
             attendee_email: Email of attendee to update
             new_partstat: New participation status
+            recurrence_id: Optional RECURRENCE-ID for specific occurrence (RFC 5545)
+            delegated_to: Optional email of delegate (RFC 5546)
 
         Returns:
             True if updated successfully
@@ -1271,12 +2728,36 @@ class ITIPProcessor:
             # Find and update the attendee
             vcal = item.vobject_item
             updated = False
+            master_component = None
 
+            # First pass: find the target component
             for subcomp in vcal.getChildren():
                 if subcomp.name not in ('VEVENT', 'VTODO', 'VJOURNAL'):
                     continue
 
-                # Find the attendee
+                # Track master component (no RECURRENCE-ID)
+                if not hasattr(subcomp, 'recurrence_id'):
+                    master_component = subcomp
+
+                if recurrence_id:
+                    # Looking for specific occurrence
+                    if hasattr(subcomp, 'recurrence_id'):
+                        # Normalize RECURRENCE-ID comparison (handle different formats)
+                        comp_recur_id = self._normalize_recurrence_id(
+                            subcomp.recurrence_id.value
+                        )
+                        target_recur_id = self._normalize_recurrence_id(recurrence_id)
+
+                        if comp_recur_id != target_recur_id:
+                            continue  # Not the target occurrence
+                    else:
+                        continue  # Skip master when looking for specific occurrence
+                else:
+                    # No recurrence_id specified - update master or all occurrences
+                    # For non-recurring events, there's only one component
+                    pass
+
+                # Found target component - update the attendee
                 if hasattr(subcomp, 'attendee_list'):
                     attendees = subcomp.attendee_list
                 else:
@@ -1287,20 +2768,38 @@ class ITIPProcessor:
                     if att_email and att_email.lower() == attendee_email.lower():
                         # Update PARTSTAT
                         att.params['PARTSTAT'] = [new_partstat]
+                        # RFC 5546: Add DELEGATED-TO if delegation
+                        if delegated_to and new_partstat == "DELEGATED":
+                            att.params['DELEGATED-TO'] = [f"mailto:{delegated_to}"]
                         updated = True
-                        logger.debug(f"Updated PARTSTAT for {attendee_email} to {new_partstat}")
+                        log_parts = [f"Updated PARTSTAT for {attendee_email} to {new_partstat}"]
+                        if delegated_to:
+                            log_parts.append(f"DELEGATED-TO: {delegated_to}")
+                        if recurrence_id:
+                            log_parts.append(f"RECURRENCE-ID: {recurrence_id}")
+                        logger.debug(" ".join(log_parts))
                         break
 
                 if updated:
-                    # Increment SEQUENCE
-                    if hasattr(subcomp, 'sequence'):
-                        subcomp.sequence.value = str(int(subcomp.sequence.value) + 1)
-                    else:
-                        subcomp.add('sequence').value = '1'
+                    # Note: Do NOT increment SEQUENCE here - per RFC 5546, SEQUENCE is
+                    # only incremented by the Organizer when making significant changes.
+                    # REPLY processing (PARTSTAT updates) should preserve the original
+                    # SEQUENCE value.
                     break
 
+            # If recurrence_id specified but no matching exception found,
+            # create exception from master component
+            if recurrence_id and not updated and master_component:
+                updated = self._create_recurrence_exception(
+                    vcal, master_component, attendee_email,
+                    new_partstat, recurrence_id
+                )
+
             if not updated:
-                logger.warning(f"Attendee {attendee_email} not found in event")
+                logger.warning(
+                    f"Attendee {attendee_email} not found in event"
+                    + (f" (RECURRENCE-ID: {recurrence_id})" if recurrence_id else "")
+                )
                 return False
 
             # Save the updated event
@@ -1314,6 +2813,810 @@ class ITIPProcessor:
 
         except Exception as e:
             logger.error(f"Error updating PARTSTAT: {e}", exc_info=True)
+            return False
+
+    def _handle_delegation(self, event_path: str, collection, delegator_email: str,
+                           delegate_email: str, component: vobject.base.Component,
+                           base_prefix: str, recurrence_id: Optional[str] = None):
+        """
+        Handle RFC 5546 delegation workflow.
+
+        When an attendee delegates their attendance to someone else:
+        1. Update delegator's PARTSTAT to DELEGATED with DELEGATED-TO
+        2. Add delegate as new ATTENDEE with DELEGATED-FROM
+        3. Send REQUEST to delegate (inbox for internal, email for external)
+
+        RFC 5546 Section 2.2.4 - Delegation:
+        "When delegating, the Attendee MUST set PARTSTAT to DELEGATED and
+        include the DELEGATED-TO parameter. The delegate is then added as
+        a new ATTENDEE with DELEGATED-FROM parameter."
+
+        Args:
+            event_path: Full path to event
+            collection: Calendar collection containing the event
+            delegator_email: Email of attendee delegating
+            delegate_email: Email of person being delegated to
+            component: VEVENT/VTODO/VJOURNAL component from REPLY
+            base_prefix: Base URL prefix for responses
+            recurrence_id: Optional RECURRENCE-ID for specific occurrence
+
+        Returns:
+            HTTP response with schedule-response, or None to fall through
+        """
+        try:
+            # Get the item
+            href = event_path.split('/')[-1]
+            item = collection._get(href)
+
+            if not item:
+                logger.warning(f"Event not found for delegation: {event_path}")
+                return None
+
+            vcal = item.vobject_item
+            updated = False
+            delegate_added = False
+
+            # Find the target component
+            for subcomp in vcal.getChildren():
+                if subcomp.name not in ('VEVENT', 'VTODO', 'VJOURNAL'):
+                    continue
+
+                # Handle recurrence_id if specified
+                if recurrence_id:
+                    if hasattr(subcomp, 'recurrence_id'):
+                        comp_recur_id = self._normalize_recurrence_id(
+                            subcomp.recurrence_id.value
+                        )
+                        target_recur_id = self._normalize_recurrence_id(recurrence_id)
+                        if comp_recur_id != target_recur_id:
+                            continue
+                    else:
+                        continue
+
+                # Update delegator's PARTSTAT and add DELEGATED-TO
+                if hasattr(subcomp, 'attendee_list'):
+                    attendees = subcomp.attendee_list
+                else:
+                    attendees = [subcomp.attendee] if hasattr(subcomp, 'attendee') else []
+
+                for att in attendees:
+                    att_email = extract_email(att.value)
+                    if att_email and att_email.lower() == delegator_email.lower():
+                        att.params['PARTSTAT'] = ['DELEGATED']
+                        att.params['DELEGATED-TO'] = [f"mailto:{delegate_email}"]
+                        updated = True
+                        logger.debug(
+                            f"Updated delegator {delegator_email}: "
+                            f"PARTSTAT=DELEGATED, DELEGATED-TO={delegate_email}"
+                        )
+                        break
+
+                if not updated:
+                    logger.warning(f"Delegator {delegator_email} not found in event")
+                    return None
+
+                # Add delegate as new ATTENDEE with DELEGATED-FROM
+                # Get properties from delegator for the delegate
+                delegator_att = None
+                for att in attendees:
+                    att_email = extract_email(att.value)
+                    if att_email and att_email.lower() == delegator_email.lower():
+                        delegator_att = att
+                        break
+
+                # Create new attendee for delegate
+                delegate_att = subcomp.add('attendee')
+                delegate_att.value = f"mailto:{delegate_email}"
+                delegate_att.params['PARTSTAT'] = ['NEEDS-ACTION']
+                delegate_att.params['DELEGATED-FROM'] = [f"mailto:{delegator_email}"]
+                delegate_att.params['ROLE'] = ['REQ-PARTICIPANT']
+                delegate_att.params['CUTYPE'] = ['INDIVIDUAL']
+                delegate_att.params['RSVP'] = ['TRUE']
+
+                delegate_added = True
+                logger.info(
+                    f"Added delegate {delegate_email} with DELEGATED-FROM={delegator_email}"
+                )
+
+                # Increment SEQUENCE
+                if hasattr(subcomp, 'sequence'):
+                    subcomp.sequence.value = str(int(subcomp.sequence.value) + 1)
+                else:
+                    subcomp.add('sequence').value = '1'
+
+                break
+
+            if not updated or not delegate_added:
+                logger.warning("Delegation update incomplete")
+                return None
+
+            # Save the updated event
+            updated_item = radicale_item.Item(
+                collection_path=collection.path,
+                vobject_item=vcal
+            )
+            updated_item.prepare()
+            collection.upload(href, updated_item)
+
+            logger.info(f"Saved delegation update to {event_path}")
+
+            # Now send REQUEST to the delegate
+            self._send_delegation_request(
+                vcal, delegate_email, delegator_email, base_prefix
+            )
+
+            # Return success response
+            return self._build_schedule_response_success(base_prefix, delegator_email)
+
+        except Exception as e:
+            logger.error(f"Error handling delegation: {e}", exc_info=True)
+            return None
+
+    def _send_delegation_request(self, vcal: vobject.base.Component,
+                                  delegate_email: str, delegator_email: str,
+                                  base_prefix: str) -> None:
+        """
+        Send a REQUEST to the delegate inviting them to the event.
+
+        For internal delegates, delivers to their schedule-inbox.
+        For external delegates, sends via email.
+
+        Args:
+            vcal: Updated VCALENDAR with delegate added
+            delegate_email: Email of the delegate
+            delegator_email: Email of the person who delegated
+            base_prefix: Base URL prefix
+        """
+        try:
+            # Generate iTIP REQUEST for the delegate
+            request_ical = self._generate_itip_request_for_delegation(vcal, delegate_email)
+
+            # Route the delegate
+            is_internal, delegate_principal = route_attendee(delegate_email, self.storage)
+
+            if is_internal:
+                # Deliver to delegate's schedule-inbox
+                inbox_path = get_inbox_path(delegate_principal)
+                discovered = list(self.storage.discover(inbox_path, depth="0"))
+
+                if not discovered:
+                    logger.warning(f"Delegate inbox not found: {inbox_path}")
+                    return
+
+                inbox = discovered[0]
+
+                # Create item
+                request_vobject = vobject.readOne(request_ical)
+                request_item = radicale_item.Item(
+                    collection_path=inbox.path,
+                    vobject_item=request_vobject
+                )
+                request_item.prepare()
+
+                # Generate filename
+                uid = self._extract_uid(request_ical)
+                import time
+                timestamp = int(time.time())
+                filename = f"{uid}-delegation-{timestamp}.ics"
+
+                # Upload
+                inbox.upload(filename, request_item)
+                logger.info(
+                    f"Delivered delegation REQUEST to {delegate_email} inbox "
+                    f"(delegated from {delegator_email})"
+                )
+
+            else:
+                # External delegate - send via email
+                if not self.email_config:
+                    logger.warning(
+                        f"Cannot send delegation to external delegate {delegate_email}: "
+                        "email not configured"
+                    )
+                    return
+
+                # Extract organizer
+                organizer_email = self._extract_field(request_ical, "ORGANIZER")
+                organizer_email = extract_email(organizer_email) if organizer_email else "unknown"
+
+                # Get UID
+                uid = self._extract_uid(request_ical)
+
+                # Create ITIPMessage
+                itip_attendee = ITIPAttendee(
+                    email=delegate_email,
+                    is_internal=False,
+                    principal_path=None,
+                    cn=None,
+                    delegated_from=delegator_email
+                )
+
+                itip_msg = ITIPMessage(
+                    method=ITIPMethod.REQUEST,
+                    uid=uid or "unknown",
+                    sequence=0,
+                    organizer=organizer_email,
+                    attendees=[itip_attendee],
+                    component_type="VEVENT",
+                    icalendar_text=request_ical
+                )
+
+                # Send via email
+                self._deliver_external(itip_msg)
+                logger.info(
+                    f"Sent delegation REQUEST email to {delegate_email} "
+                    f"(delegated from {delegator_email})"
+                )
+
+        except Exception as e:
+            logger.error(f"Error sending delegation request: {e}", exc_info=True)
+
+    def _generate_itip_request_for_delegation(self, vcal: vobject.base.Component,
+                                               delegate_email: str) -> str:
+        """
+        Generate iTIP REQUEST for a delegated attendee.
+
+        Creates a REQUEST message specifically for the delegate, containing
+        the updated event with DELEGATED-FROM information.
+
+        Args:
+            vcal: Updated VCALENDAR with delegate added
+            delegate_email: Email of the delegate
+
+        Returns:
+            iCalendar text with METHOD:REQUEST
+        """
+        # Clone the calendar for the REQUEST
+        itip_vcal = vobject.newFromBehavior('VCALENDAR')
+        itip_vcal.add('version').value = '2.0'
+        itip_vcal.add('prodid').value = '-//Radicale//NONSGML Radicale Server//EN'
+        itip_vcal.add('method').value = 'REQUEST'
+
+        # Get the component
+        component = None
+        for comp_type in ('vevent', 'vtodo', 'vjournal'):
+            if hasattr(vcal, comp_type):
+                component = getattr(vcal, comp_type)
+                break
+
+        if not component:
+            return ""
+
+        # Clone the component
+        itip_comp = itip_vcal.add(component.name.lower())
+
+        # Copy all properties
+        for prop in component.getChildren():
+            if prop.name.lower() not in ('method',):
+                itip_comp.add(prop.name).value = prop.value
+                # Copy parameters
+                if hasattr(prop, 'params'):
+                    for param_name, param_values in prop.params.items():
+                        itip_comp.contents[prop.name.lower()][-1].params[param_name] = param_values
+
+        return itip_vcal.serialize()
+
+    def _update_organizer_calendar_schedule_status(
+            self,
+            organizer_email: str,
+            uid: str,
+            attendees: List[ITIPAttendee]
+    ) -> None:
+        """
+        Update organizer's calendar event with SCHEDULE-STATUS for each attendee.
+
+        RFC 6638 Section 3.2.9 defines SCHEDULE-STATUS as a property parameter
+        on ATTENDEE that indicates the result of scheduling delivery.
+
+        Args:
+            organizer_email: Organizer's email address
+            uid: Event UID
+            attendees: List of attendees with schedule_status set
+
+        Note:
+            Failures are logged but don't interrupt the scheduling flow.
+        """
+        try:
+            # Find organizer's principal
+            is_internal, principal_path = route_attendee(organizer_email, self.storage)
+
+            if not is_internal or not principal_path:
+                logger.debug(f"Organizer {organizer_email} not internal, skipping SCHEDULE-STATUS update")
+                return
+
+            # Find the event in organizer's calendars
+            # Look for .ics files containing the UID in their calendars
+            calendar_path = f"{principal_path}calendar/"
+            discovered = list(self.storage.discover(calendar_path, depth="1"))
+
+            event_item = None
+            event_collection = None
+            event_filename = None
+
+            for resource in discovered:
+                if hasattr(resource, 'get_meta') and resource.path.endswith('.ics'):
+                    try:
+                        item_vcal = resource.vobject_item
+                        component = None
+                        for comp_type in ('vevent', 'vtodo', 'vjournal'):
+                            if hasattr(item_vcal, comp_type):
+                                component = getattr(item_vcal, comp_type)
+                                break
+                        if component and hasattr(component, 'uid'):
+                            if component.uid.value == uid:
+                                event_item = resource
+                                # Get collection path
+                                event_path = resource.path
+                                collection_path = "/".join(event_path.split("/")[:-1]) + "/"
+                                event_filename = event_path.split("/")[-1]
+                                collections = list(self.storage.discover(collection_path, depth="0"))
+                                if collections:
+                                    event_collection = collections[0]
+                                break
+                    except Exception:
+                        continue
+
+            if not event_item or not event_collection:
+                logger.debug(f"Event {uid} not found in organizer's calendar, skipping SCHEDULE-STATUS update")
+                return
+
+            # Update ATTENDEE properties with SCHEDULE-STATUS
+            item_vcal = event_item.vobject_item
+            component = None
+            for comp_type in ('vevent', 'vtodo', 'vjournal'):
+                if hasattr(item_vcal, comp_type):
+                    component = getattr(item_vcal, comp_type)
+                    break
+
+            if not component:
+                return
+
+            # Build email to status mapping
+            status_map = {
+                att.email.lower(): att.schedule_status
+                for att in attendees
+                if att.schedule_status
+            }
+
+            if not status_map:
+                logger.debug("No schedule statuses to update")
+                return
+
+            # Update each attendee's SCHEDULE-STATUS
+            attendee_list = component.contents.get('attendee', [])
+            updated = False
+
+            for att_prop in attendee_list:
+                att_email = extract_email(att_prop.value)
+                if att_email and att_email.lower() in status_map:
+                    status = status_map[att_email.lower()]
+                    # RFC 6638: SCHEDULE-STATUS is a quoted list of status values
+                    att_prop.params['SCHEDULE-STATUS'] = [status.value]
+                    updated = True
+                    logger.debug(f"Set SCHEDULE-STATUS={status.value} for {att_email}")
+
+            if updated:
+                # Save the updated event
+                updated_item = radicale_item.Item(
+                    collection_path=event_collection.path,
+                    vobject_item=item_vcal
+                )
+                updated_item.prepare()
+                event_collection.upload(event_filename, updated_item)
+                logger.info(f"Updated SCHEDULE-STATUS for event {uid} in organizer's calendar")
+
+        except Exception as e:
+            # Don't fail scheduling if status update fails
+            logger.error(f"Failed to update SCHEDULE-STATUS for {uid}: {e}", exc_info=True)
+
+    def _notify_delegator_of_decline(
+            self,
+            event_path: str,
+            collection,
+            vcal: vobject.base.Component,
+            component: vobject.base.Component,
+            delegate_email: str,
+            delegator_email: str,
+            organizer_email: str,
+            base_prefix: str,
+            recurrence_id: Optional[str] = None
+    ) -> None:
+        """
+        Notify the original delegator when their delegate declines.
+
+        Per RFC 5546 Section 2.2.4, when a delegate declines an invitation,
+        the original delegator should be notified so they can:
+        1. Attend the event themselves
+        2. Find another delegate
+        3. Decline themselves
+
+        We send a custom iTIP message to the delegator's schedule-inbox
+        containing the event with the delegate's DECLINED status.
+
+        Args:
+            event_path: Full path to the organizer's event
+            collection: Calendar collection containing the event
+            vcal: Original VCALENDAR from the REPLY
+            component: VEVENT/VTODO/VJOURNAL component
+            delegate_email: Email of the delegate who declined
+            delegator_email: Email of the original delegator to notify
+            organizer_email: Email of the organizer
+            base_prefix: Base URL prefix
+            recurrence_id: Optional RECURRENCE-ID for specific occurrence
+        """
+        try:
+            logger.info(
+                f"Delegate {delegate_email} declined invitation "
+                f"(delegated from {delegator_email}). Notifying delegator..."
+            )
+
+            # Route the delegator
+            is_internal, delegator_principal = route_attendee(delegator_email, self.storage)
+
+            if not is_internal:
+                # For external delegators, we'd send email notification
+                logger.info(
+                    f"External delegator {delegator_email} - "
+                    "delegate decline notification not yet supported for external users"
+                )
+                return
+
+            # Get the current event from organizer's calendar to build notification
+            href = event_path.rsplit('/', 1)[-1]
+            item = collection._get(href)
+
+            if not item:
+                logger.warning(
+                    f"Could not find event {event_path} to build delegate decline notification"
+                )
+                return
+
+            # Generate notification iTIP message
+            notification_ical = self._generate_delegate_decline_notification(
+                item.vobject_item, delegate_email, delegator_email,
+                recurrence_id=recurrence_id
+            )
+
+            if not notification_ical:
+                logger.warning("Failed to generate delegate decline notification")
+                return
+
+            # Deliver to delegator's schedule-inbox
+            inbox_path = get_inbox_path(delegator_principal)
+            discovered = list(self.storage.discover(inbox_path, depth="0"))
+
+            if not discovered:
+                logger.warning(
+                    f"Delegator inbox not found: {inbox_path}. "
+                    "Cannot deliver delegate decline notification."
+                )
+                return
+
+            inbox = discovered[0]
+
+            # Create inbox item
+            from radicale.item import Item
+            notification_item = Item(
+                collection=inbox,
+                vobject_item=vobject.readOne(notification_ical)
+            )
+            notification_item.prepare()
+
+            # Generate unique filename
+            uid = self._extract_uid(notification_ical)
+            import time
+            timestamp = int(time.time())
+            filename = f"{uid}-delegate-declined-{timestamp}.ics"
+
+            # Upload to inbox
+            inbox.upload(filename, notification_item)
+            logger.info(
+                f"Delivered delegate decline notification to {delegator_email} inbox: "
+                f"{delegate_email} declined the delegated invitation"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Error notifying delegator of decline: {e}", exc_info=True
+            )
+
+    def _generate_delegate_decline_notification(
+            self,
+            vcal: vobject.base.Component,
+            delegate_email: str,
+            delegator_email: str,
+            recurrence_id: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Generate an iTIP REPLY notification for delegate decline.
+
+        Creates a REPLY message that informs the delegator their delegate
+        has declined. This allows the delegator's calendar client to:
+        - Display notification about the decline
+        - Prompt the delegator to take action (attend or find new delegate)
+
+        Args:
+            vcal: Current event VCALENDAR
+            delegate_email: Email of the delegate who declined
+            delegator_email: Email of the original delegator
+            recurrence_id: Optional RECURRENCE-ID for specific occurrence
+
+        Returns:
+            iCalendar text with METHOD:REPLY or None on error
+        """
+        try:
+            from datetime import datetime
+            from vobject.icalendar import utc as vobj_utc
+
+            # Create new VCALENDAR for the notification
+            itip_vcal = vobject.newFromBehavior('VCALENDAR')
+            itip_vcal.add('version').value = '2.0'
+            itip_vcal.add('prodid').value = '-//Radicale//NONSGML Radicale Server//EN'
+            # Use REPLY method - this is the delegate's reply forwarded to delegator
+            itip_vcal.add('method').value = 'REPLY'
+
+            # Find the schedulable component
+            source_component = None
+            comp_name = None
+            for comp_type in ('vevent', 'vtodo', 'vjournal'):
+                if hasattr(vcal, comp_type):
+                    source_component = getattr(vcal, comp_type)
+                    comp_name = comp_type
+                    break
+
+            if not source_component:
+                logger.warning("No schedulable component found for decline notification")
+                return None
+
+            # If recurrence_id specified, find the matching component or use master
+            target_component = source_component
+            if recurrence_id:
+                # Look for matching exception component
+                for subcomp in vcal.getChildren():
+                    if subcomp.name.lower() == comp_name:
+                        if hasattr(subcomp, 'recurrence_id'):
+                            rid_value = self._normalize_recurrence_id(subcomp.recurrence_id.value)
+                            if rid_value == self._normalize_recurrence_id(recurrence_id):
+                                target_component = subcomp
+                                break
+
+            # Create the notification component
+            itip_comp = itip_vcal.add(comp_name)
+
+            # Copy essential properties
+            if hasattr(target_component, 'uid'):
+                itip_comp.add('uid').value = target_component.uid.value
+
+            # Use vobject's UTC timezone for compatibility
+            itip_comp.add('dtstamp').value = datetime.now(vobj_utc)
+
+            if hasattr(target_component, 'dtstart'):
+                itip_comp.add('dtstart').value = target_component.dtstart.value
+
+            if hasattr(target_component, 'dtend'):
+                itip_comp.add('dtend').value = target_component.dtend.value
+            elif hasattr(target_component, 'due'):
+                itip_comp.add('due').value = target_component.due.value
+
+            if hasattr(target_component, 'summary'):
+                itip_comp.add('summary').value = target_component.summary.value
+
+            if hasattr(target_component, 'organizer'):
+                org = itip_comp.add('organizer')
+                org.value = target_component.organizer.value
+                if hasattr(target_component.organizer, 'params'):
+                    for p_name, p_vals in target_component.organizer.params.items():
+                        org.params[p_name] = p_vals
+
+            # Add RECURRENCE-ID if applicable
+            if recurrence_id and hasattr(target_component, 'recurrence_id'):
+                rid = itip_comp.add('recurrence_id')
+                rid.value = target_component.recurrence_id.value
+
+            # Add the delegate as ATTENDEE with DECLINED status
+            # Include DELEGATED-FROM to show the delegation chain
+            delegate_att = itip_comp.add('attendee')
+            delegate_att.value = f"mailto:{delegate_email}"
+            delegate_att.params['PARTSTAT'] = ['DECLINED']
+            delegate_att.params['DELEGATED-FROM'] = [f"mailto:{delegator_email}"]
+            delegate_att.params['ROLE'] = ['REQ-PARTICIPANT']
+
+            # Add X-RADICALE-DELEGATE-DECLINED to help calendar clients
+            # understand this is a delegate decline notification
+            itip_comp.add('x-radicale-delegate-declined').value = delegate_email
+
+            # Add a COMMENT explaining the situation
+            itip_comp.add('comment').value = (
+                f"Your delegate {delegate_email} has declined this invitation. "
+                "You may want to attend yourself or delegate to someone else."
+            )
+
+            return itip_vcal.serialize()
+
+        except Exception as e:
+            logger.error(
+                f"Error generating delegate decline notification: {e}",
+                exc_info=True
+            )
+            return None
+
+    def _extract_uid(self, ical_text: str) -> Optional[str]:
+        """
+        Extract UID from iCalendar text.
+
+        Args:
+            ical_text: iCalendar text
+
+        Returns:
+            UID value or None
+        """
+        return self._extract_field(ical_text, "UID")
+
+    def _normalize_recurrence_id(self, value) -> str:
+        """
+        Normalize RECURRENCE-ID value for comparison.
+
+        Handles different formats:
+        - datetime object
+        - string with/without timezone
+        - date object
+
+        Args:
+            value: RECURRENCE-ID value (various types)
+
+        Returns:
+            Normalized string representation
+        """
+        if hasattr(value, 'strftime'):
+            # datetime or date object
+            if hasattr(value, 'hour'):
+                return value.strftime('%Y%m%dT%H%M%SZ')
+            else:
+                return value.strftime('%Y%m%d')
+        # String - normalize by removing common variations
+        s = str(value).replace('-', '').replace(':', '').replace('Z', '')
+        # Handle VALUE=DATE format
+        if 'T' not in s and len(s) == 8:
+            return s  # Date only
+        return s + 'Z' if 'T' in s else s
+
+    def _create_recurrence_exception(self, vcal, master_component,
+                                     attendee_email: str, new_partstat: str,
+                                     recurrence_id: str) -> bool:
+        """
+        Create a recurrence exception component for a specific occurrence.
+
+        When an attendee responds to a single occurrence of a recurring event
+        but no exception component exists yet, we create one based on the
+        master component.
+
+        Args:
+            vcal: Parent VCALENDAR
+            master_component: The master VEVENT/VTODO/VJOURNAL
+            attendee_email: Email of attendee to update
+            new_partstat: New participation status
+            recurrence_id: RECURRENCE-ID for the exception
+
+        Returns:
+            True if exception created successfully
+        """
+        try:
+            # Create new exception component
+            exception = vcal.add(master_component.name.lower())
+
+            # Copy key properties from master
+            if hasattr(master_component, 'uid'):
+                exception.add('uid').value = master_component.uid.value
+            if hasattr(master_component, 'summary'):
+                exception.add('summary').value = master_component.summary.value
+            if hasattr(master_component, 'organizer'):
+                org = exception.add('organizer')
+                org.value = master_component.organizer.value
+                if hasattr(master_component.organizer, 'params'):
+                    for k, v in master_component.organizer.params.items():
+                        org.params[k] = v
+
+            # Parse recurrence_id and set as proper datetime/date
+            from datetime import datetime as dt
+            from datetime import date as d
+            from vobject.icalendar import utc as vobj_utc
+
+            recurrence_dt = None
+            is_date_only = False
+
+            if hasattr(recurrence_id, 'strftime'):
+                # Already a datetime/date object
+                recurrence_dt = recurrence_id
+                is_date_only = not hasattr(recurrence_id, 'hour')
+            elif 'T' in str(recurrence_id):
+                # DateTime format string
+                normalized = self._normalize_recurrence_id(recurrence_id).replace('Z', '')
+                try:
+                    recurrence_dt = dt.strptime(normalized, '%Y%m%dT%H%M%S')
+                    # Make it UTC-aware using vobject's UTC timezone
+                    recurrence_dt = recurrence_dt.replace(tzinfo=vobj_utc)
+                except ValueError as e:
+                    logger.warning(f"Could not parse RECURRENCE-ID: {recurrence_id}: {e}")
+                    return False
+            else:
+                # Date-only format
+                try:
+                    recurrence_dt = dt.strptime(str(recurrence_id), '%Y%m%d').date()
+                    is_date_only = True
+                except ValueError as e:
+                    logger.warning(f"Could not parse RECURRENCE-ID date: {recurrence_id}: {e}")
+                    return False
+
+            # Set RECURRENCE-ID
+            recur = exception.add('recurrence-id')
+            recur.value = recurrence_dt
+
+            # Set DTSTART/DTEND based on RECURRENCE-ID
+            if not is_date_only:
+                occurrence_start = recurrence_dt
+                exception.add('dtstart').value = occurrence_start
+
+                # Compute duration from master
+                if hasattr(master_component, 'dtstart') and hasattr(master_component, 'dtend'):
+                    master_start = master_component.dtstart.value
+                    master_end = master_component.dtend.value
+                    if hasattr(master_start, 'hour') and hasattr(master_end, 'hour'):
+                        duration = master_end - master_start
+                        exception.add('dtend').value = occurrence_start + duration
+            else:
+                # Date-only
+                exception.add('dtstart').value = recurrence_dt
+
+            # Add DTSTAMP
+            exception.add('dtstamp').value = dt.now(vobj_utc)
+
+            # Copy attendees from master, updating the responding attendee
+            attendees_copied = False
+            if hasattr(master_component, 'attendee_list'):
+                master_attendees = master_component.attendee_list
+            elif hasattr(master_component, 'attendee'):
+                master_attendees = [master_component.attendee]
+            else:
+                master_attendees = []
+
+            for master_att in master_attendees:
+                att = exception.add('attendee')
+                att.value = master_att.value
+
+                # Copy params
+                if hasattr(master_att, 'params'):
+                    for k, v in master_att.params.items():
+                        att.params[k] = list(v) if isinstance(v, list) else [v]
+
+                # Update PARTSTAT for the responding attendee
+                att_email = extract_email(master_att.value)
+                if att_email and att_email.lower() == attendee_email.lower():
+                    att.params['PARTSTAT'] = [new_partstat]
+                    attendees_copied = True
+
+            if not attendees_copied:
+                logger.warning(
+                    f"Attendee {attendee_email} not found in master component"
+                )
+                return False
+
+            # Inherit SEQUENCE from master component (per RFC 5546)
+            master_seq = '0'
+            if hasattr(master_component, 'sequence'):
+                try:
+                    master_seq = str(int(master_component.sequence.value))
+                except (ValueError, TypeError):
+                    master_seq = '0'
+            exception.add('sequence').value = master_seq
+
+            logger.info(
+                f"Created recurrence exception for {recurrence_id}, "
+                f"updated {attendee_email} to {new_partstat}"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Error creating recurrence exception: {e}", exc_info=True)
             return False
 
     def _build_schedule_response_success(self, base_prefix: str, attendee_email: str):
@@ -1347,8 +3650,19 @@ class ITIPProcessor:
 
         return client.OK, headers, ET.tostring(response, encoding="utf-8"), None
 
-    def _build_schedule_response_error(self, base_prefix: str, error_msg: str):
-        """Build error RFC 6638 schedule-response."""
+    def _build_schedule_response_error(self, base_prefix: str, error_msg: str,
+                                        schedule_status: str = "5.3"):
+        """Build error RFC 6638 schedule-response.
+
+        Args:
+            base_prefix: URL prefix
+            error_msg: Error description
+            schedule_status: RFC 6638 status code (default: 5.3 No authority)
+                Common codes:
+                - 3.7: Invalid calendar user
+                - 5.1: Could not be delivered
+                - 5.3: No authority / Invalid date-time
+        """
         from radicale import xmlutils
         from http import client
         import xml.etree.ElementTree as ET
@@ -1356,10 +3670,11 @@ class ITIPProcessor:
         response = ET.Element(xmlutils.make_clark("C:schedule-response"))
         response_elem = ET.SubElement(response, xmlutils.make_clark("C:response"))
 
-        # Request status (5.3 = No authority)
+        # Request status with provided code
+        status_text = f"{schedule_status};Error"
         request_status = ET.SubElement(response_elem,
                                        xmlutils.make_clark("C:request-status"))
-        request_status.text = "5.3;No authority"
+        request_status.text = status_text
 
         # Error description
         response_desc = ET.SubElement(response_elem,
@@ -1371,3 +3686,246 @@ class ITIPProcessor:
         )
 
         return client.OK, headers, ET.tostring(response, encoding="utf-8"), None
+
+    # =========================================================================
+    # External iTIP Processing (Webhook)
+    # =========================================================================
+
+    def process_reply_external(self, itip_text: str, sender_email: str,
+                               base_prefix: str = "") -> bool:
+        """
+        Process REPLY from external attendee via webhook.
+
+        This handles iTIP REPLY messages received through email webhooks.
+        The sender is validated against the ATTENDEE in the iTIP message,
+        and the organizer must be an internal user.
+
+        Security checks:
+        1. Sender email must match ATTENDEE in iTIP
+        2. Organizer must be an internal user
+        3. Event must exist in organizer's calendar
+
+        Args:
+            itip_text: iCalendar text with METHOD:REPLY
+            sender_email: Email address of webhook sender
+            base_prefix: URL base prefix
+
+        Returns:
+            True if REPLY was processed successfully
+        """
+        try:
+            # Parse the iTIP message
+            vcal = vobject.readOne(itip_text)
+
+            # Verify METHOD is REPLY
+            method = vcal.method.value if hasattr(vcal, 'method') else None
+            if method != 'REPLY':
+                logger.warning(f"Expected REPLY method, got {method}")
+                return False
+
+            # Get component
+            component = self._get_component(vcal)
+            if not component:
+                logger.warning("No schedulable component in REPLY")
+                return False
+
+            # Extract UID
+            if not hasattr(component, 'uid'):
+                logger.warning("REPLY missing UID")
+                return False
+            uid = component.uid.value
+
+            # Extract organizer
+            if not hasattr(component, 'organizer'):
+                logger.warning("REPLY missing ORGANIZER")
+                return False
+            organizer_email = extract_email(component.organizer.value)
+
+            # Extract attendee
+            attendees = component.attendee_list if hasattr(component, 'attendee_list') else []
+            if not attendees and hasattr(component, 'attendee'):
+                attendees = [component.attendee]
+
+            if not attendees:
+                logger.warning("REPLY missing ATTENDEE")
+                return False
+
+            # Get the first attendee (should be the replying attendee)
+            attendee = attendees[0]
+            attendee_email = extract_email(attendee.value)
+
+            # SECURITY: Verify sender matches ATTENDEE
+            if sender_email.lower() != attendee_email.lower():
+                logger.warning(
+                    f"External REPLY sender mismatch: sender={sender_email}, "
+                    f"attendee={attendee_email}"
+                )
+                return False
+
+            # SECURITY: Verify organizer is internal
+            is_internal, organizer_principal = route_attendee(organizer_email, self.storage)
+            if not is_internal:
+                logger.warning(
+                    f"External REPLY for external organizer: {organizer_email}"
+                )
+                return False
+
+            # Find the organizer's event
+            found, event_path, collection = self._find_organizer_event(
+                organizer_principal, uid
+            )
+            if not found:
+                logger.warning(f"Event {uid} not found for organizer {organizer_email}")
+                return False
+
+            # Extract PARTSTAT
+            new_partstat = 'NEEDS-ACTION'
+            if hasattr(attendee, 'params') and 'PARTSTAT' in attendee.params:
+                new_partstat = attendee.params['PARTSTAT'][0]
+
+            # Extract RECURRENCE-ID for recurring event support
+            recurrence_id = None
+            if hasattr(component, 'recurrence_id'):
+                recurrence_id = component.recurrence_id.value
+
+            # Update the attendee's PARTSTAT in organizer's event
+            with self.storage.acquire_lock("w", organizer_principal.strip("/")):
+                success = self._update_attendee_partstat(
+                    event_path, collection, attendee_email, new_partstat,
+                    recurrence_id=recurrence_id
+                )
+
+            if success:
+                log_msg = (
+                    f"External REPLY processed: {attendee_email} -> {new_partstat} "
+                    f"for event {uid}"
+                )
+                if recurrence_id:
+                    log_msg += f" (RECURRENCE-ID: {recurrence_id})"
+                logger.info(log_msg)
+            else:
+                logger.warning(f"Failed to update PARTSTAT for {attendee_email}")
+
+            return success
+
+        except Exception as e:
+            logger.error(f"Error processing external REPLY: {e}", exc_info=True)
+            return False
+
+    def process_counter_external(self, itip_text: str, sender_email: str,
+                                 base_prefix: str = "") -> bool:
+        """
+        Process COUNTER from external attendee via webhook.
+
+        This handles iTIP COUNTER messages received through email webhooks.
+        The sender is validated against the ATTENDEE, and the counter-proposal
+        is delivered to the organizer's schedule-inbox.
+
+        Security checks:
+        1. Sender email must match ATTENDEE in iTIP
+        2. Organizer must be an internal user
+
+        Args:
+            itip_text: iCalendar text with METHOD:COUNTER
+            sender_email: Email address of webhook sender
+            base_prefix: URL base prefix
+
+        Returns:
+            True if COUNTER was processed successfully
+        """
+        try:
+            # Parse the iTIP message
+            vcal = vobject.readOne(itip_text)
+
+            # Verify METHOD is COUNTER
+            method = vcal.method.value if hasattr(vcal, 'method') else None
+            if method != 'COUNTER':
+                logger.warning(f"Expected COUNTER method, got {method}")
+                return False
+
+            # Get component
+            component = self._get_component(vcal)
+            if not component:
+                logger.warning("No schedulable component in COUNTER")
+                return False
+
+            # Extract UID
+            if not hasattr(component, 'uid'):
+                logger.warning("COUNTER missing UID")
+                return False
+            uid = component.uid.value
+
+            # Extract organizer
+            if not hasattr(component, 'organizer'):
+                logger.warning("COUNTER missing ORGANIZER")
+                return False
+            organizer_email = extract_email(component.organizer.value)
+
+            # Extract attendee
+            attendees = component.attendee_list if hasattr(component, 'attendee_list') else []
+            if not attendees and hasattr(component, 'attendee'):
+                attendees = [component.attendee]
+
+            if not attendees:
+                logger.warning("COUNTER missing ATTENDEE")
+                return False
+
+            attendee = attendees[0]
+            attendee_email = extract_email(attendee.value)
+
+            # SECURITY: Verify sender matches ATTENDEE
+            if sender_email.lower() != attendee_email.lower():
+                logger.warning(
+                    f"External COUNTER sender mismatch: sender={sender_email}, "
+                    f"attendee={attendee_email}"
+                )
+                return False
+
+            # SECURITY: Verify organizer is internal
+            is_internal, organizer_principal = route_attendee(organizer_email, self.storage)
+            if not is_internal:
+                logger.warning(
+                    f"External COUNTER for external organizer: {organizer_email}"
+                )
+                return False
+
+            # Deliver to organizer's schedule-inbox
+            inbox_path = get_inbox_path(organizer_principal)
+
+            with self.storage.acquire_lock("w", organizer_principal.strip("/")):
+                # Create inbox if needed
+                inbox = next(iter(self.storage.discover(inbox_path)), None)
+                if not inbox:
+                    logger.warning(f"Organizer inbox not found: {inbox_path}")
+                    return False
+
+                # Build iTIP filename
+                timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+                filename = f"{uid}-{timestamp}-counter.ics"
+
+                # Create item
+                item = radicale_item.Item(
+                    collection_path=inbox_path,
+                    vobject_item=vcal
+                )
+                item.prepare()
+
+                # Upload to inbox
+                inbox.upload(filename, item)
+                logger.info(
+                    f"External COUNTER delivered to {inbox_path}{filename} "
+                    f"from {attendee_email}"
+                )
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error processing external COUNTER: {e}", exc_info=True)
+            return False
+
+    def _get_component(self, vcal):
+        """Get the main component from a vCalendar object."""
+        for comp_type in ('vevent', 'vtodo', 'vjournal'):
+            if hasattr(vcal, comp_type):
+                return getattr(vcal, comp_type)
+        return None

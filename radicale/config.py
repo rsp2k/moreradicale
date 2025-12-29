@@ -567,6 +567,11 @@ This is an automated message. Please do not reply.""",
             "value": "",
             "help": "internal domain for routing attendees (e.g., example.com)",
             "type": str}),
+        # Group expansion for CUTYPE=GROUP
+        ("groups_file", {
+            "value": "",
+            "help": "path to JSON file defining groups for CUTYPE=GROUP expansion",
+            "type": str}),
         # Email delivery for external attendees
         ("email_enabled", {
             "value": "False",

@@ -235,9 +235,34 @@ def xml_propfind_response(
                 is404 = True
         elif (tag == xmlutils.make_clark("C:schedule-default-calendar-URL") and
               is_collection and collection.is_principal):
-            # Point to the principal's default calendar if it exists
-            # For now, we'll leave this empty - clients will use their own defaults
-            pass
+            # RFC 6638 §9.2: Point to the principal's default scheduling calendar
+            # Look for a calendar collection under the principal
+            default_cal_path = None
+            try:
+                # First check if principal has a "calendar" collection (common default)
+                calendar_path = f"{path}calendar/"
+                discovered = list(storage.discover(calendar_path, depth="0"))
+                if discovered:
+                    cal = discovered[0]
+                    if hasattr(cal, 'get_meta') and cal.get_meta("tag") == "VCALENDAR":
+                        default_cal_path = calendar_path
+
+                # If no "calendar", look for first VCALENDAR collection
+                if not default_cal_path:
+                    discovered = list(storage.discover(path, depth="1"))
+                    for resource in discovered:
+                        if resource.path != path and hasattr(resource, 'get_meta'):
+                            if resource.get_meta("tag") == "VCALENDAR":
+                                default_cal_path = resource.path
+                                break
+            except Exception:
+                pass
+
+            if default_cal_path:
+                child_element = ET.Element(xmlutils.make_clark("D:href"))
+                child_element.text = xmlutils.make_href(base_prefix, default_cal_path)
+                element.append(child_element)
+            # If no calendar found, return empty element (valid per RFC)
         elif tag == xmlutils.make_clark("C:calendar-user-type") and is_collection:
             # RFC 6638 Section 2.4.2: INDIVIDUAL, GROUP, RESOURCE, ROOM, UNKNOWN
             # Default to INDIVIDUAL for user principals and their calendars

@@ -41,6 +41,7 @@ from typing import Iterable, List, Mapping, Tuple, Union
 from radicale import config, httputils, log, pathutils, types, utils
 from radicale.app.base import ApplicationBase
 from radicale.app.delete import ApplicationPartDelete
+from radicale.app.webhook import WebhookHandler
 from radicale.app.get import ApplicationPartGet
 from radicale.app.head import ApplicationPartHead
 from radicale.app.mkcalendar import ApplicationPartMkcalendar
@@ -172,6 +173,9 @@ class Application(ApplicationPartDelete, ApplicationPartHead,
                 self.profiler_per_request_method_counter[method] = False
         self.profiler_per_request_method_starttime = datetime.datetime.now()
         self.profiler_per_request_method_logtime = self.profiler_per_request_method_starttime
+
+        # Initialize webhook handler for inbound iTIP processing
+        self._webhook_handler = WebhookHandler(configuration, self._storage)
 
     def __del__(self) -> None:
         """Shutdown application."""
@@ -437,6 +441,14 @@ class Application(ApplicationPartDelete, ApplicationPartHead,
         # Return NOT FOUND for all other paths containing ".well-known"
         if path.endswith("/.well-known") or "/.well-known/" in path:
             return response(*httputils.NOT_FOUND)
+
+        # Handle inbound iTIP webhook (bypasses standard auth)
+        if self._webhook_handler.should_handle(path, request_method):
+            logger.info("Handling webhook request for %r", path)
+            status, headers, answer, _ = self._webhook_handler.handle_request(
+                environ, base_prefix, path
+            )
+            return response(status, headers, answer)
 
         # Ask authentication backend to check rights
         login = password = ""
