@@ -15,7 +15,7 @@
   - Delegate scheduling authority ("Alice can accept meetings for Bob")
   - Common in enterprise setups
 
- [ ] 📖 Documentation - Update Radicale docs to describe the new scheduling features
+ [X] 📖 Documentation - Update Radicale docs to describe the new scheduling features
 
  [X]  RFC 7986 - New iCalendar Properties
   COLOR:#FF5733          # Calendar item colors
@@ -23,6 +23,18 @@
   IMAGE:https://...       # Event images/logos
   Modern calendar clients use these. Low effort, high value.
 
- [ ] Managed Attachments (RFC 8607) Instead of inline base64 attachments, store them server-side with URLs. Better for large files and bandwidth.
+ [X] Managed Attachments (RFC 8607) Instead of inline base64 attachments, store them server-side with URLs. Better for large files and bandwidth.
 
- 
+---
+
+## Potential Future Enhancements
+
+ [ ] 🔁 Recurring event exceptions - Enhance RECURRENCE-ID handling for delegation of specific occurrences
+
+ [ ] 📧 Inbound email parsing - Parse incoming emails from external attendees (via webhook or IMAP)
+
+ [ ] 🔐 Attachment access control - Allow shared calendar users to access attachments
+
+ [ ] 📊 Scheduling reports - CALDAV:calendar-query for schedule-inbox/outbox
+
+ [ ] 🌐 CalDAV auto-scheduling - Server-side auto-accept for resources (SCHEDULE-AGENT=SERVER)
