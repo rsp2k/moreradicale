@@ -2256,6 +2256,376 @@ END:VCALENDAR"""
         assert len(inbox_items) >= 1, \
             f"Expected decline notification in Bob's inbox. Paths: {list(responses.keys())}"
 
+    def test_delegation_single_occurrence_creates_exception(self):
+        """Test delegating a single occurrence creates recurrence exception."""
+        self.configure({"auth": {"type": "none"}})
+        self.configure({
+            "scheduling": {
+                "enabled": "True",
+                "internal_domain": "example.com"
+            }
+        })
+
+        # Create all principals
+        self.propfind("/alice/", HTTP_DEPTH="1", login="alice:")
+        self.propfind("/bob/", HTTP_DEPTH="1", login="bob:")
+        self.propfind("/carol/", HTTP_DEPTH="1", login="carol:")
+
+        # Create organizer's calendar with recurring event
+        self.request("MKCALENDAR", "/alice/calendar/",
+                     CONTENT_TYPE="application/xml", login="alice:")
+
+        event_uid = "recurring-delegation-test-001"
+        event_ics = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+BEGIN:VEVENT
+UID:{event_uid}
+DTSTAMP:20251227T050000Z
+DTSTART:20251228T140000Z
+DTEND:20251228T150000Z
+RRULE:FREQ=DAILY;COUNT=5
+SUMMARY:Daily Meeting
+ORGANIZER:mailto:alice@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:bob@example.com
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR"""
+
+        self.request("PUT", f"/alice/calendar/{event_uid}.ics",
+                     event_ics, CONTENT_TYPE="text/calendar", login="alice:")
+
+        # Bob delegates just the second occurrence to Carol
+        from radicale.itip.processor import ITIPProcessor
+        import vobject
+
+        processor = ITIPProcessor(self.application._storage, self.application.configuration)
+
+        discovered = list(self.application._storage.discover("/alice/calendar/", depth="0"))
+        collection = discovered[0] if discovered else None
+        assert collection is not None
+
+        # RECURRENCE-ID for second occurrence (Dec 29)
+        recurrence_id = "20251229T140000Z"
+
+        # Create delegation REPLY with RECURRENCE-ID
+        delegation_reply = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+METHOD:REPLY
+BEGIN:VEVENT
+UID:{event_uid}
+DTSTAMP:20251227T060000Z
+DTSTART:20251229T140000Z
+DTEND:20251229T150000Z
+RECURRENCE-ID:20251229T140000Z
+ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-TO="mailto:carol@example.com":mailto:bob@example.com
+END:VEVENT
+END:VCALENDAR"""
+
+        vobj = vobject.readOne(delegation_reply)
+        component = vobj.vevent
+
+        # Call _handle_delegation with recurrence_id
+        result = processor._handle_delegation(
+            event_path=f"/alice/calendar/{event_uid}.ics",
+            collection=collection,
+            delegator_email="bob@example.com",
+            delegate_email="carol@example.com",
+            component=component,
+            base_prefix="",
+            recurrence_id=recurrence_id
+        )
+
+        # Should succeed
+        assert result is not None
+
+        # Verify the event now has an exception component
+        status, _, answer = self.request(
+            "GET", f"/alice/calendar/{event_uid}.ics",
+            login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(answer)
+
+        # Count VEVENT components
+        vevents = [c for c in vcal.getChildren() if c.name == 'VEVENT']
+        assert len(vevents) == 2, "Should have master + exception component"
+
+        # Find the exception component
+        exception = None
+        master = None
+        for vevent in vevents:
+            if hasattr(vevent, 'recurrence_id'):
+                exception = vevent
+            else:
+                master = vevent
+
+        assert exception is not None, "Exception component should exist"
+        assert master is not None, "Master component should exist"
+
+        # Verify exception has correct RECURRENCE-ID
+        assert hasattr(exception, 'recurrence_id')
+
+        # Verify master still has RRULE and original PARTSTAT
+        assert hasattr(master, 'rrule')
+        master_bob = None
+        for att in master.attendee_list:
+            if "bob@example.com" in att.value.lower():
+                master_bob = att
+                break
+        assert master_bob is not None
+        assert master_bob.params.get('PARTSTAT', [''])[0] == 'NEEDS-ACTION', \
+            "Master should keep original PARTSTAT"
+
+        # Verify exception has delegation applied
+        exception_bob = None
+        exception_carol = None
+        for att in exception.attendee_list:
+            if "bob@example.com" in att.value.lower():
+                exception_bob = att
+            elif "carol@example.com" in att.value.lower():
+                exception_carol = att
+
+        assert exception_bob is not None, "Bob should be in exception"
+        assert exception_bob.params.get('PARTSTAT', [''])[0] == 'DELEGATED', \
+            "Bob's PARTSTAT should be DELEGATED in exception"
+        assert 'carol@example.com' in str(exception_bob.params.get('DELEGATED-TO', [])).lower(), \
+            "Bob should have DELEGATED-TO Carol"
+
+        assert exception_carol is not None, "Carol should be in exception as delegate"
+        assert exception_carol.params.get('PARTSTAT', [''])[0] == 'NEEDS-ACTION', \
+            "Carol should have NEEDS-ACTION"
+        assert 'bob@example.com' in str(exception_carol.params.get('DELEGATED-FROM', [])).lower(), \
+            "Carol should have DELEGATED-FROM Bob"
+
+    def test_delegation_existing_exception(self):
+        """Test delegating when exception already exists."""
+        self.configure({"auth": {"type": "none"}})
+        self.configure({
+            "scheduling": {
+                "enabled": "True",
+                "internal_domain": "example.com"
+            }
+        })
+
+        # Create principals
+        self.propfind("/alice/", HTTP_DEPTH="1", login="alice:")
+        self.propfind("/bob/", HTTP_DEPTH="1", login="bob:")
+        self.propfind("/carol/", HTTP_DEPTH="1", login="carol:")
+
+        self.request("MKCALENDAR", "/alice/calendar/",
+                     CONTENT_TYPE="application/xml", login="alice:")
+
+        # Create event with existing exception
+        event_uid = "recurring-with-exception-001"
+        event_ics = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+BEGIN:VEVENT
+UID:{event_uid}
+DTSTAMP:20251227T050000Z
+DTSTART:20251228T140000Z
+DTEND:20251228T150000Z
+RRULE:FREQ=DAILY;COUNT=5
+SUMMARY:Daily Meeting
+ORGANIZER:mailto:alice@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:mailto:bob@example.com
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:{event_uid}
+DTSTAMP:20251227T050000Z
+DTSTART:20251229T140000Z
+DTEND:20251229T150000Z
+RECURRENCE-ID:20251229T140000Z
+SUMMARY:Daily Meeting
+ORGANIZER:mailto:alice@example.com
+ATTENDEE;PARTSTAT=TENTATIVE:mailto:bob@example.com
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR"""
+
+        self.request("PUT", f"/alice/calendar/{event_uid}.ics",
+                     event_ics, CONTENT_TYPE="text/calendar", login="alice:")
+
+        from radicale.itip.processor import ITIPProcessor
+        import vobject
+
+        processor = ITIPProcessor(self.application._storage, self.application.configuration)
+
+        discovered = list(self.application._storage.discover("/alice/calendar/", depth="0"))
+        collection = discovered[0] if discovered else None
+        assert collection is not None
+
+        # Delegate the existing exception
+        recurrence_id = "20251229T140000Z"
+
+        delegation_reply = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+METHOD:REPLY
+BEGIN:VEVENT
+UID:{event_uid}
+DTSTAMP:20251227T060000Z
+DTSTART:20251229T140000Z
+DTEND:20251229T150000Z
+RECURRENCE-ID:20251229T140000Z
+ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-TO="mailto:carol@example.com":mailto:bob@example.com
+END:VEVENT
+END:VCALENDAR"""
+
+        vobj = vobject.readOne(delegation_reply)
+        component = vobj.vevent
+
+        result = processor._handle_delegation(
+            event_path=f"/alice/calendar/{event_uid}.ics",
+            collection=collection,
+            delegator_email="bob@example.com",
+            delegate_email="carol@example.com",
+            component=component,
+            base_prefix="",
+            recurrence_id=recurrence_id
+        )
+
+        assert result is not None
+
+        # Verify the event still has exactly 2 components
+        status, _, answer = self.request(
+            "GET", f"/alice/calendar/{event_uid}.ics",
+            login="alice:")
+        assert status == 200
+
+        vcal = vobject.readOne(answer)
+        vevents = [c for c in vcal.getChildren() if c.name == 'VEVENT']
+        assert len(vevents) == 2, "Should still have master + one exception"
+
+        # Verify the exception was updated with delegation
+        exception = None
+        for vevent in vevents:
+            if hasattr(vevent, 'recurrence_id'):
+                exception = vevent
+                break
+
+        assert exception is not None
+
+        # Carol should now be in the exception
+        has_carol = any("carol@example.com" in att.value.lower()
+                       for att in exception.attendee_list)
+        assert has_carol, "Carol should be added to existing exception"
+
+    def test_delegation_master_not_affected(self):
+        """Test delegating an occurrence doesn't affect master component."""
+        self.configure({"auth": {"type": "none"}})
+        self.configure({
+            "scheduling": {
+                "enabled": "True",
+                "internal_domain": "example.com"
+            }
+        })
+
+        self.propfind("/alice/", HTTP_DEPTH="1", login="alice:")
+        self.propfind("/bob/", HTTP_DEPTH="1", login="bob:")
+        self.propfind("/carol/", HTTP_DEPTH="1", login="carol:")
+
+        self.request("MKCALENDAR", "/alice/calendar/",
+                     CONTENT_TYPE="application/xml", login="alice:")
+
+        event_uid = "master-unchanged-test-001"
+        event_ics = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+BEGIN:VEVENT
+UID:{event_uid}
+DTSTAMP:20251227T050000Z
+DTSTART:20251228T140000Z
+DTEND:20251228T150000Z
+RRULE:FREQ=WEEKLY;COUNT=4
+SUMMARY:Weekly Meeting
+ORGANIZER:mailto:alice@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:mailto:bob@example.com
+SEQUENCE:1
+END:VEVENT
+END:VCALENDAR"""
+
+        self.request("PUT", f"/alice/calendar/{event_uid}.ics",
+                     event_ics, CONTENT_TYPE="text/calendar", login="alice:")
+
+        from radicale.itip.processor import ITIPProcessor
+        import vobject
+
+        processor = ITIPProcessor(self.application._storage, self.application.configuration)
+
+        discovered = list(self.application._storage.discover("/alice/calendar/", depth="0"))
+        collection = discovered[0] if discovered else None
+
+        # Delegate specific occurrence
+        recurrence_id = "20260104T140000Z"  # 2nd week
+
+        delegation_reply = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+METHOD:REPLY
+BEGIN:VEVENT
+UID:{event_uid}
+DTSTAMP:20251227T060000Z
+DTSTART:20260104T140000Z
+DTEND:20260104T150000Z
+RECURRENCE-ID:20260104T140000Z
+ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-TO="mailto:carol@example.com":mailto:bob@example.com
+END:VEVENT
+END:VCALENDAR"""
+
+        vobj = vobject.readOne(delegation_reply)
+        component = vobj.vevent
+
+        processor._handle_delegation(
+            event_path=f"/alice/calendar/{event_uid}.ics",
+            collection=collection,
+            delegator_email="bob@example.com",
+            delegate_email="carol@example.com",
+            component=component,
+            base_prefix="",
+            recurrence_id=recurrence_id
+        )
+
+        # Verify master is unchanged
+        status, _, answer = self.request(
+            "GET", f"/alice/calendar/{event_uid}.ics",
+            login="alice:")
+
+        vcal = vobject.readOne(answer)
+
+        master = None
+        for vevent in vcal.getChildren():
+            if vevent.name == 'VEVENT' and not hasattr(vevent, 'recurrence_id'):
+                master = vevent
+                break
+
+        assert master is not None
+
+        # Master should still have RRULE
+        assert hasattr(master, 'rrule'), "Master should still have RRULE"
+
+        # Master should NOT have Carol
+        has_carol = any("carol@example.com" in att.value.lower()
+                       for att in master.attendee_list)
+        assert not has_carol, "Carol should NOT be in master"
+
+        # Master Bob should still be ACCEPTED
+        master_bob = None
+        for att in master.attendee_list:
+            if "bob@example.com" in att.value.lower():
+                master_bob = att
+                break
+
+        assert master_bob is not None
+        assert master_bob.params.get('PARTSTAT', [''])[0] == 'ACCEPTED', \
+            "Master should keep Bob's original ACCEPTED status"
+
+        # Master SEQUENCE should be unchanged
+        assert master.sequence.value == '1', "Master SEQUENCE should be unchanged"
+
 
 class TestVTODOScheduling(BaseTest):
     """Test VTODO (task) scheduling support."""

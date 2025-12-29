@@ -2879,11 +2879,16 @@ class ITIPProcessor:
             vcal = item.vobject_item
             updated = False
             delegate_added = False
+            master_component = None
 
             # Find the target component
             for subcomp in vcal.getChildren():
                 if subcomp.name not in ('VEVENT', 'VTODO', 'VJOURNAL'):
                     continue
+
+                # Track master component (no RECURRENCE-ID) for exception creation
+                if not hasattr(subcomp, 'recurrence_id'):
+                    master_component = subcomp
 
                 # Handle recurrence_id if specified
                 if recurrence_id:
@@ -2895,7 +2900,7 @@ class ITIPProcessor:
                         if comp_recur_id != target_recur_id:
                             continue
                     else:
-                        continue
+                        continue  # Skip master when looking for specific occurrence
 
                 # Update delegator's PARTSTAT and add DELEGATED-TO
                 if hasattr(subcomp, 'attendee_list'):
@@ -2950,8 +2955,27 @@ class ITIPProcessor:
 
                 break
 
+            # If recurrence_id specified but no matching exception found,
+            # create exception from master component for delegation
+            if recurrence_id and not updated and master_component:
+                result = self._create_delegation_exception(
+                    vcal, master_component, delegator_email,
+                    delegate_email, recurrence_id
+                )
+                if result:
+                    updated = True
+                    delegate_added = True
+                    logger.info(
+                        f"Created recurrence exception for delegation: "
+                        f"{recurrence_id}, delegator={delegator_email}, "
+                        f"delegate={delegate_email}"
+                    )
+
             if not updated or not delegate_added:
-                logger.warning("Delegation update incomplete")
+                logger.warning(
+                    f"Delegation update incomplete"
+                    + (f" (RECURRENCE-ID: {recurrence_id})" if recurrence_id else "")
+                )
                 return None
 
             # Save the updated event
@@ -3641,6 +3665,152 @@ class ITIPProcessor:
 
         except Exception as e:
             logger.error(f"Error creating recurrence exception: {e}", exc_info=True)
+            return False
+
+    def _create_delegation_exception(self, vcal, master_component,
+                                     delegator_email: str, delegate_email: str,
+                                     recurrence_id: str) -> bool:
+        """
+        Create a recurrence exception for delegation of a specific occurrence.
+
+        When an attendee delegates a specific occurrence of a recurring event
+        but no exception component exists yet, we create one based on the
+        master component with delegation applied.
+
+        Args:
+            vcal: Parent VCALENDAR
+            master_component: The master VEVENT/VTODO/VJOURNAL
+            delegator_email: Email of attendee delegating
+            delegate_email: Email of delegate
+            recurrence_id: RECURRENCE-ID for the exception
+
+        Returns:
+            True if exception created successfully
+        """
+        try:
+            from datetime import datetime as dt
+            from vobject.icalendar import utc as vobj_utc
+
+            # Create new exception component
+            exception = vcal.add(master_component.name.lower())
+
+            # Copy key properties from master
+            if hasattr(master_component, 'uid'):
+                exception.add('uid').value = master_component.uid.value
+            if hasattr(master_component, 'summary'):
+                exception.add('summary').value = master_component.summary.value
+            if hasattr(master_component, 'organizer'):
+                org = exception.add('organizer')
+                org.value = master_component.organizer.value
+                if hasattr(master_component.organizer, 'params'):
+                    for k, v in master_component.organizer.params.items():
+                        org.params[k] = v
+            if hasattr(master_component, 'location'):
+                exception.add('location').value = master_component.location.value
+            if hasattr(master_component, 'description'):
+                exception.add('description').value = master_component.description.value
+
+            # Parse recurrence_id and set as proper datetime/date
+            recurrence_dt = None
+            is_date_only = False
+
+            if hasattr(recurrence_id, 'strftime'):
+                recurrence_dt = recurrence_id
+                is_date_only = not hasattr(recurrence_id, 'hour')
+            elif 'T' in str(recurrence_id):
+                normalized = self._normalize_recurrence_id(recurrence_id).replace('Z', '')
+                try:
+                    recurrence_dt = dt.strptime(normalized, '%Y%m%dT%H%M%S')
+                    recurrence_dt = recurrence_dt.replace(tzinfo=vobj_utc)
+                except ValueError as e:
+                    logger.warning(f"Could not parse RECURRENCE-ID: {recurrence_id}: {e}")
+                    return False
+            else:
+                try:
+                    recurrence_dt = dt.strptime(str(recurrence_id), '%Y%m%d').date()
+                    is_date_only = True
+                except ValueError as e:
+                    logger.warning(f"Could not parse RECURRENCE-ID date: {recurrence_id}: {e}")
+                    return False
+
+            # Set RECURRENCE-ID
+            recur = exception.add('recurrence-id')
+            recur.value = recurrence_dt
+
+            # Set DTSTART/DTEND based on RECURRENCE-ID
+            if not is_date_only:
+                occurrence_start = recurrence_dt
+                exception.add('dtstart').value = occurrence_start
+
+                if hasattr(master_component, 'dtstart') and hasattr(master_component, 'dtend'):
+                    master_start = master_component.dtstart.value
+                    master_end = master_component.dtend.value
+                    if hasattr(master_start, 'hour') and hasattr(master_end, 'hour'):
+                        duration = master_end - master_start
+                        exception.add('dtend').value = occurrence_start + duration
+            else:
+                exception.add('dtstart').value = recurrence_dt
+
+            # Add DTSTAMP
+            exception.add('dtstamp').value = dt.now(vobj_utc)
+
+            # Copy attendees from master, applying delegation to delegator
+            delegator_found = False
+            if hasattr(master_component, 'attendee_list'):
+                master_attendees = master_component.attendee_list
+            elif hasattr(master_component, 'attendee'):
+                master_attendees = [master_component.attendee]
+            else:
+                master_attendees = []
+
+            for master_att in master_attendees:
+                att = exception.add('attendee')
+                att.value = master_att.value
+
+                # Copy params
+                if hasattr(master_att, 'params'):
+                    for k, v in master_att.params.items():
+                        att.params[k] = list(v) if isinstance(v, list) else [v]
+
+                # Apply delegation to the delegator
+                att_email = extract_email(master_att.value)
+                if att_email and att_email.lower() == delegator_email.lower():
+                    att.params['PARTSTAT'] = ['DELEGATED']
+                    att.params['DELEGATED-TO'] = [f"mailto:{delegate_email}"]
+                    delegator_found = True
+
+            if not delegator_found:
+                logger.warning(
+                    f"Delegator {delegator_email} not found in master component"
+                )
+                return False
+
+            # Add delegate as new attendee
+            delegate_att = exception.add('attendee')
+            delegate_att.value = f"mailto:{delegate_email}"
+            delegate_att.params['PARTSTAT'] = ['NEEDS-ACTION']
+            delegate_att.params['DELEGATED-FROM'] = [f"mailto:{delegator_email}"]
+            delegate_att.params['ROLE'] = ['REQ-PARTICIPANT']
+            delegate_att.params['CUTYPE'] = ['INDIVIDUAL']
+            delegate_att.params['RSVP'] = ['TRUE']
+
+            # Increment SEQUENCE (delegation is a significant change)
+            master_seq = 0
+            if hasattr(master_component, 'sequence'):
+                try:
+                    master_seq = int(master_component.sequence.value)
+                except (ValueError, TypeError):
+                    master_seq = 0
+            exception.add('sequence').value = str(master_seq + 1)
+
+            logger.info(
+                f"Created delegation exception for {recurrence_id}, "
+                f"delegator={delegator_email}, delegate={delegate_email}"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Error creating delegation exception: {e}", exc_info=True)
             return False
 
     def _build_schedule_response_success(self, base_prefix: str, attendee_email: str):

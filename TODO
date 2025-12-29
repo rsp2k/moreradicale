@@ -8,7 +8,7 @@
 
  [X] 📅 RFC 7953 Calendar Availability - Implement VAVAILABILITY component for more sophisticated free/busy queries
 
- [ ] 🔁 Recurring event delegation - Test/enhance delegation for specific occurrences of recurring events
+ [X] 🔁 Recurring event delegation - Test/enhance delegation for specific occurrences of recurring events
 
  [X] Calendar Sharing/Delegation
   - Share calendars with read/write permissions
@@ -28,8 +28,6 @@
 ---
 
 ## Potential Future Enhancements
-
- [ ] 🔁 Recurring event exceptions - Enhance RECURRENCE-ID handling for delegation of specific occurrences
 
  [ ] 📧 Inbound email parsing - Parse incoming emails from external attendees (via webhook or IMAP)
 
