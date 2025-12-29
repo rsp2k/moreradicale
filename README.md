@@ -8,6 +8,8 @@ Radicale is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
 
 * Shares calendars and contact lists through CalDAV, CardDAV and HTTP.
 * Supports events, todos, journal entries and business cards.
+* Supports meeting invitations and RSVP responses (CalDAV Scheduling, RFC 6638).
+* Supports calendar sharing, delegation, and managed attachments.
 * Works out-of-the-box, no complicated setup or configuration required.
 * Can limit access by authentication.
 * Can secure connections with TLS.

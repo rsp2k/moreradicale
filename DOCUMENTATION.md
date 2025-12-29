@@ -13,6 +13,9 @@ Radicale is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
 
 * Shares calendars and contact lists through CalDAV, CardDAV and HTTP.
 * Supports events, todos, journal entries and business cards.
+* Supports meeting invitations and RSVP responses (CalDAV Scheduling, RFC 6638).
+* Supports calendar sharing and delegation between users.
+* Supports server-side attachment storage (Managed Attachments, RFC 8607).
 * Works out-of-the-box, no complicated setup or configuration required.
 * Offers flexible authentication options.
 * Can limit access by authorization.
@@ -22,6 +25,9 @@ Radicale is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
 * Stores all data on the file system in a simple folder structure.
 * Can be extended with plugins.
 * Is GPLv3-licensed free software.
+
+For meeting invitations, free/busy queries, and collaborative scheduling, see
+[SCHEDULING.md](SCHEDULING.md).
 
 #### Installation
 
@@ -1408,8 +1414,14 @@ Available backends are:
   Authenticated users can read everything and write their own collections under
   the path */USERNAME/*.
 
-* `from_file`  
+* `from_file`
   Load the rules from a file.
+
+* `owner_only_shared` _(>= 3.5.x)_
+  Extends `owner_only` with support for calendar sharing and delegation.
+  Users can access shared calendars and act as delegates for others.
+  Requires `[sharing] enabled = True` for full functionality.
+  See [SCHEDULING.md](SCHEDULING.md#calendar-sharing-and-delegation) for details.
 
 Default: `owner_only`
 
@@ -2009,6 +2021,215 @@ attacks on large time frames. If the limit is reached, an HTTP error
 is thrown instead of returning the results.
 
 Default: 10000
+
+#### [scheduling]
+
+_(>= 3.5.x)_
+
+CalDAV Scheduling (RFC 6638) enables meeting invitations, free/busy queries,
+and resource booking. For comprehensive documentation including tutorials,
+examples, and troubleshooting, see [SCHEDULING.md](SCHEDULING.md).
+
+##### enabled
+
+Enable CalDAV scheduling support including schedule-inbox and schedule-outbox.
+
+Default: `False`
+
+##### mode
+
+Scheduling processing mode:
+* `none` - Disabled (default)
+* `internal` - Same-server attendees only
+* `email` - With external attendee email delivery
+
+Default: `none`
+
+##### auto_process
+
+Automatically process incoming iTIP messages in schedule-inbox.
+
+Default: `False`
+
+##### max_attendees
+
+Maximum number of attendees per event. Prevents email bombing when
+`email_enabled` is True.
+
+Default: `100`
+
+##### internal_domain
+
+Domain for internal user routing (e.g., `example.com`). Attendees with
+this domain are delivered to their schedule-inbox; others are sent via email
+if `email_enabled` is True.
+
+Default: (unset)
+
+##### groups_file
+
+Path to JSON file defining groups for CUTYPE=GROUP expansion.
+See [SCHEDULING.md](SCHEDULING.md#group-expansion) for format.
+
+Default: (unset)
+
+##### email_enabled
+
+Enable email delivery for external attendees (RFC 6047 iMIP).
+Requires SMTP configuration in `[hook]` section.
+
+Default: `False`
+
+##### email_dryrun
+
+Log email operations without sending (for testing).
+
+Default: `False`
+
+##### smtp_from_organizer
+
+Send emails from organizer's address instead of `from_email`.
+Requires proper SPF/DKIM configuration.
+
+Default: `False`
+
+##### email_subject_prefix
+
+Prefix for email subjects (e.g., `[Calendar] `).
+
+Default: (unset)
+
+##### request_template
+
+Template for REQUEST (invitation) emails.
+Variables: `$event_title`, `$event_start_time`, `$event_end_time`,
+`$event_location`, `$organizer_name`, `$attendee_name`, `$event_description`
+
+Default: (built-in template)
+
+##### cancel_template
+
+Template for CANCEL emails. Same variables as `request_template`.
+
+Default: (built-in template)
+
+##### counter_template
+
+Template for COUNTER (counter-proposal) emails. Same variables as `request_template`.
+
+Default: (built-in template)
+
+##### declinecounter_template
+
+Template for DECLINECOUNTER emails. Same variables as `request_template`.
+
+Default: (built-in template)
+
+##### refresh_template
+
+Template for REFRESH (refresh request) emails. Same variables as `request_template`.
+
+Default: (built-in template)
+
+##### webhook_enabled
+
+Enable webhook endpoint for receiving iTIP responses from external attendees.
+
+Default: `False`
+
+##### webhook_path
+
+URL path for webhook endpoint.
+
+Default: `/scheduling/webhook`
+
+##### webhook_secret
+
+Shared secret for HMAC authentication (required for webhook security).
+
+Default: (unset)
+
+##### webhook_allowed_ips
+
+Comma-separated list of allowed IP addresses/CIDR ranges for webhook.
+
+Default: (unset, all allowed)
+
+##### webhook_provider
+
+Webhook provider format: `generic`, `sendgrid`, `mailgun`, `postmark`
+
+Default: `generic`
+
+##### webhook_max_size
+
+Maximum webhook request size in bytes.
+
+Default: `10485760` (10MB)
+
+#### [sharing]
+
+_(>= 3.5.x)_
+
+Calendar sharing enables users to share their calendars with others.
+See [SCHEDULING.md](SCHEDULING.md#calendar-sharing-and-delegation) for details.
+
+##### enabled
+
+Enable calendar sharing support.
+
+Default: `False`
+
+##### delegation_enabled
+
+Enable scheduling delegation (allow users to send invitations on behalf of others).
+
+Default: `False`
+
+##### auto_accept_same_domain
+
+Automatically accept share invitations from users on the same domain.
+
+Default: `False`
+
+#### [attachments]
+
+_(>= 3.5.x)_
+
+RFC 8607 Managed Attachments enables server-side storage of event attachments.
+Instead of embedding files as base64 in calendar events, attachments are
+stored separately and referenced by URL.
+See [SCHEDULING.md](SCHEDULING.md#managed-attachments-rfc-8607) for details.
+
+##### enabled
+
+Enable managed attachment support.
+
+Default: `False`
+
+##### filesystem_folder
+
+Directory for attachment storage.
+
+Default: `/var/lib/radicale/attachments`
+
+##### max_size
+
+Maximum attachment size in bytes.
+
+Default: `10000000` (10MB)
+
+##### max_per_resource
+
+Maximum number of attachments per calendar object.
+
+Default: `20`
+
+##### base_url
+
+Base URL for attachment serving. Auto-detected if empty.
+
+Default: (auto-detected)
 
 ## Supported Clients
 
