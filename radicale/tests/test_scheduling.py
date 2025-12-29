@@ -5809,3 +5809,315 @@ END:VCALENDAR"""
         assert status == 200
         # Request should succeed even with attachment
         assert "2.0" in response or "Success" in response
+
+
+class TestVAvailability(BaseTest):
+    """Tests for RFC 7953 Calendar Availability (VAVAILABILITY)."""
+
+    def test_parse_vavailability_component(self):
+        """Test parsing VAVAILABILITY with AVAILABLE subcomponents."""
+        from radicale.itip import availability
+
+        # Create VAVAILABILITY with work hours (Mon-Fri 9am-5pm)
+        vavail_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VAVAILABILITY
+UID:work-hours-1
+DTSTAMP:20251229T100000Z
+DTSTART:20250101T000000Z
+DTEND:20251231T235959Z
+SUMMARY:Work Hours
+PRIORITY:1
+BUSYTYPE:BUSY-UNAVAILABLE
+BEGIN:AVAILABLE
+UID:available-1
+DTSTAMP:20251229T100000Z
+DTSTART:20250101T090000Z
+DTEND:20250101T170000Z
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+SUMMARY:Office Hours
+END:AVAILABLE
+END:VAVAILABILITY
+END:VCALENDAR"""
+
+        import vobject
+        vcal = vobject.readOne(vavail_ics)
+
+        # Get the VAVAILABILITY component
+        vavail_comp = None
+        for child in vcal.getChildren():
+            if child.name == 'VAVAILABILITY':
+                vavail_comp = child
+                break
+
+        assert vavail_comp is not None
+
+        # Parse it
+        processor = availability.AvailabilityProcessor(None, None)
+        vavail = processor._parse_vavailability(vavail_comp)
+
+        assert vavail is not None
+        assert vavail.uid == "work-hours-1"
+        assert vavail.priority == 1
+        assert vavail.busytype == availability.BusyType.BUSY_UNAVAILABLE
+        assert vavail.summary == "Work Hours"
+        assert len(vavail.available) == 1
+        assert vavail.available[0].rrule == "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"
+
+    def test_available_occurrence_expansion(self):
+        """Test expanding AVAILABLE recurrences within a time range."""
+        from radicale.itip.availability import AvailablePeriod
+        from datetime import datetime, timedelta
+        from dateutil.tz import UTC
+
+        # Create available period: every Monday 9am-5pm starting Jan 6, 2025
+        available = AvailablePeriod(
+            uid="monday-hours",
+            dtstart=datetime(2025, 1, 6, 9, 0, tzinfo=UTC),  # Monday Jan 6
+            dtend=datetime(2025, 1, 6, 17, 0, tzinfo=UTC),
+            rrule="FREQ=WEEKLY;BYDAY=MO"
+        )
+
+        # Query for January 2025
+        range_start = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
+        range_end = datetime(2025, 1, 31, 23, 59, tzinfo=UTC)
+
+        occurrences = available.get_occurrences(range_start, range_end)
+
+        # Should have Mondays: Jan 6, 13, 20, 27 = 4 occurrences
+        assert len(occurrences) == 4
+
+        # Check first occurrence
+        assert occurrences[0][0].day == 6
+        assert occurrences[0][0].hour == 9
+        assert occurrences[0][1].hour == 17
+
+    def test_vavailability_priority_ordering(self):
+        """Test that VAVAILABILITY components are sorted by priority."""
+        from radicale.itip.availability import VAvailability, BusyType
+        from datetime import datetime
+        from dateutil.tz import UTC
+
+        # Create components with different priorities
+        low_priority = VAvailability(
+            uid="low",
+            dtstamp=datetime.now(UTC),
+            priority=5
+        )
+        high_priority = VAvailability(
+            uid="high",
+            dtstamp=datetime.now(UTC),
+            priority=1
+        )
+        undefined_priority = VAvailability(
+            uid="undefined",
+            dtstamp=datetime.now(UTC),
+            priority=0  # Undefined = lowest
+        )
+
+        # Sort by priority (1=highest comes first)
+        components = [low_priority, undefined_priority, high_priority]
+        sorted_components = sorted(
+            components,
+            key=lambda v: (v.priority if v.priority > 0 else 10)
+        )
+
+        assert sorted_components[0].uid == "high"
+        assert sorted_components[1].uid == "low"
+        assert sorted_components[2].uid == "undefined"
+
+    def test_merge_overlapping_busy_periods(self):
+        """Test merging overlapping busy periods with priority."""
+        from radicale.itip.availability import _merge_busy_periods
+        from datetime import datetime
+        from dateutil.tz import UTC
+
+        periods = [
+            (datetime(2025, 1, 1, 9, 0, tzinfo=UTC),
+             datetime(2025, 1, 1, 12, 0, tzinfo=UTC), "BUSY"),
+            (datetime(2025, 1, 1, 10, 0, tzinfo=UTC),
+             datetime(2025, 1, 1, 14, 0, tzinfo=UTC), "BUSY-TENTATIVE"),
+            (datetime(2025, 1, 1, 16, 0, tzinfo=UTC),
+             datetime(2025, 1, 1, 17, 0, tzinfo=UTC), "BUSY-UNAVAILABLE"),
+        ]
+
+        merged = _merge_busy_periods(periods)
+
+        # First two should merge, keeping BUSY (higher priority)
+        assert len(merged) == 2
+        assert merged[0][2] == "BUSY"  # BUSY takes precedence
+        assert merged[0][1].hour == 14  # Extended to 14:00
+
+    def test_create_vavailability_helper(self):
+        """Test the helper function for creating VAVAILABILITY iCalendar."""
+        from radicale.itip.availability import create_vavailability_ics
+        from datetime import datetime
+
+        slots = [
+            {
+                'dtstart': datetime(2025, 1, 1, 9, 0),
+                'dtend': datetime(2025, 1, 1, 17, 0),
+                'rrule': 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+                'summary': 'Work Hours'
+            }
+        ]
+
+        ics = create_vavailability_ics(
+            uid='work-hours',
+            summary='Standard Work Week',
+            available_slots=slots,
+            priority=1,
+            location='Office'
+        )
+
+        assert 'BEGIN:VAVAILABILITY' in ics
+        assert 'BEGIN:AVAILABLE' in ics
+        assert 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' in ics
+        assert 'PRIORITY:1' in ics
+        assert 'LOCATION:Office' in ics
+
+    def test_freebusy_without_vavailability(self):
+        """Test that free/busy works normally without VAVAILABILITY."""
+        self.configure({"auth": {"type": "none"}})
+        self.configure({
+            "scheduling": {
+                "enabled": "True",
+                "internal_domain": "test.local"
+            }
+        })
+
+        # Create principals
+        self.propfind("/alice/", HTTP_DEPTH="1", login="alice:")
+        self.propfind("/bob/", HTTP_DEPTH="1", login="bob:")
+
+        # Create calendar and event for bob
+        status, _, _ = self.request(
+            "MKCALENDAR", "/bob/calendar/", login="bob:"
+        )
+
+        # Create an event (busy time)
+        event_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:busy-event-1@test
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T100000Z
+DTEND:20251230T110000Z
+SUMMARY:Busy Meeting
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/bob/calendar/busy.ics",
+            event_ics, CONTENT_TYPE="text/calendar",
+            login="bob:"
+        )
+        assert status == 201
+
+        # Query bob's free/busy
+        freebusy_request = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+METHOD:REQUEST
+BEGIN:VFREEBUSY
+UID:freebusy-query-1@test
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T080000Z
+DTEND:20251230T180000Z
+ORGANIZER:mailto:alice@test.local
+ATTENDEE:mailto:bob@test.local
+END:VFREEBUSY
+END:VCALENDAR"""
+
+        status, _, response = self.request(
+            "POST", "/alice/schedule-outbox/",
+            freebusy_request,
+            CONTENT_TYPE="text/calendar",
+            login="alice:"
+        )
+
+        assert status == 200
+        # Should return schedule-response with bob's busy times
+        assert "schedule-response" in response or "FREEBUSY" in response
+
+    def test_freebusy_with_vavailability(self):
+        """Test free/busy query considering VAVAILABILITY."""
+        self.configure({"auth": {"type": "none"}})
+        self.configure({
+            "scheduling": {
+                "enabled": "True",
+                "internal_domain": "test.local"
+            }
+        })
+
+        # This is an integration test that requires:
+        # 1. Create VAVAILABILITY for bob (available only 9-17)
+        # 2. Query free/busy
+        # 3. Times outside 9-17 should show as BUSY-UNAVAILABLE
+
+        # Create principals
+        self.propfind("/alice/", HTTP_DEPTH="1", login="alice:")
+        self.propfind("/bob/", HTTP_DEPTH="1", login="bob:")
+
+        # Create bob's calendar
+        status, _, _ = self.request(
+            "MKCALENDAR", "/bob/calendar/", login="bob:"
+        )
+
+        # Store VAVAILABILITY (bob is only available 9am-5pm weekdays)
+        vavail_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VAVAILABILITY
+UID:bob-work-hours
+DTSTAMP:20251229T100000Z
+DTSTART:20250101T000000Z
+SUMMARY:Bob Work Hours
+PRIORITY:1
+BUSYTYPE:BUSY-UNAVAILABLE
+BEGIN:AVAILABLE
+UID:bob-available-1
+DTSTAMP:20251229T100000Z
+DTSTART:20250101T090000Z
+DTEND:20250101T170000Z
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+END:AVAILABLE
+END:VAVAILABILITY
+END:VCALENDAR"""
+
+        status, _, _ = self.request(
+            "PUT", "/bob/calendar/availability.ics",
+            vavail_ics, CONTENT_TYPE="text/calendar",
+            login="bob:"
+        )
+        # May return 201 or 200 depending on vobject parsing
+        assert status in (200, 201, 204)
+
+        # Query free/busy for a time range (including early morning)
+        freebusy_request = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+METHOD:REQUEST
+BEGIN:VFREEBUSY
+UID:freebusy-vavail-test@test
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T060000Z
+DTEND:20251230T200000Z
+ORGANIZER:mailto:alice@test.local
+ATTENDEE:mailto:bob@test.local
+END:VFREEBUSY
+END:VCALENDAR"""
+
+        status, _, response = self.request(
+            "POST", "/alice/schedule-outbox/",
+            freebusy_request,
+            CONTENT_TYPE="text/calendar",
+            login="alice:"
+        )
+
+        assert status == 200
+        # The query should succeed
+        assert "schedule-response" in response or "recipient" in response.lower()

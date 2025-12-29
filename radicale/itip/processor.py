@@ -2321,6 +2321,14 @@ class ITIPProcessor:
         Calculate free/busy times for a user within a time range.
 
         Scans all calendars under the user's principal and returns busy periods.
+        If VAVAILABILITY components are present (RFC 7953), they are used to
+        determine when the user is generally available vs unavailable.
+
+        RFC 7953 Algorithm:
+        1. Collect event-based busy periods (VEVENT with TRANSP:OPAQUE)
+        2. Apply VAVAILABILITY patterns (sorted by priority)
+        3. Times outside AVAILABLE slots become BUSY-UNAVAILABLE
+        4. Combine with actual event busy times
 
         Args:
             principal_path: User's principal path (e.g., /alice/)
@@ -2333,6 +2341,7 @@ class ITIPProcessor:
             iCalendar text with METHOD:REPLY and VFREEBUSY component
         """
         from radicale.item import filter as radicale_filter
+        from radicale.itip import availability
         from vobject.icalendar import utc as vobj_utc
         from datetime import datetime, timedelta
         import xml.etree.ElementTree as ET
@@ -2413,6 +2422,21 @@ class ITIPProcessor:
 
         # Sort and merge overlapping periods (optional optimization)
         busy_periods.sort(key=lambda x: x[0])
+
+        # RFC 7953: Apply VAVAILABILITY if present
+        # This adds BUSY-UNAVAILABLE periods for times outside AVAILABLE slots
+        try:
+            avail_processor = availability.AvailabilityProcessor(
+                self.storage, self.configuration
+            )
+            busy_periods = avail_processor.calculate_freebusy_with_availability(
+                principal_path, dtstart, dtend, busy_periods
+            )
+            logger.debug(f"Applied VAVAILABILITY for {principal_path}, "
+                        f"resulting in {len(busy_periods)} busy periods")
+        except Exception as e:
+            logger.warning(f"Error processing VAVAILABILITY for {principal_path}: {e}")
+            # Continue with event-only busy periods
 
         # Build VFREEBUSY REPLY
         reply = vobject.iCalendar()

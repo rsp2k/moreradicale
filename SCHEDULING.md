@@ -11,8 +11,9 @@ This guide explains how to configure and use the RFC 6638 CalDAV Scheduling feat
 5. [Group Expansion](#group-expansion)
 6. [Resource Scheduling](#resource-scheduling)
 7. [Free/Busy Queries](#freebusy-queries)
-8. [Client Compatibility](#client-compatibility)
-9. [Troubleshooting](#troubleshooting)
+8. [Calendar Availability (VAVAILABILITY)](#calendar-availability-vavailability)
+9. [Client Compatibility](#client-compatibility)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -341,6 +342,117 @@ FREEBUSY;FBTYPE=BUSY-TENTATIVE:20251229T140000Z/20251229T150000Z
 - `STATUS:CANCELLED` events
 - `TRANSP:TRANSPARENT` events
 - External attendees (no calendar access)
+
+---
+
+## Calendar Availability (VAVAILABILITY)
+
+Define when users are typically available using RFC 7953 VAVAILABILITY components. This enhances free/busy queries by showing unavailable periods even when no events are scheduled.
+
+### How It Works
+
+1. User stores a **VAVAILABILITY** component in their calendar
+2. This defines their general availability pattern (e.g., "Mon-Fri 9am-5pm")
+3. When someone queries their free/busy, times **outside** available periods show as busy-unavailable
+4. Events still show as busy during available periods
+
+### Example: Work Hours
+
+Store this in a user's calendar to indicate they're only available during work hours:
+
+```
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example//EN
+BEGIN:VAVAILABILITY
+UID:work-hours@example.com
+DTSTAMP:20251228T100000Z
+DTSTART:20250101T000000Z
+SUMMARY:Work Hours
+PRIORITY:1
+BUSYTYPE:BUSY-UNAVAILABLE
+BEGIN:AVAILABLE
+UID:weekday-hours@example.com
+DTSTAMP:20251228T100000Z
+DTSTART:20250101T090000Z
+DTEND:20250101T170000Z
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+SUMMARY:Office Hours
+END:AVAILABLE
+END:VAVAILABILITY
+END:VCALENDAR
+```
+
+### Key Concepts
+
+| Component | Description |
+|-----------|-------------|
+| `VAVAILABILITY` | Container defining an availability period |
+| `AVAILABLE` | Subcomponent with specific available time slots |
+| `BUSYTYPE` | What to show outside available times (`BUSY-UNAVAILABLE`, `BUSY`, `BUSY-TENTATIVE`) |
+| `PRIORITY` | Priority when multiple VAVAILABILITY overlap (1=highest, 9=low, 0=undefined) |
+| `RRULE` | Recurrence rule for repeating availability (on AVAILABLE subcomponents) |
+
+### Multiple VAVAILABILITY Components
+
+Users can have multiple VAVAILABILITY for different scenarios:
+
+```
+# High priority: Vacation (not available at all)
+PRIORITY:1
+DTSTART:20251224T000000Z
+DTEND:20251226T000000Z
+BUSYTYPE:BUSY-UNAVAILABLE
+# No AVAILABLE subcomponents = never available
+
+# Normal priority: Work hours
+PRIORITY:5
+DTSTART:20250101T000000Z
+# AVAILABLE: Mon-Fri 9am-5pm
+```
+
+Higher priority (lower number) VAVAILABILITY takes precedence in overlapping periods.
+
+### Effect on Free/Busy Queries
+
+When someone queries Bob's availability for 8am-6pm:
+
+**Without VAVAILABILITY:**
+```
+FREEBUSY;FBTYPE=BUSY:20251229T100000Z/20251229T110000Z
+```
+Only actual events show as busy.
+
+**With VAVAILABILITY (9am-5pm work hours):**
+```
+FREEBUSY;FBTYPE=BUSY-UNAVAILABLE:20251229T080000Z/20251229T090000Z
+FREEBUSY;FBTYPE=BUSY:20251229T100000Z/20251229T110000Z
+FREEBUSY;FBTYPE=BUSY-UNAVAILABLE:20251229T170000Z/20251229T180000Z
+```
+Times outside work hours also show as busy-unavailable.
+
+### Creating VAVAILABILITY
+
+You can create VAVAILABILITY using the helper function:
+
+```python
+from radicale.itip.availability import create_vavailability_ics
+
+ics = create_vavailability_ics(
+    uid='work-hours',
+    summary='Standard Work Week',
+    available_slots=[
+        {
+            'dtstart': datetime(2025, 1, 1, 9, 0),
+            'dtend': datetime(2025, 1, 1, 17, 0),
+            'rrule': 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+            'summary': 'Office Hours'
+        }
+    ],
+    priority=1,
+    location='Office'
+)
+```
 
 ---
 
