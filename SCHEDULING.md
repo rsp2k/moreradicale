@@ -12,8 +12,9 @@ This guide explains how to configure and use the RFC 6638 CalDAV Scheduling feat
 6. [Resource Scheduling](#resource-scheduling)
 7. [Free/Busy Queries](#freebusy-queries)
 8. [Calendar Availability (VAVAILABILITY)](#calendar-availability-vavailability)
-9. [Client Compatibility](#client-compatibility)
-10. [Troubleshooting](#troubleshooting)
+9. [RFC 7986 Extended Properties](#rfc-7986-extended-properties)
+10. [Client Compatibility](#client-compatibility)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -456,6 +457,115 @@ ics = create_vavailability_ics(
 
 ---
 
+## RFC 7986 Extended Properties
+
+Radicale fully supports RFC 7986 - New Properties for iCalendar, which adds rich metadata to calendar events:
+
+### COLOR Property
+
+Add visual distinction to events with CSS3 color names:
+
+```
+BEGIN:VEVENT
+UID:meeting@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T140000Z
+DTEND:20251230T150000Z
+SUMMARY:Team Meeting
+COLOR:dodgerblue
+END:VEVENT
+```
+
+Supported colors include: `dodgerblue`, `coral`, `teal`, `mediumseagreen`, `slateblue`, `crimson`, `darkorange`, and all CSS3 color names.
+
+### CONFERENCE Property
+
+Link virtual meeting rooms directly to calendar events:
+
+```
+BEGIN:VEVENT
+UID:standup@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T090000Z
+DTEND:20251230T091500Z
+SUMMARY:Daily Standup
+CONFERENCE;VALUE=URI;FEATURE=VIDEO,AUDIO;LABEL=Zoom:
+ https://zoom.us/j/123456
+CONFERENCE;VALUE=URI;FEATURE=PHONE;LABEL=Dial-in:
+ tel:+1-555-123-4567
+END:VEVENT
+```
+
+#### FEATURE Parameter Values
+
+| Value | Description |
+|-------|-------------|
+| `VIDEO` | Video conferencing capability |
+| `AUDIO` | Audio conferencing capability |
+| `PHONE` | Dial-in phone number |
+| `CHAT` | Text chat channel |
+| `SCREEN` | Screen sharing capability |
+| `MODERATOR` | Moderator access link |
+| `FEED` | Streaming/broadcast feed |
+
+Multiple features can be combined: `FEATURE=VIDEO,AUDIO,SCREEN`
+
+### IMAGE Property
+
+Attach visual content to events:
+
+```
+BEGIN:VEVENT
+UID:conference@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T090000Z
+DTEND:20251230T170000Z
+SUMMARY:Tech Conference 2025
+IMAGE;VALUE=URI;DISPLAY=BADGE;FMTTYPE=image/png:
+ https://example.com/badge.png
+IMAGE;VALUE=URI;DISPLAY=FULLSIZE;FMTTYPE=image/jpeg:
+ https://example.com/banner.jpg
+END:VEVENT
+```
+
+#### DISPLAY Parameter Values
+
+| Value | Description |
+|-------|-------------|
+| `BADGE` | Small icon/badge (e.g., sponsor logo) |
+| `THUMBNAIL` | Preview thumbnail |
+| `FULLSIZE` | Full-size image |
+| `GRAPHIC` | Decorative graphic |
+
+### Combined Example
+
+A complete event with all RFC 7986 properties:
+
+```
+BEGIN:VEVENT
+UID:team-meeting@example.com
+DTSTAMP:20251229T100000Z
+DTSTART:20251230T140000Z
+DTEND:20251230T150000Z
+SUMMARY:Weekly Team Sync
+COLOR:mediumseagreen
+CONFERENCE;VALUE=URI;FEATURE=VIDEO,AUDIO;LABEL=Teams:
+ https://teams.microsoft.com/meet/123
+CONFERENCE;VALUE=URI;FEATURE=PHONE:tel:+1-800-MEETING
+IMAGE;VALUE=URI;DISPLAY=BADGE;FMTTYPE=image/png:
+ https://example.com/team-logo.png
+END:VEVENT
+```
+
+### Notes
+
+- All RFC 7986 properties are preserved through CalDAV scheduling (meeting invitations)
+- Properties are round-tripped correctly through storage and retrieval
+- Most modern calendar clients (Thunderbird, Apple Calendar, etc.) can display these properties
+- The vobject library provides native support for these properties
+
+---
+
 ## Client Compatibility
 
 ### Tested Clients
@@ -613,6 +723,8 @@ This implementation follows:
 - **RFC 5546**: iCalendar Transport-Independent Interoperability Protocol (iTIP)
 - **RFC 6047**: iCalendar Message-Based Interoperability Protocol (iMIP)
 - **RFC 5545**: Internet Calendaring and Scheduling (iCalendar)
+- **RFC 7953**: Calendar Availability (VAVAILABILITY)
+- **RFC 7986**: New Properties for iCalendar (COLOR, CONFERENCE, IMAGE)
 
 ### Supported iTIP Methods
 
