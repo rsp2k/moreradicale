@@ -25,3 +25,8 @@ coverage.xml
 Gemfile.lock
 
 pytestdebug.log
+
+# Local test scripts with credentials
+test-email-config.ini
+test-email-delivery.sh
+test-imap-reply.sh
