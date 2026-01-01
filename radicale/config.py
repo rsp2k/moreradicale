@@ -675,7 +675,48 @@ $event_description""",
         ("webhook_max_size", {
             "value": "10485760",
             "help": "maximum webhook request size in bytes (default: 10MB)",
-            "type": positive_int})
+            "type": positive_int}),
+        # IMAP polling for inbound iTIP
+        ("imap_enabled", {
+            "value": "False",
+            "help": "enable IMAP polling for inbound iTIP responses from external attendees",
+            "type": bool}),
+        ("imap_server", {
+            "value": "",
+            "help": "IMAP server hostname",
+            "type": str}),
+        ("imap_port", {
+            "value": "993",
+            "help": "IMAP server port (993 for SSL, 143 for STARTTLS)",
+            "type": positive_int}),
+        ("imap_security", {
+            "value": "ssl",
+            "help": "IMAP security mode: ssl (port 993) or starttls (port 143)",
+            "type": str}),
+        ("imap_username", {
+            "value": "",
+            "help": "IMAP username for authentication",
+            "type": str}),
+        ("imap_password", {
+            "value": "",
+            "help": "IMAP password for authentication",
+            "type": str}),
+        ("imap_folder", {
+            "value": "INBOX",
+            "help": "IMAP folder to monitor for iTIP responses",
+            "type": str}),
+        ("imap_poll_interval", {
+            "value": "300",
+            "help": "IMAP polling interval in seconds (default: 5 minutes)",
+            "type": positive_int}),
+        ("imap_processed_folder", {
+            "value": "",
+            "help": "move successfully processed emails to this folder (empty = delete)",
+            "type": str}),
+        ("imap_failed_folder", {
+            "value": "",
+            "help": "move failed emails to this folder (empty = leave in inbox)",
+            "type": str})
     ])),
     ("sharing", OrderedDict([
         ("enabled", {

@@ -502,3 +502,219 @@ permissions: RrWw""")
         attach = vobj.vevent.attach
         assert "FILENAME" in attach.params
         assert attach.params["FILENAME"][0] == "tést filé.txt"
+
+
+class TestAttachmentSharedAccess(BaseTest):
+    """Tests for attachment access via shared calendars."""
+
+    def setup_method(self) -> None:
+        BaseTest.setup_method(self)
+
+        # Configure with sharing enabled and owner_only_shared rights
+        self.attachments_folder = tempfile.mkdtemp()
+        self.configure({
+            "auth": {"type": "none"},
+            "rights": {"type": "owner_only_shared"},
+            "sharing": {
+                "enabled": "True",
+            },
+            "attachments": {
+                "enabled": "True",
+                "filesystem_folder": self.attachments_folder,
+                "max_size": "10000000",
+                "max_per_resource": "20",
+            },
+        })
+
+    def request_binary(self, method: str, path: str, data: bytes,
+                       check: Optional[int] = None,
+                       content_type: str = "application/octet-stream",
+                       **kwargs) -> Tuple[int, Dict[str, str], bytes]:
+        """Send a request with binary data."""
+        from urllib.parse import urlparse
+
+        login = kwargs.pop("login", None)
+        environ: Dict[str, Any] = {k.upper(): v for k, v in kwargs.items()}
+
+        encoding: str = self.configuration.get("encoding", "request")
+        if login:
+            environ["HTTP_AUTHORIZATION"] = "Basic " + base64.b64encode(
+                login.encode(encoding)).decode()
+
+        # Parse path and query string
+        parsed = urlparse(path)
+        actual_path = parsed.path
+        query_string = parsed.query
+
+        environ["REQUEST_METHOD"] = method.upper()
+        environ["PATH_INFO"] = actual_path
+        environ["QUERY_STRING"] = query_string
+        environ["CONTENT_TYPE"] = content_type
+        environ["wsgi.input"] = BytesIO(data)
+        environ["CONTENT_LENGTH"] = str(len(data))
+        environ["wsgi.errors"] = sys.stderr
+        wsgiref.util.setup_testing_defaults(environ)
+
+        status = headers = None
+
+        def start_response(status_: str, headers_: List[Tuple[str, str]]) -> None:
+            nonlocal status, headers
+            status = int(status_.split()[0])
+            headers = dict(headers_)
+
+        answers = list(self.application(environ, start_response))
+        assert status is not None and headers is not None
+        assert check is None or status == check, "%d != %d" % (status, check)
+
+        return status, headers, b"".join(answers)
+
+    def _share_calendar(self, owner: str, sharee: str, calendar_path: str,
+                        access: str = "read-write") -> None:
+        """Helper to set up calendar sharing directly via storage.
+
+        This bypasses the HTTP interface to directly set up sharing
+        for testing purposes.
+        """
+        import json
+        from radicale.sharing import SHARES_PROPERTY, InviteStatus
+
+        # Discover the collection
+        with self.application._storage.acquire_lock("w", owner):
+            discovered = list(self.application._storage.discover(calendar_path, depth="0"))
+            if not discovered:
+                raise ValueError(f"Calendar not found: {calendar_path}")
+            collection = discovered[0]
+
+            # Set sharing metadata
+            shares_data = {
+                sharee: {
+                    "access": access,
+                    "cn": sharee,
+                    "status": InviteStatus.ACCEPTED.value,
+                    "invited_at": "2025-01-01T00:00:00Z",
+                    "accepted_at": "2025-01-01T00:00:00Z"
+                }
+            }
+            meta = dict(collection.get_meta() or {})
+            meta[SHARES_PROPERTY] = json.dumps(shares_data)
+            collection.set_meta(meta)
+
+    def test_shared_user_can_access_attachment(self) -> None:
+        """User with shared calendar access can download attachments."""
+        # Create calendar and event for alice
+        self.mkcalendar("/alice/calendar/", login="alice:")
+        self.put("/alice/calendar/event.ics", SIMPLE_EVENT, login="alice:")
+
+        # Add attachment as alice
+        attachment_data = b"This is alice's shared attachment."
+        status, headers, _ = self.request_binary(
+            "POST",
+            "/alice/calendar/event.ics?action=attachment-add",
+            attachment_data,
+            content_type="text/plain",
+            HTTP_CONTENT_DISPOSITION='attachment; filename="shared.txt"',
+            login="alice:",
+        )
+        assert status == 201
+        managed_id = headers["Cal-Managed-ID"]
+
+        # Share calendar with bob
+        self._share_calendar("alice", "bob", "/alice/calendar/")
+
+        # Bob should be able to access the attachment
+        status, headers, answer = self.request_binary(
+            "GET",
+            f"/.attachments/alice/{managed_id}",
+            b"",
+            login="bob:",
+        )
+        assert status == 200
+        assert answer == attachment_data
+        assert headers.get("Content-Type") == "text/plain"
+
+    def test_non_shared_user_cannot_access_attachment(self) -> None:
+        """User without shared access cannot download attachments."""
+        # Create calendar and event for alice
+        self.mkcalendar("/alice/calendar/", login="alice:")
+        self.put("/alice/calendar/event.ics", SIMPLE_EVENT, login="alice:")
+
+        # Add attachment as alice
+        status, headers, _ = self.request_binary(
+            "POST",
+            "/alice/calendar/event.ics?action=attachment-add",
+            b"alice private attachment",
+            content_type="text/plain",
+            login="alice:",
+        )
+        assert status == 201
+        managed_id = headers["Cal-Managed-ID"]
+
+        # Calendar is NOT shared with charlie
+        # Charlie should NOT be able to access the attachment
+        status, _, _ = self.request_binary(
+            "GET",
+            f"/.attachments/alice/{managed_id}",
+            b"",
+            login="charlie:",
+        )
+        assert status == 403  # Forbidden
+
+    def test_read_only_shared_user_can_access_attachment(self) -> None:
+        """User with read-only shared access can download attachments."""
+        # Create calendar and event for alice
+        self.mkcalendar("/alice/calendar/", login="alice:")
+        self.put("/alice/calendar/event.ics", SIMPLE_EVENT, login="alice:")
+
+        # Add attachment as alice
+        attachment_data = b"Read-only shared attachment content."
+        status, headers, _ = self.request_binary(
+            "POST",
+            "/alice/calendar/event.ics?action=attachment-add",
+            attachment_data,
+            content_type="application/pdf",
+            HTTP_CONTENT_DISPOSITION='attachment; filename="document.pdf"',
+            login="alice:",
+        )
+        assert status == 201
+        managed_id = headers["Cal-Managed-ID"]
+
+        # Share calendar with bob as read-only
+        self._share_calendar("alice", "bob", "/alice/calendar/", access="read")
+
+        # Bob should still be able to access (download) the attachment
+        status, headers, answer = self.request_binary(
+            "GET",
+            f"/.attachments/alice/{managed_id}",
+            b"",
+            login="bob:",
+        )
+        assert status == 200
+        assert answer == attachment_data
+
+    def test_owner_can_always_access_own_attachment(self) -> None:
+        """Calendar owner can always access their own attachments."""
+        # Create calendar and event
+        self.mkcalendar("/alice/calendar/", login="alice:")
+        self.put("/alice/calendar/event.ics", SIMPLE_EVENT, login="alice:")
+
+        # Add attachment
+        attachment_data = b"Owner's attachment."
+        status, headers, _ = self.request_binary(
+            "POST",
+            "/alice/calendar/event.ics?action=attachment-add",
+            attachment_data,
+            content_type="text/plain",
+            login="alice:",
+        )
+        assert status == 201
+        managed_id = headers["Cal-Managed-ID"]
+
+        # Owner can access
+        status, _, answer = self.request_binary(
+            "GET",
+            f"/.attachments/alice/{managed_id}",
+            b"",
+            login="alice:",
+        )
+        assert status == 200
+        assert answer == attachment_data

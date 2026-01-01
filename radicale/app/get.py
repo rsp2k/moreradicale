@@ -26,6 +26,7 @@ from radicale import httputils, pathutils, storage, types, xmlutils
 from radicale.app.base import Access, ApplicationBase
 from radicale.attachments import ATTACHMENTS_PATH
 from radicale.log import logger
+from radicale.sharing import get_sharing_manager
 
 
 def propose_filename(collection: storage.BaseCollection) -> str:
@@ -144,13 +145,56 @@ class ApplicationPartGet(ApplicationBase):
 
         owner, managed_id = parts[0], parts[1]
 
-        # Access control: user must be the owner or have calendar access
-        # For simplicity, we currently only allow owners to access their attachments
-        # TODO: Check if user has access to the calendar containing this attachment
+        # Access control: user must be the owner or have shared calendar access
         if owner != user:
-            logger.warning("User %s attempted to access %s's attachment %s",
-                          user, owner, managed_id)
-            return httputils.NOT_ALLOWED
+            # Check if user has shared access to any calendar with this attachment
+            has_access = False
+
+            # Check if sharing is enabled
+            sharing_manager = get_sharing_manager(self.configuration)
+            if sharing_manager.is_sharing_enabled():
+                # Get calendars that contain this attachment
+                try:
+                    attachment_storage = AttachmentStorage(self.configuration)
+                    calendar_paths = attachment_storage.get_attachment_calendars(
+                        owner, managed_id
+                    )
+
+                    # Check if user has shared access to any of these calendars
+                    for calendar_path in calendar_paths:
+                        try:
+                            # Discover the collection
+                            discovered = list(self._storage.discover(
+                                calendar_path, depth="0"
+                            ))
+                            if discovered:
+                                collection = discovered[0]
+                                access = sharing_manager.check_share_access(
+                                    user, collection
+                                )
+                                if access:  # READ or READ_WRITE
+                                    has_access = True
+                                    logger.debug(
+                                        "User %s has %s access to %s's attachment "
+                                        "%s via shared calendar %s",
+                                        user, access.value, owner, managed_id,
+                                        calendar_path
+                                    )
+                                    break
+                        except Exception as e:
+                            logger.debug(
+                                "Error checking calendar %s: %s", calendar_path, e
+                            )
+                            continue
+                except Exception as e:
+                    logger.debug("Error getting attachment calendars: %s", e)
+
+            if not has_access:
+                logger.warning(
+                    "User %s attempted to access %s's attachment %s (no access)",
+                    user, owner, managed_id
+                )
+                return httputils.NOT_ALLOWED
 
         # Retrieve the attachment
         try:

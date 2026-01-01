@@ -25,7 +25,7 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from radicale.attachments import (
     AttachmentManager,
@@ -315,3 +315,25 @@ class AttachmentStorage:
                 path.unlink()
         except Exception as e:
             logger.warning("Failed to delete %s: %s", path, e)
+
+    def get_attachment_calendars(self, owner: str, managed_id: str) -> List[str]:
+        """
+        Get calendar paths that contain/reference this attachment.
+
+        For shared access control, we need to know which calendars contain
+        an attachment so we can check if the requesting user has shared
+        access to any of them.
+
+        Args:
+            owner: Username who owns the attachment
+            managed_id: Unique attachment identifier
+
+        Returns:
+            List of calendar collection paths that reference this attachment.
+            Returns the primary calendar_path from metadata. If metadata is
+            missing or corrupted, returns empty list.
+        """
+        metadata = self.get_metadata(owner, managed_id)
+        if metadata and metadata.calendar_path:
+            return [metadata.calendar_path]
+        return []

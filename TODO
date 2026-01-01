@@ -29,9 +29,14 @@
 
 ## Potential Future Enhancements
 
- [ ] 📧 Inbound email parsing - Parse incoming emails from external attendees (via webhook or IMAP)
+ [X] 📧 Inbound email parsing - Parse incoming emails from external attendees (via webhook or IMAP)
+  - Webhooks: SendGrid, Mailgun, Postmark, generic formats
+  - IMAP polling: Background thread with configurable interval
+  - CLI: `--imap-poll` for cron-based polling
 
- [ ] 🔐 Attachment access control - Allow shared calendar users to access attachments
+ [X] 🔐 Attachment access control - Allow shared calendar users to access attachments
+  - Integrated with SharingManager.check_share_access()
+  - Both READ and READ_WRITE access can download attachments
 
  [ ] 📊 Scheduling reports - CALDAV:calendar-query for schedule-inbox/outbox
 
