@@ -171,12 +171,15 @@ def xml_report(base_prefix: str, path: str, xml_request: Optional[ET.Element],
         logger.warning("Unsupported REPORT method %r on %r requested",
                        xmlutils.make_human_tag(root.tag), path)
         return client.MULTI_STATUS, multistatus
+    # Calendar-related tags that support CalDAV operations
+    calendar_collection_tags = ("VCALENDAR", "SCHEDULING-INBOX", "SCHEDULING-OUTBOX")
+
     if (root.tag == xmlutils.make_clark("C:calendar-multiget") and
-            collection.tag != "VCALENDAR" or
+            collection.tag not in calendar_collection_tags or
             root.tag == xmlutils.make_clark("CR:addressbook-multiget") and
             collection.tag != "VADDRESSBOOK" or
             root.tag == xmlutils.make_clark("D:sync-collection") and
-            collection.tag not in ("VADDRESSBOOK", "VCALENDAR", "SCHEDULING-INBOX", "SCHEDULING-OUTBOX")):
+            collection.tag not in ("VADDRESSBOOK",) + calendar_collection_tags):
         logger.warning("Invalid REPORT method %r on %r requested",
                        xmlutils.make_human_tag(root.tag), path)
         return client.FORBIDDEN, xmlutils.webdav_error("D:supported-report")
@@ -747,7 +750,8 @@ def retrieve_items(
 def test_filter(collection_tag: str, item: radicale_item.Item,
                 filter_: ET.Element) -> bool:
     """Match an item against a filter."""
-    if (collection_tag == "VCALENDAR" and
+    # Calendar collections and scheduling collections use CalDAV filters
+    if (collection_tag in ("VCALENDAR", "SCHEDULING-INBOX", "SCHEDULING-OUTBOX") and
             filter_.tag != xmlutils.make_clark("C:%s" % filter_)):
         if len(filter_) == 0:
             return True
