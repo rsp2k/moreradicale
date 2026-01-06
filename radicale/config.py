@@ -716,6 +716,15 @@ $event_description""",
         ("imap_failed_folder", {
             "value": "",
             "help": "move failed emails to this folder (empty = leave in inbox)",
+            "type": str}),
+        # Auto-scheduling for resources (RFC 6638 SCHEDULE-AGENT=SERVER)
+        ("auto_accept_policy", {
+            "value": "if-free",
+            "help": "default auto-accept policy for resources: always, if-free, manual, tentative-if-conflict",
+            "type": str}),
+        ("resource_policies_file", {
+            "value": "",
+            "help": "path to JSON file with per-resource auto-accept policies",
             "type": str})
     ])),
     ("sharing", OrderedDict([

@@ -252,16 +252,63 @@ Radicale expands this to individual invitations for alice, bob, and charlie.
 
 ## Resource Scheduling
 
-Conference rooms, projectors, and other resources can automatically accept or decline based on availability.
+Conference rooms, projectors, and other resources can automatically accept or decline based on availability using RFC 6638 SCHEDULE-AGENT=SERVER.
 
 ### How It Works
 
 1. Create a "user" for each resource (e.g., `room101`, `projector1`)
 2. Give the resource a calendar
-3. Invite the resource with `CUTYPE=ROOM` or `CUTYPE=RESOURCE`
-4. Radicale automatically:
-   - **Accepts** if the time slot is free
-   - **Declines** if there's a conflict
+3. Invite the resource with `CUTYPE=ROOM` or `CUTYPE=RESOURCE` and `SCHEDULE-AGENT=SERVER`
+4. Radicale's AutoScheduler automatically:
+   - Checks the resource's calendar for conflicts
+   - Checks VAVAILABILITY constraints (if defined)
+   - **Accepts** if the time slot is free (based on policy)
+   - **Declines** if there's a conflict (based on policy)
+   - **Tentative** if configured to accept conflicts tentatively
+
+### Auto-Accept Policies
+
+Configure how resources respond to scheduling requests:
+
+| Policy | Behavior | Use Case |
+|--------|----------|----------|
+| **if-free** (default) | Accept if no conflicts, decline otherwise | Conference rooms, vehicles |
+| **always** | Always accept (allows double-booking) | Shared resources, projectors |
+| **manual** | Never auto-accept, requires manual approval | VIP calendars, executive assistants |
+| **tentative-if-conflict** | Accept if free, tentative if conflict | Resources that can be shared with approval |
+
+### Configuration
+
+#### Global Policy
+
+Set the default policy for all resources:
+
+```ini
+[scheduling]
+enabled = True
+internal_domain = example.com
+auto_accept_policy = if-free
+```
+
+#### Per-Resource Policies
+
+Override policies for specific resources using a JSON file:
+
+```json
+{
+  "conference-room-a@example.com": "if-free",
+  "projector@example.com": "always",
+  "ceo-calendar@example.com": "manual",
+  "shared-desk@example.com": "tentative-if-conflict"
+}
+```
+
+Configure the file path:
+
+```ini
+[scheduling]
+resource_policies_file = /etc/radicale/resource-policies.json
+```
 
 ### Setup
 
@@ -275,26 +322,66 @@ Conference rooms, projectors, and other resources can automatically accept or de
 In your calendar client, add the resource as an attendee with the appropriate CUTYPE:
 
 ```
-ATTENDEE;CUTYPE=ROOM:mailto:room101@example.com
-ATTENDEE;CUTYPE=RESOURCE:mailto:projector1@example.com
+ATTENDEE;CUTYPE=ROOM;SCHEDULE-AGENT=SERVER:mailto:room101@example.com
+ATTENDEE;CUTYPE=RESOURCE;SCHEDULE-AGENT=SERVER:mailto:projector1@example.com
 ```
+
+**Note**: `SCHEDULE-AGENT=SERVER` is the default per RFC 6638, but some clients may require it to be explicit.
 
 ### Conflict Detection
 
-Resources check their calendar for conflicts before accepting. The following are **ignored**:
+The AutoScheduler checks for conflicts before accepting. The following are **ignored** when checking:
 - Events with `STATUS:CANCELLED`
 - Events with `TRANSP:TRANSPARENT` (free/busy shows as free)
 - The same event being rescheduled (same UID)
+- VAVAILABILITY unavailable periods (if defined)
 
-### SCHEDULE-AGENT
+### VAVAILABILITY Integration
 
-To handle resource booking yourself (not via server):
+Resources can define availability patterns using RFC 7953 VAVAILABILITY components. For example, a conference room might only be available during business hours:
+
+```ical
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Radicale//RFC7953//EN
+BEGIN:VAVAILABILITY
+UID:room101-availability
+DTSTAMP:20250101T000000Z
+SUMMARY:Business Hours Only
+BUSYTYPE:BUSY-UNAVAILABLE
+BEGIN:AVAILABLE
+UID:room101-weekdays
+DTSTART:20250101T090000Z
+DTEND:20250101T170000Z
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+SUMMARY:Weekday Hours
+END:AVAILABLE
+END:VAVAILABILITY
+END:VCALENDAR
+```
+
+The AutoScheduler will:
+1. Check for conflicting events
+2. Check if requested time falls within AVAILABLE slots
+3. Decline if outside available hours or if conflicts exist
+
+### SCHEDULE-AGENT Parameter
+
+Control how scheduling is processed:
+
+| Value | Behavior |
+|-------|----------|
+| **SERVER** (default) | Radicale handles scheduling automatically |
+| **CLIENT** | Client handles scheduling, server skips auto-accept |
+| **NONE** | No scheduling processing at all |
+
+Example - client-side scheduling:
 
 ```
 ATTENDEE;CUTYPE=ROOM;SCHEDULE-AGENT=CLIENT:mailto:room101@example.com
 ```
 
-This skips auto-accept processing.
+This skips auto-accept processing entirely.
 
 ---
 

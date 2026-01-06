@@ -40,4 +40,9 @@
 
  [ ] 📊 Scheduling reports - CALDAV:calendar-query for schedule-inbox/outbox
 
- [ ] 🌐 CalDAV auto-scheduling - Server-side auto-accept for resources (SCHEDULE-AGENT=SERVER)
+ [X] 🌐 CalDAV auto-scheduling - Server-side auto-accept for resources (SCHEDULE-AGENT=SERVER)
+  - Implemented AutoScheduler class with configurable policies
+  - Support for: always, if-free, manual, tentative-if-conflict
+  - Per-resource policy configuration via JSON file
+  - VAVAILABILITY integration for availability constraints
+  - Comprehensive test suite in test_auto_scheduling.py
