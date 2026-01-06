@@ -131,8 +131,8 @@ END:VEVENT
 END:VCALENDAR""",
             login="alice:")
 
-        # Should return METHOD_NOT_ALLOWED (405)
-        assert status == 405
+        # Should return NOT_FOUND (404) - outbox doesn't exist when scheduling disabled
+        assert status == 404
 
 
 class TestITIPParsing(BaseTest):

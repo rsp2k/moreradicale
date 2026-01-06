@@ -38,7 +38,10 @@
   - Integrated with SharingManager.check_share_access()
   - Both READ and READ_WRITE access can download attachments
 
- [ ] 📊 Scheduling reports - CALDAV:calendar-query for schedule-inbox/outbox
+ [X] 📊 Scheduling reports - CALDAV:calendar-query for schedule-inbox/outbox
+  - Enable calendar-query, calendar-multiget on schedule-inbox/outbox
+  - Time-range and component filtering supported
+  - 9 comprehensive test cases in test_scheduling_reports.py
 
  [X] 🌐 CalDAV auto-scheduling - Server-side auto-accept for resources (SCHEDULE-AGENT=SERVER)
   - Implemented AutoScheduler class with configurable policies
