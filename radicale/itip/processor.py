@@ -39,6 +39,9 @@ class ITIPProcessor:
         # Group definitions for CUTYPE=GROUP expansion
         self.groups = {}
 
+        # Initialize AutoScheduler for resource auto-accept
+        self.auto_scheduler = None
+
         if configuration:
             scheduling_enabled = configuration.get("scheduling", "enabled")
             email_enabled = configuration.get("scheduling", "email_enabled")
@@ -55,6 +58,15 @@ class ITIPProcessor:
             groups_file = configuration.get("scheduling", "groups_file")
             if groups_file:
                 self.groups = self._load_groups(groups_file)
+
+            # Initialize AutoScheduler for SCHEDULE-AGENT=SERVER
+            if scheduling_enabled:
+                try:
+                    from radicale.itip.auto_scheduler import AutoScheduler
+                    self.auto_scheduler = AutoScheduler(storage, configuration)
+                    logger.info("AutoScheduler initialized for resource calendars")
+                except Exception as e:
+                    logger.warning(f"AutoScheduler initialization failed: {e}")
 
     def _load_groups(self, groups_file: str) -> dict:
         """
@@ -737,20 +749,51 @@ class ITIPProcessor:
         """
         Auto-accept/decline for resource attendees (CUTYPE=ROOM or CUTYPE=RESOURCE).
 
-        Resources automatically accept meeting invitations if they're available
-        (no conflicting events). If conflicts exist, the resource declines.
+        This method now delegates to the AutoScheduler class which implements
+        RFC 6638 SCHEDULE-AGENT=SERVER processing with configurable policies.
+
+        Resources automatically accept meeting invitations based on:
+        1. Auto-accept policy (always, if-free, manual, tentative-if-conflict)
+        2. Scheduling conflicts in the resource's calendar
+        3. VAVAILABILITY constraints (if defined)
 
         For each resource attendee:
-        1. Check for scheduling conflicts in the resource's calendar
-        2. If no conflicts: Create event in resource's calendar with PARTSTAT=ACCEPTED
-        3. If conflicts: Update PARTSTAT to DECLINED (don't create event)
-        4. Update the organizer's copy with the resource's response
+        1. Check auto-accept policy
+        2. Check for scheduling conflicts (if needed)
+        3. Set PARTSTAT to ACCEPTED/DECLINED/TENTATIVE
+        4. Add event to resource's calendar (if accepted)
+        5. Update the organizer's copy with the resource's response
 
         Args:
             itip_msg: iTIP REQUEST message
             vcal: Full VCALENDAR object
             component: VEVENT/VTODO component
         """
+        # Use new AutoScheduler if available
+        if self.auto_scheduler:
+            try:
+                auto_scheduled = self.auto_scheduler.process_request(itip_msg, vcal, component)
+
+                # Update organizer's copy for each auto-scheduled resource
+                for attendee in auto_scheduled:
+                    try:
+                        is_internal, organizer_principal = route_attendee(itip_msg.organizer, self.storage)
+                        if is_internal:
+                            event_found, event_path, event_collection = self._find_organizer_event(
+                                organizer_principal, itip_msg.uid)
+                            if event_found:
+                                self._update_attendee_partstat(
+                                    event_path, event_collection, attendee.email, attendee.partstat.value
+                                )
+                    except Exception as e:
+                        logger.error(f"Error updating organizer calendar for {attendee.email}: {e}", exc_info=True)
+
+                return
+
+            except Exception as e:
+                logger.error(f"AutoScheduler failed, falling back to legacy implementation: {e}", exc_info=True)
+
+        # Fallback to legacy implementation if AutoScheduler not available
         from datetime import datetime
         from vobject.icalendar import utc as vobj_utc
 
