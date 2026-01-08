@@ -438,6 +438,18 @@ class Application(ApplicationPartDelete, ApplicationPartHead,
                 path.rstrip("/").endswith("/.well-known/carddav")):
             return response(*httputils.redirect(
                 base_prefix + "/", client.MOVED_PERMANENTLY))
+
+        # Handle /.well-known/timezone for RFC 7808 TZDIST
+        if path.startswith("/.well-known/timezone"):
+            if self.configuration.get("tzdist", "enabled"):
+                from radicale.tzdist.handler import TZDistHandler
+                handler = TZDistHandler(self.configuration)
+                status, headers, answer, _ = handler.handle_request(
+                    environ, base_prefix, path
+                )
+                return response(status, headers, answer)
+            return response(*httputils.NOT_FOUND)
+
         # Return NOT FOUND for all other paths containing ".well-known"
         if path.endswith("/.well-known") or "/.well-known/" in path:
             return response(*httputils.NOT_FOUND)
