@@ -364,6 +364,10 @@ class ITIPProcessor:
             # Deliver to internal attendees
             self._deliver_internal(itip_msg)
 
+            # Process resource auto-accept for ROOM/RESOURCE attendees
+            # This checks for conflicts and auto-accepts if available
+            self._process_resource_auto_accept(itip_msg, vcal, component)
+
             # Deliver to external attendees via email
             try:
                 self._deliver_external(itip_msg)

@@ -6,10 +6,10 @@ for automatic resource scheduling.
 """
 
 import os
-import pytest
 import tempfile
-from datetime import datetime, timedelta
-from radicale import Application
+
+import pytest
+
 from radicale.tests import BaseTest
 
 
@@ -18,8 +18,8 @@ class TestAutoScheduling(BaseTest):
 
     def setup_method(self):
         """Set up test configuration with auto-scheduling enabled."""
-        self.configuration = self.Configuration({
-            "storage": {"filesystem_folder": self.colpath},
+        super().setup_method()
+        self.configure({
             "auth": {"type": "none"},
             "scheduling": {
                 "enabled": "True",
@@ -27,15 +27,24 @@ class TestAutoScheduling(BaseTest):
                 "auto_accept_policy": "if-free"
             }
         })
-        self.application = Application(self.configuration)
+
+    def _create_principal(self, user: str) -> None:
+        """Create a principal collection for a user."""
+        self.propfind(f"/{user}/", HTTP_DEPTH="1", login=f"{user}:")
+
+    def _create_calendar(self, user: str, calendar: str = "calendar") -> None:
+        """Create a calendar for a user (creates principal if needed)."""
+        self._create_principal(user)
+        self.request("MKCALENDAR", f"/{user}/{calendar}/",
+                     CONTENT_TYPE="application/xml", login=f"{user}:")
 
     def test_auto_accept_no_conflict(self):
         """Test resource auto-accepts when no conflicts exist."""
         # Create organizer's calendar
-        self.request("MKCALENDAR", "/alice/calendar.ics/")
+        self._create_calendar("alice")
 
         # Create resource's calendar
-        self.request("MKCALENDAR", "/conference-room/calendar.ics/")
+        self._create_calendar("conference-room")
 
         # Organizer invites resource to meeting
         event = """BEGIN:VCALENDAR
@@ -53,27 +62,30 @@ END:VEVENT
 END:VCALENDAR"""
 
         # PUT event as organizer
-        response = self.request(
+        status, _, _ = self.request(
             "PUT",
-            "/alice/calendar.ics/test-resource-1.ics",
-            event
+            "/alice/calendar/test-resource-1.ics",
+            event,
+            login="alice:"
         )
-        assert response.status == 201
+        assert status == 201
 
         # Check resource's calendar - should have auto-accepted
-        response = self.request(
+        # File is named with sanitized UID (@ replaced with -)
+        status, _, content = self.request(
             "GET",
-            "/conference-room/calendar.ics/test-resource-1.ics"
+            "/conference-room/calendar/test-resource-1-example.com.ics",
+            login="conference-room:"
         )
-        assert response.status == 200
-        assert b"PARTSTAT=ACCEPTED" in response.body
+        assert status == 200
+        assert "PARTSTAT=ACCEPTED" in content
 
     def test_auto_decline_on_conflict(self):
         """Test resource auto-declines when conflicts exist."""
         # Create calendars
-        self.request("MKCALENDAR", "/alice/calendar.ics/")
-        self.request("MKCALENDAR", "/bob/calendar.ics/")
-        self.request("MKCALENDAR", "/conference-room/calendar.ics/")
+        self._create_calendar("alice")
+        self._create_calendar("bob")
+        self._create_calendar("conference-room")
 
         # Alice books the room first
         event1 = """BEGIN:VCALENDAR
@@ -90,20 +102,23 @@ ATTENDEE;PARTSTAT=ACCEPTED;CUTYPE=ROOM;SCHEDULE-AGENT=SERVER:mailto:conference-r
 END:VEVENT
 END:VCALENDAR"""
 
-        response = self.request(
+        status, _, _ = self.request(
             "PUT",
-            "/alice/calendar.ics/existing-booking.ics",
-            event1
+            "/alice/calendar/existing-booking.ics",
+            event1,
+            login="alice:"
         )
-        assert response.status == 201
+        assert status == 201
 
-        # Manually add to resource calendar (simulate successful booking)
-        response = self.request(
-            "PUT",
-            "/conference-room/calendar.ics/existing-booking.ics",
-            event1
+        # Auto-scheduler already added event to resource calendar
+        # Verify it's there with ACCEPTED status
+        status, _, content = self.request(
+            "GET",
+            "/conference-room/calendar/existing-booking-example.com.ics",
+            login="conference-room:"
         )
-        assert response.status == 201
+        assert status == 200
+        assert "PARTSTAT=ACCEPTED" in content
 
         # Bob tries to book at the same time
         event2 = """BEGIN:VCALENDAR
@@ -120,46 +135,46 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;CUTYPE=ROOM;SCHEDULE-AGENT=SERVER:mailto:conferen
 END:VEVENT
 END:VCALENDAR"""
 
-        response = self.request(
+        status, _, _ = self.request(
             "PUT",
-            "/bob/calendar.ics/conflicting-booking.ics",
-            event2
+            "/bob/calendar/conflicting-booking.ics",
+            event2,
+            login="bob:"
         )
-        assert response.status == 201
+        assert status == 201
 
         # Check Bob's calendar - resource should have declined
-        response = self.request(
+        status, _, content = self.request(
             "GET",
-            "/bob/calendar.ics/conflicting-booking.ics"
+            "/bob/calendar/conflicting-booking.ics",
+            login="bob:"
         )
-        assert response.status == 200
-        assert b"PARTSTAT=DECLINED" in response.body
+        assert status == 200
+        assert "PARTSTAT=DECLINED" in content
 
         # Check resource calendar - should NOT have Bob's event
-        response = self.request(
+        status, _, _ = self.request(
             "GET",
-            "/conference-room/calendar.ics/conflicting-booking.ics"
+            "/conference-room/calendar/conflicting-booking-example.com.ics",
+            login="conference-room:"
         )
-        assert response.status == 404
+        assert status == 404
 
     def test_auto_accept_always_policy(self):
         """Test ALWAYS policy allows double-booking."""
         # Set policy to ALWAYS
-        self.configuration = self.Configuration({
-            "storage": {"filesystem_folder": self.colpath},
-            "auth": {"type": "none"},
+        self.configure({
             "scheduling": {
                 "enabled": "True",
                 "internal_domain": "example.com",
                 "auto_accept_policy": "always"
             }
         })
-        self.application = Application(self.configuration)
 
         # Create calendars
-        self.request("MKCALENDAR", "/alice/calendar.ics/")
-        self.request("MKCALENDAR", "/bob/calendar.ics/")
-        self.request("MKCALENDAR", "/projector/calendar.ics/")
+        self._create_calendar("alice")
+        self._create_calendar("bob")
+        self._create_calendar("projector")
 
         # Alice books the projector
         event1 = """BEGIN:VCALENDAR
@@ -176,8 +191,9 @@ ATTENDEE;PARTSTAT=ACCEPTED;CUTYPE=RESOURCE;SCHEDULE-AGENT=SERVER:mailto:projecto
 END:VEVENT
 END:VCALENDAR"""
 
-        self.request("PUT", "/alice/calendar.ics/alice-projector.ics", event1)
-        self.request("PUT", "/projector/calendar.ics/alice-projector.ics", event1)
+        self.request("PUT", "/alice/calendar/alice-projector.ics",
+                     event1, login="alice:")
+        # Auto-scheduler already added to projector's calendar
 
         # Bob books at same time (should succeed with ALWAYS policy)
         event2 = """BEGIN:VCALENDAR
@@ -194,46 +210,46 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;CUTYPE=RESOURCE;SCHEDULE-AGENT=SERVER:mailto:proj
 END:VEVENT
 END:VCALENDAR"""
 
-        response = self.request(
+        status, _, _ = self.request(
             "PUT",
-            "/bob/calendar.ics/bob-projector.ics",
-            event2
+            "/bob/calendar/bob-projector.ics",
+            event2,
+            login="bob:"
         )
-        assert response.status == 201
+        assert status == 201
 
         # Check Bob's calendar - should be ACCEPTED (ALWAYS policy)
-        response = self.request(
+        status, _, content = self.request(
             "GET",
-            "/bob/calendar.ics/bob-projector.ics"
+            "/bob/calendar/bob-projector.ics",
+            login="bob:"
         )
-        assert response.status == 200
-        assert b"PARTSTAT=ACCEPTED" in response.body
+        assert status == 200
+        assert "PARTSTAT=ACCEPTED" in content
 
         # Projector should have both events (double-booked)
-        response = self.request(
+        status, _, _ = self.request(
             "GET",
-            "/projector/calendar.ics/bob-projector.ics"
+            "/projector/calendar/bob-projector-example.com.ics",
+            login="projector:"
         )
-        assert response.status == 200
+        assert status == 200
 
     def test_auto_tentative_on_conflict(self):
         """Test TENTATIVE_IF_CONFLICT policy."""
         # Set policy to tentative on conflict
-        self.configuration = self.Configuration({
-            "storage": {"filesystem_folder": self.colpath},
-            "auth": {"type": "none"},
+        self.configure({
             "scheduling": {
                 "enabled": "True",
                 "internal_domain": "example.com",
                 "auto_accept_policy": "tentative-if-conflict"
             }
         })
-        self.application = Application(self.configuration)
 
         # Create calendars
-        self.request("MKCALENDAR", "/alice/calendar.ics/")
-        self.request("MKCALENDAR", "/bob/calendar.ics/")
-        self.request("MKCALENDAR", "/conference-room/calendar.ics/")
+        self._create_calendar("alice")
+        self._create_calendar("bob")
+        self._create_calendar("conference-room")
 
         # Alice books the room
         event1 = """BEGIN:VCALENDAR
@@ -250,8 +266,9 @@ ATTENDEE;PARTSTAT=ACCEPTED;CUTYPE=ROOM;SCHEDULE-AGENT=SERVER:mailto:conference-r
 END:VEVENT
 END:VCALENDAR"""
 
-        self.request("PUT", "/alice/calendar.ics/alice-meeting.ics", event1)
-        self.request("PUT", "/conference-room/calendar.ics/alice-meeting.ics", event1)
+        self.request("PUT", "/alice/calendar/alice-meeting.ics",
+                     event1, login="alice:")
+        # Auto-scheduler already added to conference-room's calendar
 
         # Bob books at same time (should get TENTATIVE)
         event2 = """BEGIN:VCALENDAR
@@ -268,38 +285,37 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;CUTYPE=ROOM;SCHEDULE-AGENT=SERVER:mailto:conferen
 END:VEVENT
 END:VCALENDAR"""
 
-        response = self.request(
+        status, _, _ = self.request(
             "PUT",
-            "/bob/calendar.ics/bob-meeting.ics",
-            event2
+            "/bob/calendar/bob-meeting.ics",
+            event2,
+            login="bob:"
         )
-        assert response.status == 201
+        assert status == 201
 
         # Check Bob's calendar - should be TENTATIVE
-        response = self.request(
+        status, _, content = self.request(
             "GET",
-            "/bob/calendar.ics/bob-meeting.ics"
+            "/bob/calendar/bob-meeting.ics",
+            login="bob:"
         )
-        assert response.status == 200
-        assert b"PARTSTAT=TENTATIVE" in response.body
+        assert status == 200
+        assert "PARTSTAT=TENTATIVE" in content
 
     def test_manual_policy_no_auto_accept(self):
         """Test MANUAL policy prevents auto-scheduling."""
         # Set policy to MANUAL
-        self.configuration = self.Configuration({
-            "storage": {"filesystem_folder": self.colpath},
-            "auth": {"type": "none"},
+        self.configure({
             "scheduling": {
                 "enabled": "True",
                 "internal_domain": "example.com",
                 "auto_accept_policy": "manual"
             }
         })
-        self.application = Application(self.configuration)
 
         # Create calendars
-        self.request("MKCALENDAR", "/alice/calendar.ics/")
-        self.request("MKCALENDAR", "/ceo-calendar/calendar.ics/")
+        self._create_calendar("alice")
+        self._create_calendar("ceo-calendar")
 
         # Invite CEO calendar (should require manual accept)
         event = """BEGIN:VCALENDAR
@@ -316,32 +332,35 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;CUTYPE=ROOM;SCHEDULE-AGENT=SERVER:mailto:ceo-cale
 END:VEVENT
 END:VCALENDAR"""
 
-        response = self.request(
+        status, _, _ = self.request(
             "PUT",
-            "/alice/calendar.ics/meeting-with-ceo.ics",
-            event
+            "/alice/calendar/meeting-with-ceo.ics",
+            event,
+            login="alice:"
         )
-        assert response.status == 201
+        assert status == 201
 
         # Check organizer's calendar - should remain NEEDS-ACTION
-        response = self.request(
+        status, _, content = self.request(
             "GET",
-            "/alice/calendar.ics/meeting-with-ceo.ics"
+            "/alice/calendar/meeting-with-ceo.ics",
+            login="alice:"
         )
-        assert response.status == 200
-        assert b"PARTSTAT=NEEDS-ACTION" in response.body
+        assert status == 200
+        assert "PARTSTAT=NEEDS-ACTION" in content
 
         # CEO calendar should NOT have the event
-        response = self.request(
+        status, _, _ = self.request(
             "GET",
-            "/ceo-calendar/calendar.ics/meeting-with-ceo.ics"
+            "/ceo-calendar/calendar/meeting-with-ceo.ics",
+            login="ceo-calendar:"
         )
-        assert response.status == 404
+        assert status == 404
 
     def test_schedule_agent_client_skipped(self):
         """Test SCHEDULE-AGENT=CLIENT skips auto-scheduling."""
-        self.request("MKCALENDAR", "/alice/calendar.ics/")
-        self.request("MKCALENDAR", "/conference-room/calendar.ics/")
+        self._create_calendar("alice")
+        self._create_calendar("conference-room")
 
         # Event with SCHEDULE-AGENT=CLIENT
         event = """BEGIN:VCALENDAR
@@ -358,25 +377,27 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;CUTYPE=ROOM;SCHEDULE-AGENT=CLIENT:mailto:conferen
 END:VEVENT
 END:VCALENDAR"""
 
-        response = self.request(
+        status, _, _ = self.request(
             "PUT",
-            "/alice/calendar.ics/client-scheduled.ics",
-            event
+            "/alice/calendar/client-scheduled.ics",
+            event,
+            login="alice:"
         )
-        assert response.status == 201
+        assert status == 201
 
         # Resource should NOT auto-accept (SCHEDULE-AGENT=CLIENT)
-        response = self.request(
+        status, _, _ = self.request(
             "GET",
-            "/conference-room/calendar.ics/client-scheduled.ics"
+            "/conference-room/calendar/client-scheduled.ics",
+            login="conference-room:"
         )
-        assert response.status == 404
+        assert status == 404
 
     def test_transparent_events_dont_conflict(self):
         """Test that TRANSP=TRANSPARENT events don't cause conflicts."""
-        self.request("MKCALENDAR", "/alice/calendar.ics/")
-        self.request("MKCALENDAR", "/bob/calendar.ics/")
-        self.request("MKCALENDAR", "/conference-room/calendar.ics/")
+        self._create_calendar("alice")
+        self._create_calendar("bob")
+        self._create_calendar("conference-room")
 
         # Alice creates transparent event (doesn't block time)
         event1 = """BEGIN:VCALENDAR
@@ -394,8 +415,9 @@ ATTENDEE;PARTSTAT=ACCEPTED;CUTYPE=ROOM;SCHEDULE-AGENT=SERVER:mailto:conference-r
 END:VEVENT
 END:VCALENDAR"""
 
-        self.request("PUT", "/alice/calendar.ics/transparent-event.ics", event1)
-        self.request("PUT", "/conference-room/calendar.ics/transparent-event.ics", event1)
+        self.request("PUT", "/alice/calendar/transparent-event.ics",
+                     event1, login="alice:")
+        # Auto-scheduler added to conference-room's calendar
 
         # Bob books at same time (should succeed - transparent doesn't block)
         event2 = """BEGIN:VCALENDAR
@@ -412,25 +434,28 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;CUTYPE=ROOM;SCHEDULE-AGENT=SERVER:mailto:conferen
 END:VEVENT
 END:VCALENDAR"""
 
-        response = self.request(
+        status, _, _ = self.request(
             "PUT",
-            "/bob/calendar.ics/real-booking.ics",
-            event2
+            "/bob/calendar/real-booking.ics",
+            event2,
+            login="bob:"
         )
-        assert response.status == 201
+        assert status == 201
 
         # Should be ACCEPTED (transparent events don't conflict)
-        response = self.request(
+        status, _, content = self.request(
             "GET",
-            "/bob/calendar.ics/real-booking.ics"
+            "/bob/calendar/real-booking.ics",
+            login="bob:"
         )
-        assert response.status == 200
-        assert b"PARTSTAT=ACCEPTED" in response.body
+        assert status == 200
+        assert "PARTSTAT=ACCEPTED" in content
 
     def test_per_resource_policy_file(self):
         """Test per-resource policies from JSON file."""
         # Create temporary policy file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json',
+                                         delete=False) as f:
             f.write("""
             {
                 "vip-room@example.com": "manual",
@@ -441,9 +466,7 @@ END:VCALENDAR"""
 
         try:
             # Configure with policy file
-            self.configuration = self.Configuration({
-                "storage": {"filesystem_folder": self.colpath},
-                "auth": {"type": "none"},
+            self.configure({
                 "scheduling": {
                     "enabled": "True",
                     "internal_domain": "example.com",
@@ -451,12 +474,11 @@ END:VCALENDAR"""
                     "resource_policies_file": policy_file
                 }
             })
-            self.application = Application(self.configuration)
 
             # Create calendars
-            self.request("MKCALENDAR", "/alice/calendar.ics/")
-            self.request("MKCALENDAR", "/vip-room/calendar.ics/")
-            self.request("MKCALENDAR", "/projector-a/calendar.ics/")
+            self._create_calendar("alice")
+            self._create_calendar("vip-room")
+            self._create_calendar("projector-a")
 
             # VIP room should use MANUAL policy
             event1 = """BEGIN:VCALENDAR
@@ -473,11 +495,16 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;CUTYPE=ROOM;SCHEDULE-AGENT=SERVER:mailto:vip-room
 END:VEVENT
 END:VCALENDAR"""
 
-            self.request("PUT", "/alice/calendar.ics/vip-meeting.ics", event1)
+            self.request("PUT", "/alice/calendar/vip-meeting.ics",
+                         event1, login="alice:")
 
-            # VIP room should NOT auto-accept
-            response = self.request("GET", "/vip-room/calendar.ics/vip-meeting.ics")
-            assert response.status == 404
+            # VIP room should NOT auto-accept (MANUAL policy)
+            status, _, _ = self.request(
+                "GET",
+                "/vip-room/calendar/vip-meeting-example.com.ics",
+                login="vip-room:"
+            )
+            assert status == 404
 
             # Projector should use ALWAYS policy (even with conflicts)
             event2 = """BEGIN:VCALENDAR
@@ -494,20 +521,22 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;CUTYPE=RESOURCE;SCHEDULE-AGENT=SERVER:mailto:proj
 END:VEVENT
 END:VCALENDAR"""
 
-            response = self.request(
+            status, _, _ = self.request(
                 "PUT",
-                "/alice/calendar.ics/projector-meeting.ics",
-                event2
+                "/alice/calendar/projector-meeting.ics",
+                event2,
+                login="alice:"
             )
-            assert response.status == 201
+            assert status == 201
 
             # Projector should have auto-accepted
-            response = self.request(
+            status, _, content = self.request(
                 "GET",
-                "/projector-a/calendar.ics/projector-meeting.ics"
+                "/projector-a/calendar/projector-meeting-example.com.ics",
+                login="projector-a:"
             )
-            assert response.status == 200
-            assert b"PARTSTAT=ACCEPTED" in response.body
+            assert status == 200
+            assert "PARTSTAT=ACCEPTED" in content
 
         finally:
             # Clean up policy file
@@ -516,8 +545,8 @@ END:VCALENDAR"""
 
     def test_vtodo_auto_scheduling(self):
         """Test auto-scheduling works for VTODO (tasks)."""
-        self.request("MKCALENDAR", "/alice/calendar.ics/")
-        self.request("MKCALENDAR", "/review-queue/calendar.ics/")
+        self._create_calendar("alice")
+        self._create_calendar("review-queue")
 
         # Create task assigned to resource
         task = """BEGIN:VCALENDAR
@@ -534,20 +563,22 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;CUTYPE=RESOURCE;SCHEDULE-AGENT=SERVER:mailto:revi
 END:VTODO
 END:VCALENDAR"""
 
-        response = self.request(
+        status, _, _ = self.request(
             "PUT",
-            "/alice/calendar.ics/review-task.ics",
-            task
+            "/alice/calendar/review-task.ics",
+            task,
+            login="alice:"
         )
-        assert response.status == 201
+        assert status == 201
 
         # Resource should auto-accept task
-        response = self.request(
+        status, _, content = self.request(
             "GET",
-            "/review-queue/calendar.ics/review-task.ics"
+            "/review-queue/calendar/review-task-example.com.ics",
+            login="review-queue:"
         )
-        assert response.status == 200
-        assert b"PARTSTAT=ACCEPTED" in response.body
+        assert status == 200
+        assert "PARTSTAT=ACCEPTED" in content
 
 
 if __name__ == '__main__':

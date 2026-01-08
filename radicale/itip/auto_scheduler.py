@@ -197,6 +197,7 @@ class AutoScheduler:
 
         # Must be a resource type
         if attendee.cutype not in ('ROOM', 'RESOURCE'):
+            logger.debug(f"Auto-schedule skipped for {attendee.email}: CUTYPE={attendee.cutype} (not ROOM/RESOURCE)")
             return False
 
         # Must be internal (we can't auto-schedule external resources)
@@ -591,8 +592,9 @@ class AutoScheduler:
                 logger.error(f"No calendar found for resource {resource_email}")
                 return False
 
-            # Clone the calendar and component
-            new_vcal = vcal.copy()
+            # Clone the calendar and component using vobject's duplicate method
+            import copy
+            new_vcal = copy.deepcopy(vcal)
 
             # Update ATTENDEE line for this resource to show PARTSTAT
             for comp in new_vcal.getChildren():
@@ -610,22 +612,23 @@ class AutoScheduler:
                             att.params['PARTSTAT'] = [partstat.value]
                             break
 
-            # Serialize and store
-            ical_text = new_vcal.serialize()
+            # Generate item href from UID (sanitize for filesystem)
+            # Remove or replace special characters
+            safe_uid = uid.replace('@', '-').replace('/', '-').replace('\\', '-')
+            href = f"{safe_uid}.ics"
 
-            # Generate item href (use UID)
-            href = f"{uid}.ics"
-
-            # Store in collection
+            # Create proper Item object
             from radicale import item as radicale_item
-            items = list(radicale_item.read_components(ical_text))
+            event_item = radicale_item.Item(
+                collection_path=target_collection.path,
+                vobject_item=new_vcal
+            )
+            event_item.prepare()
 
-            if items:
-                target_collection._upload(href, items[0])
-                logger.info(f"Added event {uid} to {resource_email}'s calendar with PARTSTAT={partstat.value}")
-                return True
-
-            return False
+            # Upload to collection
+            target_collection.upload(href, event_item)
+            logger.info(f"Added event {uid} to {resource_email}'s calendar with PARTSTAT={partstat.value}")
+            return True
 
         except Exception as e:
             logger.error(f"Error adding event to resource calendar: {e}", exc_info=True)
