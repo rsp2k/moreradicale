@@ -32,5 +32,5 @@ class ApplicationPartOptions(ApplicationBase):
         headers = {
             "Allow": ", ".join(
                 name[3:] for name in dir(self) if name.startswith("do_")),
-            "DAV": httputils.DAV_HEADERS}
+            "DAV": httputils.get_dav_headers(self.configuration)}
         return client.OK, headers, None, None

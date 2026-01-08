@@ -1,0 +1,23 @@
+{
+  "_comment": "Per-resource auto-scheduling policies for Radicale",
+  "_description": "This file defines how each resource responds to scheduling requests",
+
+  "conference-room-a@example.com": "if-free",
+  "conference-room-b@example.com": "if-free",
+  "conference-room-vip@example.com": "manual",
+
+  "projector-portable@example.com": "always",
+  "projector-auditorium@example.com": "if-free",
+
+  "vehicle-truck@example.com": "if-free",
+  "vehicle-van@example.com": "if-free",
+
+  "equipment-camera@example.com": "always",
+  "equipment-microphone@example.com": "always",
+
+  "shared-desk-1@example.com": "tentative-if-conflict",
+  "shared-desk-2@example.com": "tentative-if-conflict",
+
+  "ceo-calendar@example.com": "manual",
+  "executive-assistant@example.com": "manual"
+}

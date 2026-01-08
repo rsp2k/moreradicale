@@ -97,7 +97,8 @@ def check_and_sanitize_items(
     The ``tag`` of the collection.
 
     """
-    if tag and tag not in ("VCALENDAR", "VADDRESSBOOK", "VSUBSCRIBED"):
+    if tag and tag not in ("VCALENDAR", "VADDRESSBOOK", "VSUBSCRIBED",
+                           "SCHEDULING-INBOX", "SCHEDULING-OUTBOX"):
         raise ValueError("Unsupported collection tag: %r" % tag)
     if not is_collection and len(vobject_items) != 1:
         raise ValueError("Item contains %d components" % len(vobject_items))
@@ -111,7 +112,8 @@ def check_and_sanitize_items(
                              "collection" % (vobject_item.name, tag))
         component_uids = set()
         for component in vobject_item.components():
-            if component.name in ("VTODO", "VEVENT", "VJOURNAL"):
+            # RFC 7953: VAVAILABILITY is a valid calendar component
+            if component.name in ("VTODO", "VEVENT", "VJOURNAL", "VAVAILABILITY"):
                 component_uid = get_uid(component)
                 if component_uid:
                     component_uids.add(component_uid)
@@ -127,7 +129,8 @@ def check_and_sanitize_items(
             elif component_name != component.name:
                 raise ValueError("Multiple component types in object: %r, %r" %
                                  (component_name, component.name))
-            if component_name not in ("VTODO", "VEVENT", "VJOURNAL"):
+            # RFC 7953: VAVAILABILITY is a valid calendar component
+            if component_name not in ("VTODO", "VEVENT", "VJOURNAL", "VAVAILABILITY"):
                 continue
             component_uid = get_uid(component)
             if not object_uid_set or is_collection:
@@ -180,11 +183,14 @@ def check_and_sanitize_items(
                     if ref_value_param is not None:
                         dates.params["VALUE"] = ref_value_param
             # vobject interprets recurrence rules on demand
-            try:
-                component.rruleset
-            except Exception as e:
-                raise ValueError("Invalid recurrence rules in %s in object %r"
-                                 % (component.name, component_uid)) from e
+            # RFC 7953: VAVAILABILITY has RRULE in AVAILABLE subcomponents,
+            # not at the top level, so skip rruleset validation for it
+            if component_name != "VAVAILABILITY":
+                try:
+                    component.rruleset
+                except Exception as e:
+                    raise ValueError("Invalid recurrence rules in %s in object %r"
+                                     % (component.name, component_uid)) from e
     elif tag == "VADDRESSBOOK":
         # https://tools.ietf.org/html/rfc6352#section-5.1
         object_uids = set()
@@ -236,7 +242,8 @@ def check_and_sanitize_props(props: MutableMapping[Any, Any]
             raise ValueError("Value of %r must be %r not %r: %r" % (
                 k, str.__name__, type(v).__name__, v))
         if k == "tag":
-            if v not in ("", "VCALENDAR", "VADDRESSBOOK", "VSUBSCRIBED"):
+            if v not in ("", "VCALENDAR", "VADDRESSBOOK", "VSUBSCRIBED",
+                         "SCHEDULING-INBOX", "SCHEDULING-OUTBOX"):
                 raise ValueError("Unsupported collection tag: %r" % v)
     return props
 

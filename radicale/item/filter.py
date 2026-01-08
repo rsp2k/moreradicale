@@ -548,6 +548,32 @@ def visit_time_ranges(vobject_item: vobject.base.Component, child_name: str,
                         if range_fn(dtstart, dtstart + DAY, is_recurrence):
                             return
 
+    elif child_name == "VAVAILABILITY":
+        # RFC 7953: VAVAILABILITY component for calendar availability
+        # Get VAVAILABILITY components - use getattr since vobject may not have vavailability_list
+        vavail_list = getattr(vobject_item, 'vavailability_list', [])
+        for child in vavail_list:
+            dtstart = getattr(child, "dtstart", None)
+            dtend = getattr(child, "dtend", None)
+
+            if dtstart is not None:
+                dtstart = dtstart.value
+                start = date_to_datetime(dtstart)
+            else:
+                # No DTSTART means availability applies indefinitely from now
+                start = DATETIME_MIN
+
+            if dtend is not None:
+                dtend = dtend.value
+                end = date_to_datetime(dtend)
+            else:
+                # No DTEND means availability extends indefinitely
+                end = DATETIME_MAX
+
+            # VAVAILABILITY doesn't use recurrence at top level
+            if range_fn(start, end, False):
+                return
+
     else:
         # Match a property
         logger.debug("TRACE/ITEM/FILTER/get_children: child_name=%s property match", child_name)

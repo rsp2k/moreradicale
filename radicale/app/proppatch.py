@@ -95,7 +95,7 @@ class ApplicationPartProppatch(ApplicationBase):
                 return httputils.NOT_ALLOWED
             if not isinstance(item, storage.BaseCollection):
                 return httputils.FORBIDDEN
-            headers = {"DAV": httputils.DAV_HEADERS,
+            headers = {"DAV": httputils.get_dav_headers(self.configuration),
                        "Content-Type": "text/xml; charset=%s" % self._encoding}
             try:
                 xml_answer = xml_proppatch(base_prefix, path, xml_content,

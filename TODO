@@ -1,0 +1,51 @@
+ [x] 🧪 Run the mochitests - Test the new delegation tests against the live Radicale server to verify end-to-end functionality
+
+ [x] 📋 VTODO scheduling - Extend iTIP support to task delegation (same RFC 5546 patterns apply to VTODOs)
+
+ [X] 🔄 Delegate declines - Handle the case where a delegate (Carol) declines the delegated invitation (should notify both organizer and original delegator)
+
+ [x] 📝 Commit changes - Package up the RFC 5546 delegation work into a commit
+
+ [X] 📅 RFC 7953 Calendar Availability - Implement VAVAILABILITY component for more sophisticated free/busy queries
+
+ [X] 🔁 Recurring event delegation - Test/enhance delegation for specific occurrences of recurring events
+
+ [X] Calendar Sharing/Delegation
+  - Share calendars with read/write permissions
+  - Delegate scheduling authority ("Alice can accept meetings for Bob")
+  - Common in enterprise setups
+
+ [X] 📖 Documentation - Update Radicale docs to describe the new scheduling features
+
+ [X]  RFC 7986 - New iCalendar Properties
+  COLOR:#FF5733          # Calendar item colors
+  CONFERENCE:https://...  # Video call links (Zoom, Meet, Teams)
+  IMAGE:https://...       # Event images/logos
+  Modern calendar clients use these. Low effort, high value.
+
+ [X] Managed Attachments (RFC 8607) Instead of inline base64 attachments, store them server-side with URLs. Better for large files and bandwidth.
+
+---
+
+## Potential Future Enhancements
+
+ [X] 📧 Inbound email parsing - Parse incoming emails from external attendees (via webhook or IMAP)
+  - Webhooks: SendGrid, Mailgun, Postmark, generic formats
+  - IMAP polling: Background thread with configurable interval
+  - CLI: `--imap-poll` for cron-based polling
+
+ [X] 🔐 Attachment access control - Allow shared calendar users to access attachments
+  - Integrated with SharingManager.check_share_access()
+  - Both READ and READ_WRITE access can download attachments
+
+ [X] 📊 Scheduling reports - CALDAV:calendar-query for schedule-inbox/outbox
+  - Enable calendar-query, calendar-multiget on schedule-inbox/outbox
+  - Time-range and component filtering supported
+  - 9 comprehensive test cases in test_scheduling_reports.py
+
+ [X] 🌐 CalDAV auto-scheduling - Server-side auto-accept for resources (SCHEDULE-AGENT=SERVER)
+  - Implemented AutoScheduler class with configurable policies
+  - Support for: always, if-free, manual, tentative-if-conflict
+  - Per-resource policy configuration via JSON file
+  - VAVAILABILITY integration for availability constraints
+  - Comprehensive test suite in test_auto_scheduling.py

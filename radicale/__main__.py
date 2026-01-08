@@ -65,6 +65,8 @@ def run() -> None:
     parser.add_argument("--version", action="version", version=VERSION)
     parser.add_argument("--verify-storage", action="store_true",
                         help="check the storage for errors and exit")
+    parser.add_argument("--imap-poll", action="store_true",
+                        help="poll IMAP mailbox for iTIP responses and exit")
     parser.add_argument("-C", "--config",
                         help="use specific configuration files", nargs="*")
     parser.add_argument("-D", "--debug", action="store_const", const="debug",
@@ -191,6 +193,26 @@ def run() -> None:
         except Exception as e:
             logger.critical("An exception occurred during storage "
                             "verification: %s", e, exc_info=True)
+            sys.exit(1)
+        return
+
+    if args_ns.imap_poll:
+        logger.info("Polling IMAP mailbox for iTIP responses")
+        try:
+            from radicale.itip.imap_poller import IMAPPoller
+
+            if not configuration.get("scheduling", "imap_enabled"):
+                logger.error("IMAP polling is not enabled in configuration")
+                logger.info("Set [scheduling] imap_enabled = True and configure "
+                           "IMAP server details")
+                sys.exit(1)
+
+            storage_ = storage.load(configuration)
+            poller = IMAPPoller(configuration, storage_)
+            count = poller.poll_once()
+            logger.info("Processed %d iTIP message(s)", count)
+        except Exception as e:
+            logger.critical("IMAP polling failed: %s", e, exc_info=True)
             sys.exit(1)
         return
 

@@ -38,6 +38,7 @@ from radicale import (httputils, pathutils, rights, storage, types, utils,
 from radicale.app.base import Access, ApplicationBase
 from radicale.hook import HookNotificationItem, HookNotificationItemTypes
 from radicale.log import logger
+from radicale.itip.processor import ITIPProcessor
 
 MIMETYPE_TAGS: Mapping[str, str] = {value: key for key, value in
                                     xmlutils.MIMETYPES.items()}
@@ -341,6 +342,16 @@ class ApplicationPartPut(ApplicationBase):
                         new_content=prepared_item.serialize()
                     )
                     self._hook.notify(hook_notification_item)
+
+                    # Process iTIP scheduling if this is a calendar item
+                    if parent_item.tag == "VCALENDAR":
+                        try:
+                            itip_processor = ITIPProcessor(self._storage, self.configuration)
+                            itip_processor.process_put(prepared_item.serialize(), user, path)
+                        except Exception as e:
+                            logger.warning("iTIP processing failed for %r: %s", path, e, exc_info=True)
+                            # Don't fail the PUT if iTIP processing fails
+
                 except ValueError as e:
                     # return better matching HTTP result in case errno is provided and catched
                     errno_match = re.search("\\[Errno ([0-9]+)\\]", str(e))

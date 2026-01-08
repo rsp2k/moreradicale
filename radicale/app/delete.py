@@ -95,6 +95,17 @@ class ApplicationPartDelete(ApplicationBase):
             else:
                 assert item.collection is not None
                 assert item.href is not None
+
+                # RFC 6638: Process iTIP CANCEL if event has attendees
+                if self.configuration.get("scheduling", "enabled"):
+                    try:
+                        from radicale.itip import processor
+                        itip_processor = processor.ITIPProcessor(self._storage, self.configuration)
+                        itip_processor.process_delete(item, user)
+                    except Exception as e:
+                        logger.warning("Failed to process iTIP CANCEL: %s", e)
+                        # Continue with deletion even if CANCEL delivery fails
+
                 hook_notification_item_list.append(
                     HookNotificationItem(
                         notification_item_type=HookNotificationItemTypes.DELETE,

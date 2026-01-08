@@ -308,6 +308,16 @@ def serve(configuration: config.Configuration,
     server_class = ParallelHTTPSServer if use_ssl else ParallelHTTPServer
     application = Application(configuration)
     servers = {}
+
+    # Start IMAP poller if enabled
+    imap_poller = None
+    if configuration.get("scheduling", "imap_enabled"):
+        try:
+            from radicale.itip.imap_poller import IMAPPoller
+            imap_poller = IMAPPoller(configuration, application._storage)
+            imap_poller.start()
+        except Exception as e:
+            logger.warning("Failed to start IMAP poller: %s", e)
     try:
         hosts: List[Tuple[str, int]] = configuration.get("server", "hosts")
         for address_port in hosts:
@@ -372,6 +382,13 @@ def serve(configuration: config.Configuration,
                 if active_server:
                     active_server.handle_request()
     finally:
+        # Stop IMAP poller if running
+        if imap_poller:
+            try:
+                imap_poller.stop()
+            except Exception as e:
+                logger.warning("Error stopping IMAP poller: %s", e)
+
         # Wait for clients to finish and close servers
         for server in servers.values():
             for s in server.worker_sockets:
