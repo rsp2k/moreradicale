@@ -438,9 +438,34 @@ class Application(ApplicationPartDelete, ApplicationPartHead,
                 path.rstrip("/").endswith("/.well-known/carddav")):
             return response(*httputils.redirect(
                 base_prefix + "/", client.MOVED_PERMANENTLY))
+
+        # Handle /.well-known/timezone for RFC 7808 TZDIST
+        if path.startswith("/.well-known/timezone"):
+            if self.configuration.get("tzdist", "enabled"):
+                from radicale.tzdist.handler import TZDistHandler
+                handler = TZDistHandler(self.configuration)
+                status, headers, answer, _ = handler.handle_request(
+                    environ, base_prefix, path
+                )
+                return response(status, headers, answer)
+            return response(*httputils.NOT_FOUND)
+
         # Return NOT FOUND for all other paths containing ".well-known"
         if path.endswith("/.well-known") or "/.well-known/" in path:
             return response(*httputils.NOT_FOUND)
+
+        # Handle /.push/ endpoints for RFC 8030 Web Push (VAPID key is public)
+        if path.startswith("/.push/"):
+            if self.configuration.get("push", "enabled"):
+                from radicale.push.handler import PushHandler
+                push_handler = PushHandler(self.configuration)
+                # VAPID public key endpoint doesn't require auth
+                if path == "/.push/vapid-key":
+                    status, headers, answer, _ = push_handler.handle_get_vapid_key()
+                    return response(status, headers, answer)
+                # Other push endpoints handled after auth below
+            else:
+                return response(*httputils.NOT_FOUND)
 
         # Handle inbound iTIP webhook (bypasses standard auth)
         if self._webhook_handler.should_handle(path, request_method):
@@ -522,6 +547,32 @@ class Application(ApplicationPartDelete, ApplicationPartHead,
                         content_length > self._max_content_length):
                     logger.info("Request body too large: %d", content_length)
                     return response(*httputils.REQUEST_ENTITY_TOO_LARGE)
+
+        # Handle authenticated push endpoints (subscribe, unsubscribe, list)
+        if path.startswith("/.push/") and self.configuration.get("push", "enabled"):
+            from radicale.push.handler import PushHandler
+            push_handler = PushHandler(self.configuration)
+
+            if not user:
+                # Push operations require authentication
+                return response(*httputils.NOT_ALLOWED)
+
+            if path == "/.push/subscribe" and request_method == "POST":
+                # Get collection path from query string or body
+                collection_path = environ.get("QUERY_STRING", "").replace("collection=", "") or "/"
+                status, headers, answer, _ = push_handler.handle_subscribe(
+                    environ, user, collection_path
+                )
+                return response(status, headers, answer)
+            elif path.startswith("/.push/subscription/") and request_method == "DELETE":
+                sub_id = path.split("/")[-1]
+                status, headers, answer, _ = push_handler.handle_unsubscribe(sub_id, user)
+                return response(status, headers, answer)
+            elif path == "/.push/subscriptions" and request_method == "GET":
+                status, headers, answer, _ = push_handler.handle_list_subscriptions(user)
+                return response(status, headers, answer)
+            else:
+                return response(*httputils.NOT_FOUND)
 
         if not login or user:
             # Profiling

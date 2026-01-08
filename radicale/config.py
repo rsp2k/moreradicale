@@ -763,6 +763,58 @@ $event_description""",
             "help": "base URL for attachment serving (auto-detected if empty)",
             "type": str})
     ])),
+    ("tzdist", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable RFC 7808 Timezone Distribution Service",
+            "type": bool}),
+        ("provider", {
+            "value": "zoneinfo",
+            "help": "timezone data provider: zoneinfo (Python 3.9+) or pytz",
+            "type": str}),
+        ("cache_ttl", {
+            "value": "86400",
+            "help": "timezone data cache TTL in seconds (default: 24 hours)",
+            "type": positive_int}),
+        ("truncate_years_before", {
+            "value": "0",
+            "help": "truncate timezone data before this many years ago (0 = no truncation)",
+            "type": positive_int}),
+        ("expand_years", {
+            "value": "10",
+            "help": "number of future years to expand recurring timezone rules",
+            "type": positive_int})
+    ])),
+    ("push", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable RFC 8030 Web Push notifications for calendar changes",
+            "type": bool}),
+        ("vapid_private_key", {
+            "value": "",
+            "help": "path to VAPID private key file (auto-generated if empty)",
+            "type": filepath}),
+        ("vapid_subject", {
+            "value": "",
+            "help": "VAPID subject (mailto: or https: URL identifying the sender)",
+            "type": str}),
+        ("subscription_folder", {
+            "value": "",
+            "help": "folder for push subscriptions (default: inside storage folder)",
+            "type": filepath}),
+        ("ttl", {
+            "value": "86400",
+            "help": "push notification TTL in seconds (default: 24 hours)",
+            "type": positive_int}),
+        ("urgency", {
+            "value": "normal",
+            "help": "default notification urgency: very-low, low, normal, high",
+            "type": str}),
+        ("batch_interval", {
+            "value": "5",
+            "help": "batch notifications within this interval (seconds)",
+            "type": positive_int})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",

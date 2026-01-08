@@ -202,6 +202,10 @@ def xml_propfind_response(
             if configuration.get("attachments", "enabled"):
                 props.append(xmlutils.make_clark("C:max-attachment-size"))
                 props.append(xmlutils.make_clark("C:max-attachments-per-resource"))
+            # RFC 8030 Web Push properties
+            if configuration.get("push", "enabled"):
+                props.append(xmlutils.make_clark("D:push-transports"))
+                props.append(xmlutils.make_clark("CS:pushkey"))
 
         if not is_collection or is_leaf:
             props.append(xmlutils.make_clark("D:getetag"))
@@ -340,6 +344,26 @@ def xml_propfind_response(
             # RFC 6638 Section 2.4.2: INDIVIDUAL, GROUP, RESOURCE, ROOM, UNKNOWN
             # Default to INDIVIDUAL for user principals and their calendars
             element.text = "INDIVIDUAL"
+        elif tag == xmlutils.make_clark("D:push-transports") and is_collection:
+            # RFC 8030 Web Push transports
+            if configuration.get("push", "enabled"):
+                # Advertise web-push transport
+                transport = ET.Element(xmlutils.make_clark("D:web-push"))
+                # Add subscription URL
+                sub_url = ET.Element(xmlutils.make_clark("D:subscription-url"))
+                sub_url.text = xmlutils.make_href(base_prefix, "/.push/subscribe")
+                transport.append(sub_url)
+                element.append(transport)
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("CS:pushkey") and is_collection:
+            # CalendarServer pushkey for subscribing to changes
+            if configuration.get("push", "enabled") and is_leaf:
+                from radicale.push.subscription import generate_pushkey
+                pushkey = generate_pushkey(path, user or "")
+                element.text = pushkey
+            else:
+                is404 = True
         elif tag == xmlutils.make_clark("C:supported-calendar-component-set"):
             human_tag = xmlutils.make_human_tag(tag)
             if is_collection and is_leaf:
