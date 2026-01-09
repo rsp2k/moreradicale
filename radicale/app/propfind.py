@@ -228,6 +228,11 @@ def xml_propfind_response(
                 props.append(xmlutils.make_clark("CS:getctag"))
                 props.append(
                     xmlutils.make_clark("C:supported-calendar-component-set"))
+                # Apple CalDAV default alarm properties
+                props.append(xmlutils.make_clark("C:default-alarm-vevent-datetime"))
+                props.append(xmlutils.make_clark("C:default-alarm-vevent-date"))
+                props.append(xmlutils.make_clark("C:default-alarm-vtodo-datetime"))
+                props.append(xmlutils.make_clark("C:default-alarm-vtodo-date"))
 
             meta = collection.get_meta()
             for tag in meta:
