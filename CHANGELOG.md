@@ -11,6 +11,18 @@
   - List, get, and find timezones with date range filtering
   - iCalendar VTIMEZONE formatting with DST transitions
   - Configurable cache TTL and history truncation
+* Feature: RFC 7809 Time Zones by Reference
+  - `CalDAV-Timezones` header support for VTIMEZONE stripping
+  - `DAV:calendar-no-timezone` capability advertisement
+  - `CALDAV:timezone-service-set` property for TZDIST integration
+* Feature: RFC 4331 Quota and Size Properties
+  - `DAV:quota-used-bytes` and `DAV:quota-available-bytes` properties
+  - Per-user storage quota enforcement with configurable limits
+  - HTTP 507 (Insufficient Storage) when quota exceeded
+* Feature: Apple CalDAV Default Alarms
+  - `CALDAV:default-alarm-vevent-datetime` and `-date` properties
+  - `CALDAV:default-alarm-vtodo-datetime` and `-date` properties
+  - Used by iOS/macOS Calendar for user alarm preferences
 
 ## 3.5.10
 * Improve: logging of broken calendar items during PUT

@@ -18,6 +18,9 @@ Radicale is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
 * Supports server-side attachment storage (Managed Attachments, RFC 8607).
 * Supports real-time push notifications (Web Push, RFC 8030).
 * Provides timezone data to clients (TZDIST, RFC 7808).
+* Supports timezone-by-reference to reduce payload sizes (RFC 7809).
+* Provides per-user storage quota reporting and enforcement (RFC 4331).
+* Supports iOS/macOS default alarm preferences on calendars.
 * Works out-of-the-box, no complicated setup or configuration required.
 * Offers flexible authentication options.
 * Can limit access by authorization.
@@ -2359,6 +2362,49 @@ Interval in seconds for batching multiple changes into a single notification.
 If multiple changes occur within this interval, they may be combined.
 
 Default: `5`
+
+#### [quota]
+
+_(>= 3.5.x)_
+
+RFC 4331 Quota and Size Properties for DAV Collections allows users
+to see their storage usage and available space. The server can also
+enforce per-user storage limits.
+
+##### enabled
+
+Enable quota reporting and enforcement.
+
+When enabled, the server reports `DAV:quota-used-bytes` and
+`DAV:quota-available-bytes` properties in PROPFIND responses.
+
+Default: `False`
+
+##### max_bytes
+
+Maximum storage space per user in bytes.
+
+Set to 0 for unlimited storage (no quota enforcement).
+
+When a limit is set and a user exceeds it, PUT requests will fail
+with HTTP 507 (Insufficient Storage).
+
+Examples:
+
+* `0` - Unlimited
+* `10485760` - 10 MB
+* `1073741824` - 1 GB
+
+Default: `0` (unlimited)
+
+##### include_cache
+
+Include cache directories in quota calculations.
+
+When disabled, `.Radicale.cache` folders are excluded from storage
+calculations, giving users more effective storage space.
+
+Default: `False`
 
 ## Supported Clients
 
