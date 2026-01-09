@@ -16,6 +16,8 @@ Radicale is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
 * Supports meeting invitations and RSVP responses (CalDAV Scheduling, RFC 6638).
 * Supports calendar sharing and delegation between users.
 * Supports server-side attachment storage (Managed Attachments, RFC 8607).
+* Supports real-time push notifications (Web Push, RFC 8030).
+* Provides timezone data to clients (TZDIST, RFC 7808).
 * Works out-of-the-box, no complicated setup or configuration required.
 * Offers flexible authentication options.
 * Can limit access by authorization.
@@ -2230,6 +2232,133 @@ Default: `20`
 Base URL for attachment serving. Auto-detected if empty.
 
 Default: (auto-detected)
+
+#### [tzdist]
+
+_(>= 3.5.x)_
+
+RFC 7808 Time Zone Data Distribution Service provides timezone information
+to CalDAV clients. Clients can query the server for timezone definitions
+instead of bundling potentially outdated timezone databases.
+
+##### enabled
+
+Enable the Timezone Distribution Service.
+
+When enabled, the server exposes timezone data at `/.well-known/timezone`.
+
+Default: `False`
+
+##### provider
+
+Timezone data provider to use.
+
+Available providers:
+
+* `zoneinfo`
+  Uses Python's built-in zoneinfo module (requires Python 3.9+).
+  Provides timezone data from the system's IANA timezone database.
+
+Default: `zoneinfo`
+
+##### cache_ttl
+
+Cache time-to-live in seconds for timezone data responses.
+
+Clients can cache timezone data for this duration.
+
+Default: `86400` (24 hours)
+
+##### truncate_years_before
+
+Truncate historical timezone transitions older than this many years ago.
+
+Set to 0 to include all historical data.
+
+Default: `0`
+
+##### expand_years
+
+Number of future years to expand recurring timezone rules.
+
+Default: `10`
+
+#### [push]
+
+_(>= 3.5.x)_
+
+RFC 8030 Web Push enables real-time notifications when calendar or contacts
+data changes. Clients can subscribe to receive push notifications instead
+of polling for changes.
+
+##### enabled
+
+Enable Web Push notification support.
+
+When enabled, the server exposes push endpoints at `/.push/` and advertises
+push support via WebDAV properties (`DAV:push-transports` and `CS:pushkey`).
+
+Default: `False`
+
+##### vapid_private_key
+
+Path to the VAPID (Voluntary Application Server Identification) private key file.
+
+If not specified, a new EC P-256 key pair is auto-generated and stored
+in the storage folder as `.Radicale.vapid`.
+
+Default: (auto-generated)
+
+##### vapid_subject
+
+VAPID subject identifier - a `mailto:` or `https:` URL identifying the
+server operator.
+
+This is included in push notifications and may be displayed by push
+services. Should be a contact email or URL for the server administrator.
+
+Example: `mailto:admin@calendar.example.com`
+
+Default: (empty)
+
+##### subscription_folder
+
+Custom folder for storing push subscriptions.
+
+If not specified, subscriptions are stored in `.Radicale.push/` within
+the main storage folder.
+
+Default: (storage folder)/.Radicale.push
+
+##### ttl
+
+Push notification Time-To-Live in seconds.
+
+How long push services should attempt to deliver a notification before
+giving up.
+
+Default: `86400` (24 hours)
+
+##### urgency
+
+Default notification urgency level.
+
+Available levels (from RFC 8030):
+
+* `very-low` - Best effort delivery, may be delayed
+* `low` - Deliver when convenient
+* `normal` - Deliver promptly (default)
+* `high` - Deliver immediately
+
+Default: `normal`
+
+##### batch_interval
+
+Interval in seconds for batching multiple changes into a single notification.
+
+If multiple changes occur within this interval, they may be combined.
+
+Default: `5`
 
 ## Supported Clients
 

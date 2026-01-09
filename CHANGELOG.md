@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.5.11
+* Feature: RFC 8030 Web Push notifications for calendar and contacts updates
+  - VAPID key management (RFC 8292) with auto-generation
+  - Push subscription endpoints (`/.push/subscribe`, `/.push/vapid-key`)
+  - WebDAV property discovery (`DAV:push-transports`, `CS:pushkey`)
+  - Configurable TTL, urgency levels, and batch intervals
+* Feature: RFC 7808 Time Zone Data Distribution Service (TZDIST)
+  - Timezone service at `/.well-known/timezone`
+  - List, get, and find timezones with date range filtering
+  - iCalendar VTIMEZONE formatting with DST transitions
+  - Configurable cache TTL and history truncation
+
 ## 3.5.10
 * Improve: logging of broken calendar items during PUT
 * Add: logging of broken contact items during PUT
