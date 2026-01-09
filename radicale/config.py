@@ -815,6 +815,20 @@ $event_description""",
             "help": "batch notifications within this interval (seconds)",
             "type": positive_int})
     ])),
+    ("quota", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable RFC 4331 quota reporting",
+            "type": bool}),
+        ("max_bytes", {
+            "value": "0",
+            "help": "maximum storage per user in bytes (0 = unlimited)",
+            "type": positive_int}),
+        ("include_cache", {
+            "value": "False",
+            "help": "include cache folders in quota calculation",
+            "type": bool})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",

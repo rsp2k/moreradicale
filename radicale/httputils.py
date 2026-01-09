@@ -101,6 +101,9 @@ def get_dav_headers(configuration) -> str:
         headers += ", calendar-schedule"
     if configuration.get("attachments", "enabled"):
         headers += ", calendar-managed-attachments"
+    # RFC 7809: Advertise timezone-by-reference when TZDIST is enabled
+    if configuration.get("tzdist", "enabled"):
+        headers += ", calendar-no-timezone"
     return headers
 
 

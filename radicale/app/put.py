@@ -193,6 +193,15 @@ class ApplicationPartPut(ApplicationBase):
         except socket.timeout:
             logger.debug("Client timed out", exc_info=True)
             return httputils.REQUEST_TIMEOUT
+
+        # RFC 4331: Check quota before processing
+        if self.configuration.get("quota", "enabled"):
+            from radicale import quota
+            content_length = len(content.encode(self._encoding)) if content else 0
+            if quota.check_quota_exceeded(self.configuration, user, content_length):
+                logger.warning("Quota exceeded for user %s on PUT request: %r", user, path)
+                return httputils.INSUFFICIENT_STORAGE
+
         # Prepare before locking
         content_type = environ.get("CONTENT_TYPE", "").split(";",
                                                              maxsplit=1)[0]

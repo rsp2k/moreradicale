@@ -206,6 +206,13 @@ def xml_propfind_response(
             if configuration.get("push", "enabled"):
                 props.append(xmlutils.make_clark("D:push-transports"))
                 props.append(xmlutils.make_clark("CS:pushkey"))
+            # RFC 7809 Time Zones by Reference
+            if configuration.get("tzdist", "enabled"):
+                props.append(xmlutils.make_clark("C:timezone-service-set"))
+            # RFC 4331 Quota Properties (on principals)
+            if configuration.get("quota", "enabled"):
+                props.append(xmlutils.make_clark("D:quota-available-bytes"))
+                props.append(xmlutils.make_clark("D:quota-used-bytes"))
 
         if not is_collection or is_leaf:
             props.append(xmlutils.make_clark("D:getetag"))
@@ -221,6 +228,11 @@ def xml_propfind_response(
                 props.append(xmlutils.make_clark("CS:getctag"))
                 props.append(
                     xmlutils.make_clark("C:supported-calendar-component-set"))
+                # Apple CalDAV default alarm properties
+                props.append(xmlutils.make_clark("C:default-alarm-vevent-datetime"))
+                props.append(xmlutils.make_clark("C:default-alarm-vevent-date"))
+                props.append(xmlutils.make_clark("C:default-alarm-vtodo-datetime"))
+                props.append(xmlutils.make_clark("C:default-alarm-vtodo-date"))
 
             meta = collection.get_meta()
             for tag in meta:
@@ -362,6 +374,45 @@ def xml_propfind_response(
                 from radicale.push.subscription import generate_pushkey
                 pushkey = generate_pushkey(path, user or "")
                 element.text = pushkey
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("C:timezone-service-set"):
+            # RFC 7809: Advertise timezone distribution service URLs
+            if configuration.get("tzdist", "enabled"):
+                # Point to our own TZDIST service
+                tzdist_url = ET.Element(xmlutils.make_clark("D:href"))
+                tzdist_url.text = xmlutils.make_href(base_prefix, "/.well-known/timezone")
+                element.append(tzdist_url)
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("D:quota-available-bytes"):
+            # RFC 4331: Quota available bytes for the user
+            if configuration.get("quota", "enabled") and is_collection:
+                from radicale import quota
+                # Get user from collection path (owner or path)
+                quota_user = collection.owner or path.strip("/").split("/")[0]
+                if quota_user:
+                    _, available = quota.calculate_user_quota(configuration, quota_user)
+                    if available >= 0:
+                        element.text = str(available)
+                    else:
+                        # -1 means unlimited - don't return this property
+                        is404 = True
+                else:
+                    is404 = True
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("D:quota-used-bytes"):
+            # RFC 4331: Quota used bytes for the user
+            if configuration.get("quota", "enabled") and is_collection:
+                from radicale import quota
+                # Get user from collection path (owner or path)
+                quota_user = collection.owner or path.strip("/").split("/")[0]
+                if quota_user:
+                    used, _ = quota.calculate_user_quota(configuration, quota_user)
+                    element.text = str(used)
+                else:
+                    is404 = True
             else:
                 is404 = True
         elif tag == xmlutils.make_clark("C:supported-calendar-component-set"):
