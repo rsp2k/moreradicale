@@ -116,6 +116,12 @@ class ApplicationPartGet(ApplicationBase):
             if content_disposition:
                 headers["Content-Disposition"] = content_disposition
             answer = item.serialize()
+
+            # RFC 7809: Filter VTIMEZONE based on CalDAV-Timezones header
+            if isinstance(item, storage.BaseCollection) and item.tag == "VCALENDAR":
+                from radicale.tzdist.rfc7809 import filter_calendar_response
+                answer = filter_calendar_response(answer, environ, self.configuration)
+
             return client.OK, headers, answer, None
 
     def _serve_attachment(self, path: str, user: str) -> types.WSGIResponse:

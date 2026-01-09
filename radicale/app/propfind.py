@@ -206,6 +206,9 @@ def xml_propfind_response(
             if configuration.get("push", "enabled"):
                 props.append(xmlutils.make_clark("D:push-transports"))
                 props.append(xmlutils.make_clark("CS:pushkey"))
+            # RFC 7809 Time Zones by Reference
+            if configuration.get("tzdist", "enabled"):
+                props.append(xmlutils.make_clark("C:timezone-service-set"))
 
         if not is_collection or is_leaf:
             props.append(xmlutils.make_clark("D:getetag"))
@@ -362,6 +365,15 @@ def xml_propfind_response(
                 from radicale.push.subscription import generate_pushkey
                 pushkey = generate_pushkey(path, user or "")
                 element.text = pushkey
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("C:timezone-service-set"):
+            # RFC 7809: Advertise timezone distribution service URLs
+            if configuration.get("tzdist", "enabled"):
+                # Point to our own TZDIST service
+                tzdist_url = ET.Element(xmlutils.make_clark("D:href"))
+                tzdist_url.text = xmlutils.make_href(base_prefix, "/.well-known/timezone")
+                element.append(tzdist_url)
             else:
                 is404 = True
         elif tag == xmlutils.make_clark("C:supported-calendar-component-set"):
