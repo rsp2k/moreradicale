@@ -851,6 +851,20 @@ $event_description""",
             "help": "automatically add unknown voters on reply",
             "type": bool})
     ])),
+    ("availability", OrderedDict([
+        ("enabled", {
+            "value": "True",
+            "help": "enable VAVAILABILITY (RFC 7953) in free-busy calculations",
+            "type": bool}),
+        ("max_available_periods", {
+            "value": "100",
+            "help": "maximum AVAILABLE components per VAVAILABILITY",
+            "type": positive_int}),
+        ("include_in_freebusy", {
+            "value": "True",
+            "help": "include availability data in free-busy query results",
+            "type": bool})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",

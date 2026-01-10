@@ -239,6 +239,10 @@ def xml_propfind_response(
                     props.append(xmlutils.make_clark("C:vpoll-max-items"))
                     props.append(xmlutils.make_clark("C:vpoll-max-active"))
                     props.append(xmlutils.make_clark("C:vpoll-max-voters"))
+            if collection.tag == "SCHEDULING-INBOX":
+                # RFC 7953 Calendar Availability property
+                if configuration.get("availability", "enabled"):
+                    props.append(xmlutils.make_clark("C:calendar-availability"))
 
             meta = collection.get_meta()
             for tag in meta:
@@ -473,6 +477,19 @@ def xml_propfind_response(
                 if max_voters > 0:
                     element.text = str(max_voters)
                 # Return empty if unlimited (0)
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("C:calendar-availability"):
+            # RFC 7953: Calendar Availability on scheduling-inbox
+            if (configuration.get("availability", "enabled") and
+                    is_collection and is_leaf and
+                    collection.tag == "SCHEDULING-INBOX"):
+                # Get stored calendar-availability from collection props
+                meta = collection.get_meta()
+                avail_data = meta.get("C:calendar-availability")
+                if avail_data:
+                    element.text = avail_data
+                # Return empty element if not set (property exists but has no value)
             else:
                 is404 = True
         elif tag == xmlutils.make_clark("D:current-user-principal"):
