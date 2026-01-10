@@ -21,6 +21,10 @@ Radicale is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
 * Supports timezone-by-reference to reduce payload sizes (RFC 7809).
 * Provides per-user storage quota reporting and enforcement (RFC 4331).
 * Supports iOS/macOS default alarm preferences on calendars.
+* Exposes Prometheus metrics for operational monitoring.
+* Supports enhanced VTODO task relationships and dependencies (RFC 9253).
+* Provides CardDAV Directory Gateway for LDAP/Active Directory contact lookup.
+* Supports WebSocket real-time sync for push-based change notifications.
 * Works out-of-the-box, no complicated setup or configuration required.
 * Offers flexible authentication options.
 * Can limit access by authorization.
@@ -33,6 +37,9 @@ Radicale is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
 
 For meeting invitations, free/busy queries, and collaborative scheduling, see
 [SCHEDULING.md](SCHEDULING.md).
+
+For Prometheus metrics, VTODO extensions, LDAP directory gateway, and WebSocket sync, see
+[ADVANCED-FEATURES.md](ADVANCED-FEATURES.md).
 
 #### Installation
 
