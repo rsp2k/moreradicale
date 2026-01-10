@@ -955,6 +955,28 @@ $event_description""",
             "help": "cache TTL in seconds for LDAP entries",
             "type": positive_int})
     ])),
+    ("websync", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable WebSocket real-time sync at /.websync",
+            "type": bool}),
+        ("require_auth", {
+            "value": "True",
+            "help": "require authentication for WebSocket connections",
+            "type": bool}),
+        ("ping_interval", {
+            "value": "30",
+            "help": "WebSocket ping interval in seconds",
+            "type": positive_int}),
+        ("max_connections", {
+            "value": "1000",
+            "help": "maximum concurrent WebSocket connections",
+            "type": positive_int}),
+        ("connection_timeout", {
+            "value": "3600",
+            "help": "connection timeout in seconds (0 = no timeout)",
+            "type": positive_int})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",
