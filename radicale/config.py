@@ -865,6 +865,36 @@ $event_description""",
             "help": "include availability data in free-busy query results",
             "type": bool})
     ])),
+    ("subscriptions", OrderedDict([
+        ("enabled", {
+            "value": "True",
+            "help": "enable external ICS calendar subscriptions",
+            "type": bool}),
+        ("auto_refresh", {
+            "value": "True",
+            "help": "automatically refresh subscribed calendars in background",
+            "type": bool}),
+        ("refresh_interval", {
+            "value": "3600",
+            "help": "seconds between subscription refresh cycles",
+            "type": positive_int}),
+        ("timeout", {
+            "value": "30",
+            "help": "HTTP timeout in seconds for fetching external feeds",
+            "type": positive_int}),
+        ("verify_ssl", {
+            "value": "True",
+            "help": "verify SSL certificates when fetching HTTPS feeds",
+            "type": bool}),
+        ("max_content_size", {
+            "value": "10485760",
+            "help": "maximum content size in bytes (default: 10MB)",
+            "type": positive_int}),
+        ("block_private_networks", {
+            "value": "True",
+            "help": "block subscriptions to private/local network addresses",
+            "type": bool})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",
