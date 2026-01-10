@@ -829,6 +829,28 @@ $event_description""",
             "help": "include cache folders in quota calculation",
             "type": bool})
     ])),
+    ("vpoll", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable VPOLL consensus scheduling (draft-ietf-calext-vpoll)",
+            "type": bool}),
+        ("max_items", {
+            "value": "100",
+            "help": "maximum poll items per VPOLL (0 = unlimited)",
+            "type": positive_int}),
+        ("max_active", {
+            "value": "50",
+            "help": "maximum active polls per user (0 = unlimited)",
+            "type": positive_int}),
+        ("max_voters", {
+            "value": "1000",
+            "help": "maximum voters per poll (0 = unlimited)",
+            "type": positive_int}),
+        ("auto_add_voters", {
+            "value": "False",
+            "help": "automatically add unknown voters on reply",
+            "type": bool})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",
