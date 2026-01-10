@@ -233,6 +233,16 @@ def xml_propfind_response(
                 props.append(xmlutils.make_clark("C:default-alarm-vevent-date"))
                 props.append(xmlutils.make_clark("C:default-alarm-vtodo-datetime"))
                 props.append(xmlutils.make_clark("C:default-alarm-vtodo-date"))
+                # VPOLL consensus scheduling properties
+                if configuration.get("vpoll", "enabled"):
+                    props.append(xmlutils.make_clark("C:supported-vpoll-component-set"))
+                    props.append(xmlutils.make_clark("C:vpoll-max-items"))
+                    props.append(xmlutils.make_clark("C:vpoll-max-active"))
+                    props.append(xmlutils.make_clark("C:vpoll-max-voters"))
+            if collection.tag == "SCHEDULING-INBOX":
+                # RFC 7953 Calendar Availability property
+                if configuration.get("availability", "enabled"):
+                    props.append(xmlutils.make_clark("C:calendar-availability"))
 
             meta = collection.get_meta()
             for tag in meta:
@@ -427,6 +437,59 @@ def xml_propfind_response(
                     comp = ET.Element(xmlutils.make_clark("C:comp"))
                     comp.set("name", component)
                     element.append(comp)
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("C:supported-vpoll-component-set"):
+            # VPOLL: List of component types allowed in VPOLL
+            if configuration.get("vpoll", "enabled") and is_collection and is_leaf:
+                if collection.tag == "VCALENDAR":
+                    # Allow VEVENT and VTODO in VPOLLs
+                    for comp_type in ["VEVENT", "VTODO"]:
+                        comp = ET.Element(xmlutils.make_clark("C:comp"))
+                        comp.set("name", comp_type)
+                        element.append(comp)
+                else:
+                    is404 = True
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("C:vpoll-max-items"):
+            # VPOLL: Maximum items per poll
+            if configuration.get("vpoll", "enabled") and is_collection and is_leaf:
+                max_items = configuration.get("vpoll", "max_items")
+                if max_items > 0:
+                    element.text = str(max_items)
+                # Return empty if unlimited (0)
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("C:vpoll-max-active"):
+            # VPOLL: Maximum active polls
+            if configuration.get("vpoll", "enabled") and is_collection and is_leaf:
+                max_active = configuration.get("vpoll", "max_active")
+                if max_active > 0:
+                    element.text = str(max_active)
+                # Return empty if unlimited (0)
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("C:vpoll-max-voters"):
+            # VPOLL: Maximum voters per poll
+            if configuration.get("vpoll", "enabled") and is_collection and is_leaf:
+                max_voters = configuration.get("vpoll", "max_voters")
+                if max_voters > 0:
+                    element.text = str(max_voters)
+                # Return empty if unlimited (0)
+            else:
+                is404 = True
+        elif tag == xmlutils.make_clark("C:calendar-availability"):
+            # RFC 7953: Calendar Availability on scheduling-inbox
+            if (configuration.get("availability", "enabled") and
+                    is_collection and is_leaf and
+                    collection.tag == "SCHEDULING-INBOX"):
+                # Get stored calendar-availability from collection props
+                meta = collection.get_meta()
+                avail_data = meta.get("C:calendar-availability")
+                if avail_data:
+                    element.text = avail_data
+                # Return empty element if not set (property exists but has no value)
             else:
                 is404 = True
         elif tag == xmlutils.make_clark("D:current-user-principal"):

@@ -829,6 +829,72 @@ $event_description""",
             "help": "include cache folders in quota calculation",
             "type": bool})
     ])),
+    ("vpoll", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable VPOLL consensus scheduling (draft-ietf-calext-vpoll)",
+            "type": bool}),
+        ("max_items", {
+            "value": "100",
+            "help": "maximum poll items per VPOLL (0 = unlimited)",
+            "type": positive_int}),
+        ("max_active", {
+            "value": "50",
+            "help": "maximum active polls per user (0 = unlimited)",
+            "type": positive_int}),
+        ("max_voters", {
+            "value": "1000",
+            "help": "maximum voters per poll (0 = unlimited)",
+            "type": positive_int}),
+        ("auto_add_voters", {
+            "value": "False",
+            "help": "automatically add unknown voters on reply",
+            "type": bool})
+    ])),
+    ("availability", OrderedDict([
+        ("enabled", {
+            "value": "True",
+            "help": "enable VAVAILABILITY (RFC 7953) in free-busy calculations",
+            "type": bool}),
+        ("max_available_periods", {
+            "value": "100",
+            "help": "maximum AVAILABLE components per VAVAILABILITY",
+            "type": positive_int}),
+        ("include_in_freebusy", {
+            "value": "True",
+            "help": "include availability data in free-busy query results",
+            "type": bool})
+    ])),
+    ("subscriptions", OrderedDict([
+        ("enabled", {
+            "value": "True",
+            "help": "enable external ICS calendar subscriptions",
+            "type": bool}),
+        ("auto_refresh", {
+            "value": "True",
+            "help": "automatically refresh subscribed calendars in background",
+            "type": bool}),
+        ("refresh_interval", {
+            "value": "3600",
+            "help": "seconds between subscription refresh cycles",
+            "type": positive_int}),
+        ("timeout", {
+            "value": "30",
+            "help": "HTTP timeout in seconds for fetching external feeds",
+            "type": positive_int}),
+        ("verify_ssl", {
+            "value": "True",
+            "help": "verify SSL certificates when fetching HTTPS feeds",
+            "type": bool}),
+        ("max_content_size", {
+            "value": "10485760",
+            "help": "maximum content size in bytes (default: 10MB)",
+            "type": positive_int}),
+        ("block_private_networks", {
+            "value": "True",
+            "help": "block subscriptions to private/local network addresses",
+            "type": bool})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",
