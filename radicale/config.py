@@ -895,6 +895,16 @@ $event_description""",
             "help": "block subscriptions to private/local network addresses",
             "type": bool})
     ])),
+    ("metrics", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable Prometheus metrics endpoint at /.metrics",
+            "type": bool}),
+        ("require_auth", {
+            "value": "True",
+            "help": "require authentication to access metrics",
+            "type": bool})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",
