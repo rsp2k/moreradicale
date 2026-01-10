@@ -23,6 +23,26 @@
   - `CALDAV:default-alarm-vevent-datetime` and `-date` properties
   - `CALDAV:default-alarm-vtodo-datetime` and `-date` properties
   - Used by iOS/macOS Calendar for user alarm preferences
+* Feature: Prometheus Metrics endpoint for operational monitoring
+  - Expose metrics at configurable endpoint (default: `/.metrics`)
+  - Request counters, histograms for duration/size
+  - Storage, authentication, and WebSocket metrics
+  - Prometheus text format (text/plain; version=0.0.4)
+* Feature: RFC 9253 Enhanced VTODO Support
+  - RELATED-TO with RELTYPE (PARENT, CHILD, DEPENDS-ON, SIBLING)
+  - Task hierarchy building and cycle detection
+  - Filtering by STATUS, PERCENT-COMPLETE range
+  - Sorting by PRIORITY and DUE date
+* Feature: CardDAV Directory Gateway for LDAP/Active Directory
+  - Read-only vCard 4.0 access to LDAP directory entries
+  - Configurable attribute mapping (LDAP to vCard)
+  - Support for ldap3 and python-ldap modules
+  - Entry caching with configurable TTL
+* Feature: WebSocket Real-time Sync
+  - RFC 6455 WebSocket upgrade at `/.websync`
+  - Per-collection subscriptions with path matching
+  - Push notifications for create/update/delete/sync
+  - Connection manager with statistics tracking
 
 ## 3.5.10
 * Improve: logging of broken calendar items during PUT

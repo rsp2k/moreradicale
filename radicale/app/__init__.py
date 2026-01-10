@@ -450,6 +450,17 @@ class Application(ApplicationPartDelete, ApplicationPartHead,
                 return response(status, headers, answer)
             return response(*httputils.NOT_FOUND)
 
+        # Handle /.metrics endpoint for Prometheus monitoring
+        if path == "/.metrics" and request_method == "GET":
+            if self.configuration.get("metrics", "enabled"):
+                from radicale.metrics.handler import MetricsHandler
+                handler = MetricsHandler(self.configuration, self._auth)
+                status, headers, body = handler.handle_request(environ)
+                # Use response helper to format status text and encode body
+                # We use body.encode() since metrics output is already formatted
+                return response(status, headers, body.encode("utf-8") if body else b"")
+            return response(*httputils.NOT_FOUND)
+
         # Return NOT FOUND for all other paths containing ".well-known"
         if path.endswith("/.well-known") or "/.well-known/" in path:
             return response(*httputils.NOT_FOUND)

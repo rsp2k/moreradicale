@@ -895,6 +895,88 @@ $event_description""",
             "help": "block subscriptions to private/local network addresses",
             "type": bool})
     ])),
+    ("metrics", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable Prometheus metrics endpoint at /.metrics",
+            "type": bool}),
+        ("require_auth", {
+            "value": "True",
+            "help": "require authentication to access metrics",
+            "type": bool})
+    ])),
+    ("directory", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable CardDAV directory gateway for LDAP contacts",
+            "type": bool}),
+        ("ldap_uri", {
+            "value": "ldap://localhost",
+            "help": "URI to the LDAP server",
+            "type": str}),
+        ("ldap_base", {
+            "value": "",
+            "help": "base DN for LDAP searches",
+            "type": str}),
+        ("ldap_reader_dn", {
+            "value": "",
+            "help": "DN of LDAP user with read access",
+            "type": str}),
+        ("ldap_secret", {
+            "value": "",
+            "help": "password for ldap_reader_dn",
+            "type": str}),
+        ("ldap_secret_file", {
+            "value": "",
+            "help": "file containing password for ldap_reader_dn",
+            "type": filepath}),
+        ("ldap_filter", {
+            "value": "(objectClass=inetOrgPerson)",
+            "help": "LDAP filter for contact entries",
+            "type": str}),
+        ("ldap_security", {
+            "value": "none",
+            "help": "LDAP connection security: none, tls, starttls",
+            "type": str}),
+        ("ldap_ssl_verify_mode", {
+            "value": "REQUIRED",
+            "help": "certificate verification: NONE, OPTIONAL, REQUIRED",
+            "type": str}),
+        ("ldap_ssl_ca_file", {
+            "value": "",
+            "help": "CA file for TLS certificate verification",
+            "type": filepath}),
+        ("virtual_addressbook", {
+            "value": "/directory/contacts/",
+            "help": "virtual path for directory address book",
+            "type": str}),
+        ("cache_ttl", {
+            "value": "300",
+            "help": "cache TTL in seconds for LDAP entries",
+            "type": positive_int})
+    ])),
+    ("websync", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable WebSocket real-time sync at /.websync",
+            "type": bool}),
+        ("require_auth", {
+            "value": "True",
+            "help": "require authentication for WebSocket connections",
+            "type": bool}),
+        ("ping_interval", {
+            "value": "30",
+            "help": "WebSocket ping interval in seconds",
+            "type": positive_int}),
+        ("max_connections", {
+            "value": "1000",
+            "help": "maximum concurrent WebSocket connections",
+            "type": positive_int}),
+        ("connection_timeout", {
+            "value": "3600",
+            "help": "connection timeout in seconds (0 = no timeout)",
+            "type": positive_int})
+    ])),
     ("web", OrderedDict([
         ("type", {
             "value": "internal",
