@@ -25,6 +25,10 @@ from typing import IO, AnyStr, ClassVar, Iterator, Optional, Type
 from radicale import config, logger, pathutils, storage, types, utils
 from radicale.storage import multifilesystem  # noqa:F401
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from radicale.tenant import TenantContext
+
 
 class CollectionBase(storage.BaseCollection):
 
@@ -79,10 +83,18 @@ class StorageBase(storage.BaseStorage):
     _folder_umask: str
     _config_umask: int
 
+    # Multi-tenant support
+    _tenant_context: Optional["TenantContext"] = None
+    _tenant_enabled: bool = False
+    _tenant_isolation_mode: str = "logical"
+
     def __init__(self, configuration: config.Configuration) -> None:
         super().__init__(configuration)
         self._filesystem_folder = configuration.get(
             "storage", "filesystem_folder")
+        # Initialize multi-tenant settings
+        self._tenant_enabled = configuration.get("tenant", "enabled")
+        self._tenant_isolation_mode = configuration.get("tenant", "isolation_mode")
         self._filesystem_fsync = configuration.get(
             "storage", "_filesystem_fsync")
         self._filesystem_cache_folder = configuration.get(
@@ -100,14 +112,66 @@ class StorageBase(storage.BaseStorage):
         self._debug_cache_actions = configuration.get(
             "logging", "storage_cache_actions_on_debug")
 
+    def set_tenant_context(self, context: Optional["TenantContext"]) -> None:
+        """
+        Set tenant context for storage operations.
+
+        Args:
+            context: TenantContext from request, or None for single-tenant mode
+        """
+        self._tenant_context = context
+
     def _get_collection_root_folder(self) -> str:
-        return os.path.join(self._filesystem_folder, "collection-root")
+        """
+        Get collection root folder, tenant-aware if multi-tenancy enabled.
+
+        In filesystem isolation mode, each tenant gets a separate folder:
+        /storage/tenants/{tenant_id}/collection-root/
+
+        In logical isolation mode, shared folder is used:
+        /storage/collection-root/
+        """
+        base_folder = os.path.join(self._filesystem_folder, "collection-root")
+
+        # Check for filesystem isolation with valid tenant context
+        if (self._tenant_enabled and
+                self._tenant_isolation_mode == "filesystem" and
+                self._tenant_context and
+                self._tenant_context.is_valid):
+            tenant_folder = os.path.join(
+                self._filesystem_folder,
+                "tenants",
+                self._tenant_context.tenant_id,
+                "collection-root"
+            )
+            # Ensure tenant folder exists
+            if not os.path.exists(tenant_folder):
+                os.makedirs(tenant_folder, exist_ok=True)
+                logger.debug(
+                    "Created tenant storage folder: %s",
+                    tenant_folder
+                )
+            return tenant_folder
+
+        return base_folder
 
     def _get_collection_cache_folder(self) -> str:
+        """Get cache folder, tenant-aware if filesystem isolation enabled."""
         if self._filesystem_cache_folder:
-            return os.path.join(self._filesystem_cache_folder, "collection-cache")
+            base = self._filesystem_cache_folder
         else:
-            return os.path.join(self._filesystem_folder, "collection-cache")
+            base = self._filesystem_folder
+
+        # For filesystem isolation, use tenant-specific cache folder
+        if (self._tenant_enabled and
+                self._tenant_isolation_mode == "filesystem" and
+                self._tenant_context and
+                self._tenant_context.is_valid):
+            return os.path.join(
+                base, "tenants", self._tenant_context.tenant_id, "collection-cache"
+            )
+
+        return os.path.join(base, "collection-cache")
 
     def _get_collection_cache_subfolder(self, path, folder, subfolder) -> str:
         if (self._use_cache_subfolder_for_item is True) and (subfolder == "item"):

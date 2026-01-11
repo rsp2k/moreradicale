@@ -38,8 +38,9 @@ import zlib
 from http import client
 from typing import Iterable, List, Mapping, Tuple, Union
 
-from radicale import config, httputils, log, pathutils, types, utils
+from radicale import config, httputils, log, pathutils, tenant, types, utils
 from radicale.app.base import ApplicationBase
+from radicale.tenant.config import TenantAwareConfiguration
 from radicale.app.delete import ApplicationPartDelete
 from radicale.app.webhook import WebhookHandler
 from radicale.app.get import ApplicationPartGet
@@ -82,6 +83,10 @@ class Application(ApplicationPartDelete, ApplicationPartHead,
     _extra_headers: Mapping[str, str]
     _profiling_per_request: bool = False
     _profiling_per_request_method: bool = False
+    # Multi-tenant support
+    _tenant_enabled: bool = False
+    _tenant_extractor: "tenant.BaseTenantExtractor"
+    _tenant_config: TenantAwareConfiguration
     profiler_per_request_method: dict[str, cProfile.Profile] = {}
     profiler_per_request_method_counter: dict[str, int] = {}
     profiler_per_request_method_starttime: datetime.datetime
@@ -176,6 +181,15 @@ class Application(ApplicationPartDelete, ApplicationPartHead,
 
         # Initialize webhook handler for inbound iTIP processing
         self._webhook_handler = WebhookHandler(configuration, self._storage)
+
+        # Initialize multi-tenant support
+        self._tenant_enabled = configuration.get("tenant", "enabled")
+        if self._tenant_enabled:
+            self._tenant_extractor = tenant.load(configuration)
+            self._tenant_config = TenantAwareConfiguration(configuration)
+            logger.info("Multi-tenant support enabled (type=%s, isolation=%s)",
+                        configuration.get("tenant", "type"),
+                        configuration.get("tenant", "isolation_mode"))
 
     def __del__(self) -> None:
         """Shutdown application."""
@@ -426,6 +440,36 @@ class Application(ApplicationPartDelete, ApplicationPartHead,
                 else:
                     logger.debug("Called by reverse proxy, cannot remove base prefix %r from path: %r as not matching", base_prefix, path)
 
+        # Extract tenant context for multi-tenant support
+        tenant_context = None
+        if self._tenant_enabled:
+            # Extract tenant from path/header/subdomain (user not known yet)
+            # Domain extraction will be updated after authentication
+            tenant_context = self._tenant_extractor.extract(environ, path, "")
+            if tenant_context:
+                logger.debug("Tenant context extracted: tenant=%r method=%r",
+                             tenant_context.tenant_id, tenant_context.extraction_method)
+                # Set tenant context on storage and rights
+                self._storage.set_tenant_context(tenant_context)
+                self._rights.set_tenant_context(tenant_context)
+                # Rewrite path if needed (e.g., for path_prefix mode)
+                if tenant_context.rewritten_path and tenant_context.rewritten_path != path:
+                    logger.debug("Path rewritten by tenant extractor: %r => %r",
+                                 path, tenant_context.rewritten_path)
+                    path = tenant_context.rewritten_path
+            elif self.configuration.get("tenant", "default_tenant"):
+                # Use default tenant if configured and no tenant extracted
+                default_id = self.configuration.get("tenant", "default_tenant")
+                tenant_context = tenant.TenantContext(
+                    tenant_id=default_id,
+                    extraction_method="default",
+                    original_path=path,
+                    rewritten_path=path
+                )
+                logger.debug("Using default tenant: %r", default_id)
+                self._storage.set_tenant_context(tenant_context)
+                self._rights.set_tenant_context(tenant_context)
+
         # Get function corresponding to method
         function = getattr(self, "do_%s" % request_method, None)
         if not function:
@@ -523,6 +567,18 @@ class Application(ApplicationPartDelete, ApplicationPartHead,
             # Prevent usernames like "user/calendar.ics"
             logger.info("Refused unsafe username: %r", user)
             user = ""
+
+        # Update tenant context for domain-based extraction (now that we have user)
+        if self._tenant_enabled and user:
+            tenant_type = self.configuration.get("tenant", "type")
+            if tenant_type == "domain":
+                # Re-extract tenant context with authenticated user
+                tenant_context = self._tenant_extractor.extract(environ, path, user)
+                if tenant_context:
+                    logger.debug("Tenant context updated with user: tenant=%r",
+                                 tenant_context.tenant_id)
+                    self._storage.set_tenant_context(tenant_context)
+                    self._rights.set_tenant_context(tenant_context)
 
         # Create principal collection
         if user:

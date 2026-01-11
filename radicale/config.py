@@ -37,7 +37,7 @@ from configparser import RawConfigParser
 from typing import (Any, Callable, ClassVar, Iterable, List, Optional,
                     Sequence, Tuple, TypeVar, Union)
 
-from radicale import auth, hook, rights, storage, types, web
+from radicale import auth, hook, rights, storage, tenant, types, web
 from radicale.hook import email
 from radicale.item import check_and_sanitize_props
 
@@ -976,6 +976,49 @@ $event_description""",
             "value": "3600",
             "help": "connection timeout in seconds (0 = no timeout)",
             "type": positive_int})
+    ])),
+    ("tenant", OrderedDict([
+        ("enabled", {
+            "value": "False",
+            "help": "enable multi-tenant support",
+            "type": bool}),
+        ("type", {
+            "value": "none",
+            "help": "tenant extraction method (" + "|".join(tenant.INTERNAL_TYPES) + ")",
+            "type": str,
+            "internal": tenant.INTERNAL_TYPES}),
+        ("config_directory", {
+            "value": "/etc/radicale/tenants",
+            "help": "directory containing per-tenant configuration files",
+            "type": filepath}),
+        ("isolation_mode", {
+            "value": "logical",
+            "help": "tenant isolation: logical (shared storage with rights) or filesystem (separate folders)",
+            "type": str}),
+        ("default_tenant", {
+            "value": "",
+            "help": "default tenant ID when extraction fails (empty = reject request)",
+            "type": str}),
+        ("domain_strip_subdomains", {
+            "value": "False",
+            "help": "strip subdomains from domain (a.b.example.com -> example.com)",
+            "type": bool}),
+        ("path_prefix_pattern", {
+            "value": "/{tenant}/",
+            "help": "pattern for extracting tenant from URL path",
+            "type": str}),
+        ("header_name", {
+            "value": "X-Tenant-ID",
+            "help": "HTTP header name for tenant identification",
+            "type": str}),
+        ("base_domain", {
+            "value": "",
+            "help": "base domain for subdomain extraction (e.g., example.com)",
+            "type": str}),
+        ("per_tenant_locking", {
+            "value": "False",
+            "help": "use separate lock files per tenant (filesystem isolation only)",
+            "type": bool})
     ])),
     ("web", OrderedDict([
         ("type", {

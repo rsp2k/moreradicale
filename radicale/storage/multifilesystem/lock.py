@@ -24,7 +24,7 @@ import shlex
 import signal
 import subprocess
 import sys
-from typing import Iterator
+from typing import Dict, Iterator
 
 from radicale import config, pathutils, types
 from radicale.log import logger
@@ -51,6 +51,8 @@ class CollectionPartLock(CollectionBase):
 class StoragePartLock(StorageBase):
 
     _lock: pathutils.RwLock
+    _tenant_locks: Dict[str, pathutils.RwLock]
+    _per_tenant_locking: bool
     _hook: str
 
     def __init__(self, configuration: config.Configuration) -> None:
@@ -58,11 +60,49 @@ class StoragePartLock(StorageBase):
         lock_path = os.path.join(self._filesystem_folder, ".Radicale.lock")
         logger.debug("Lock file (StoragePartLock): %r" % lock_path)
         self._lock = pathutils.RwLock(lock_path)
+        self._tenant_locks = {}
+        self._per_tenant_locking = configuration.get("tenant", "per_tenant_locking")
         self._hook = configuration.get("storage", "hook")
+
+    def _get_lock(self) -> pathutils.RwLock:
+        """
+        Get appropriate lock for current tenant context.
+
+        Returns per-tenant lock if per_tenant_locking is enabled
+        and filesystem isolation is active, otherwise returns global lock.
+        """
+        if (self._per_tenant_locking and
+                self._tenant_enabled and
+                self._tenant_isolation_mode == "filesystem" and
+                self._tenant_context and
+                self._tenant_context.is_valid):
+
+            tenant_id = self._tenant_context.tenant_id
+            if tenant_id not in self._tenant_locks:
+                # Create lock for this tenant
+                tenant_lock_path = os.path.join(
+                    self._filesystem_folder,
+                    "tenants",
+                    tenant_id,
+                    ".Radicale.lock"
+                )
+                # Ensure tenant directory exists
+                tenant_dir = os.path.dirname(tenant_lock_path)
+                os.makedirs(tenant_dir, exist_ok=True)
+                logger.debug(
+                    "Lock file (per-tenant) for %r: %r",
+                    tenant_id, tenant_lock_path
+                )
+                self._tenant_locks[tenant_id] = pathutils.RwLock(tenant_lock_path)
+
+            return self._tenant_locks[tenant_id]
+
+        return self._lock
 
     @types.contextmanager
     def acquire_lock(self, mode: str, user: str = "", *args, **kwargs) -> Iterator[None]:
-        with self._lock.acquire(mode):
+        lock = self._get_lock()
+        with lock.acquire(mode):
             yield
             # execute hook
             if mode == "w" and self._hook:
