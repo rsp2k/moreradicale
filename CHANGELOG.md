@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.5.12
+* Feature: Multi-Tenant Support with configurable isolation
+  - Four tenant extraction methods: domain (user@tenant.com), path_prefix (/tenant/user/), header (X-Tenant-ID), subdomain (tenant.example.com)
+  - Two isolation modes: logical (shared storage with rights-based access) and filesystem (separate tenant folders)
+  - Per-tenant configuration overrides from config_directory (e.g., /etc/radicale/tenants/acme.conf)
+  - New `tenant_owner_only` rights backend preventing cross-tenant access
+  - Per-tenant locking for high-concurrency multi-tenant deployments
+  - Configurable default tenant fallback when extraction fails
+
 ## 3.5.11
 * Feature: RFC 8030 Web Push notifications for calendar and contacts updates
   - VAPID key management (RFC 8292) with auto-generation

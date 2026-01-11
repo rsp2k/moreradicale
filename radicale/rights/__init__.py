@@ -32,12 +32,16 @@ Take a look at the class ``BaseRights`` if you want to implement your own.
 
 """
 
-from typing import Sequence, Set
+from typing import Optional, Sequence, Set, TYPE_CHECKING
 
 from radicale import config, utils
 
+if TYPE_CHECKING:
+    from radicale.tenant import TenantContext
+
 INTERNAL_TYPES: Sequence[str] = ("authenticated", "owner_write", "owner_only",
-                                 "owner_only_shared", "from_file", "allow_read_write")
+                                 "owner_only_shared", "tenant_owner_only",
+                                 "from_file", "allow_read_write")
 
 
 def load(configuration: "config.Configuration") -> "BaseRights":
@@ -68,6 +72,18 @@ class BaseRights:
 
         """
         self.configuration = configuration
+
+    def set_tenant_context(self, context: Optional["TenantContext"]) -> None:
+        """Set tenant context for rights checking.
+
+        This is a no-op for most rights backends. Override in tenant-aware
+        backends like ``tenant_owner_only``.
+
+        Args:
+            context: TenantContext from request, or None
+
+        """
+        pass  # Default no-op for non-tenant-aware backends
 
     def authorization(self, user: str, path: str) -> str:
         """Get granted rights of ``user`` for the collection ``path``.
