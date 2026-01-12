@@ -27,6 +27,7 @@ from radicale.app.base import Access, ApplicationBase
 from radicale.attachments import ATTACHMENTS_PATH
 from radicale.log import logger
 from radicale.sharing import get_sharing_manager
+from radicale.sharing.notifications import NOTIFICATIONS_PROPERTY
 
 
 def propose_filename(collection: storage.BaseCollection) -> str:
@@ -97,6 +98,31 @@ class ApplicationPartGet(ApplicationBase):
             else:
                 return httputils.NOT_ALLOWED
             if isinstance(item, storage.BaseCollection):
+                # Handle notification resources (stored as collections with XML in props)
+                if "/notifications/" in item.path:
+                    import json
+                    from radicale.sharing.notifications import Notification
+                    notif_json = item.get_meta(NOTIFICATIONS_PROPERTY)
+                    if notif_json:
+                        try:
+                            notif_data = json.loads(notif_json)
+                            notification = Notification.from_dict(notif_data)
+                            import xml.etree.ElementTree as ET
+                            xml_content = ET.tostring(
+                                notification.to_xml(),
+                                encoding="unicode",
+                                xml_declaration=True
+                            )
+                            headers = {
+                                "Content-Type": "text/xml; charset=utf-8",
+                                "ETag": item.etag,
+                            }
+                            if item.last_modified:
+                                headers["Last-Modified"] = item.last_modified
+                            return client.OK, headers, xml_content, None
+                        except (json.JSONDecodeError, ValueError) as e:
+                            logger.warning("Failed to parse notification: %s", e)
+
                 if not item.tag:
                     return (httputils.NOT_ALLOWED if limited_access else
                             httputils.DIRECTORY_LISTING)

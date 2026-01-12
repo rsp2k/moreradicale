@@ -736,6 +736,10 @@ $event_description""",
             "value": "False",
             "help": "enable scheduling delegation (allow users to send invites on behalf of others)",
             "type": bool}),
+        ("notifications_enabled", {
+            "value": "True",
+            "help": "enable notification collections for share invitations (requires sharing enabled)",
+            "type": bool}),
         ("auto_accept_same_domain", {
             "value": "False",
             "help": "automatically accept share invitations from users on the same domain",

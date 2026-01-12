@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.5.13
+* Feature: CalDAV Sharing Notifications (Apple CalendarServer extension)
+  - Notification collections at `/{user}/notifications/` for share invitations
+  - `CS:notification-URL` property for discovering notification collection
+  - `CS:invite-notification` XML for pending share invitations
+  - `CS:invite-reply` XML for accept/decline responses to calendar owner
+  - Automatic notification creation when shares are added or replied to
+  - Configurable via `[sharing] notifications_enabled` option
+
 ## 3.5.12
 * Feature: Multi-Tenant Support with configurable isolation
   - Four tenant extraction methods: domain (user@tenant.com), path_prefix (/tenant/user/), header (X-Tenant-ID), subdomain (tenant.example.com)

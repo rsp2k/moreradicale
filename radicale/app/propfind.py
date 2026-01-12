@@ -206,6 +206,10 @@ def xml_propfind_response(
             if configuration.get("push", "enabled"):
                 props.append(xmlutils.make_clark("D:push-transports"))
                 props.append(xmlutils.make_clark("CS:pushkey"))
+            # CalendarServer sharing notification URL
+            if (configuration.get("sharing", "enabled") and
+                    configuration.get("sharing", "notifications_enabled")):
+                props.append(xmlutils.make_clark("CS:notification-URL"))
             # RFC 7809 Time Zones by Reference
             if configuration.get("tzdist", "enabled"):
                 props.append(xmlutils.make_clark("C:timezone-service-set"))
@@ -603,6 +607,16 @@ def xml_propfind_response(
                         child_element = ET.Element(
                             xmlutils.make_clark("C:schedule-outbox"))
                         element.append(child_element)
+                # Check if this is a notification collection
+                if collection.path.endswith("/notifications/"):
+                    notifications_enabled = (
+                        configuration.get("sharing", "enabled") and
+                        configuration.get("sharing", "notifications_enabled")
+                    )
+                    if notifications_enabled:
+                        child_element = ET.Element(
+                            xmlutils.make_clark("CS:notification"))
+                        element.append(child_element)
                 child_element = ET.Element(xmlutils.make_clark("D:collection"))
                 element.append(child_element)
             elif tag == xmlutils.make_clark("RADICALE:displayname"):
@@ -738,6 +752,22 @@ def xml_propfind_response(
                         _add_proxy_for_elements(element, user, "write",
                                                base_prefix, storage, configuration)
                     # Empty element is valid if no proxies
+                else:
+                    is404 = True
+            elif tag == xmlutils.make_clark("CS:notification-URL"):
+                # CalendarServer: Returns URL to user's notification collection
+                if is_collection and collection.is_principal and user:
+                    notifications_enabled = (
+                        configuration.get("sharing", "enabled") and
+                        configuration.get("sharing", "notifications_enabled")
+                    )
+                    if notifications_enabled:
+                        child_element = ET.Element(xmlutils.make_clark("D:href"))
+                        child_element.text = xmlutils.make_href(
+                            base_prefix, f"/{user}/notifications/")
+                        element.append(child_element)
+                    else:
+                        is404 = True
                 else:
                     is404 = True
             elif tag == xmlutils.make_clark("CS:source"):

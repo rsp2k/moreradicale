@@ -34,6 +34,7 @@ from radicale.sharing import (
     SharingManager, ShareAccess, InviteStatus,
     SHARES_PROPERTY
 )
+from radicale.sharing.notifications import NotificationManager
 
 if TYPE_CHECKING:
     from radicale import config, storage
@@ -47,6 +48,7 @@ class SharingHandler:
         self.storage = storage
         self.configuration = configuration
         self.sharing_manager = SharingManager(configuration)
+        self.notification_manager = NotificationManager(configuration, storage)
 
     def handle_sharing_post(self, user: str, xml_content: ET.Element,
                            collection: "storage.BaseCollection",
@@ -151,6 +153,20 @@ class SharingHandler:
             self.sharing_manager.add_share(collection, user, sharee, access, cn)
             logger.info("Added share: %s -> %s (%s) on %s",
                        user, sharee, access.value, collection.path)
+
+            # Create invite notification for sharee
+            share = self.sharing_manager.get_shares(collection).get(sharee)
+            if share:
+                collection_name = collection.get_meta("D:displayname") or collection.path
+                self.notification_manager.create_invite_notification(
+                    sharee=sharee,
+                    share=share,
+                    collection_path=collection.path,
+                    collection_name=collection_name,
+                    sharer=user,
+                    sharer_cn=None  # Could be enhanced to get user's display name
+                )
+
         except PermissionError as e:
             logger.warning("Permission denied for share: %s", e)
             return httputils.FORBIDDEN
@@ -237,6 +253,16 @@ class SharingHandler:
             else:
                 self.sharing_manager.decline_share(collection, user)
                 logger.info("User %s declined share of %s", user, collection.path)
+
+            # Notify the calendar owner of the response
+            if collection.owner:
+                self.notification_manager.create_reply_notification(
+                    owner=collection.owner,
+                    sharee=user,
+                    collection_path=collection.path,
+                    accepted=accept
+                )
+
         except ValueError as e:
             logger.warning("Invalid share reply: %s", e)
             return httputils.BAD_REQUEST
