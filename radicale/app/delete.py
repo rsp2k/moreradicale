@@ -72,7 +72,16 @@ class ApplicationPartDelete(ApplicationBase):
                 return httputils.PRECONDITION_FAILED
             hook_notification_item_list = []
             if isinstance(item, storage.BaseCollection):
-                if self._permit_delete_collection:
+                # Allow deletion of notification resources without permit_delete_collection
+                is_notification = "/notifications/" in path and path.endswith(".xml")
+                if is_notification:
+                    # User can only delete their own notifications
+                    notification_owner = path.split("/")[1] if path.startswith("/") else path.split("/")[0]
+                    if notification_owner != user:
+                        logger.warning("User %s attempted to delete %s's notification", user, notification_owner)
+                        return httputils.NOT_ALLOWED
+                    logger.debug("Allowing notification deletion: %s", path)
+                elif self._permit_delete_collection:
                     if access.check("d", item):
                         logger.info("delete of collection is permitted by config/option [rights] permit_delete_collection but explicit forbidden by permission 'd': %s", path)
                         return httputils.NOT_ALLOWED

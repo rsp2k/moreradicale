@@ -206,10 +206,11 @@ def xml_propfind_response(
             if configuration.get("push", "enabled"):
                 props.append(xmlutils.make_clark("D:push-transports"))
                 props.append(xmlutils.make_clark("CS:pushkey"))
-            # CalendarServer sharing notification URL
-            if (configuration.get("sharing", "enabled") and
-                    configuration.get("sharing", "notifications_enabled")):
-                props.append(xmlutils.make_clark("CS:notification-URL"))
+            # CalendarServer sharing properties
+            if configuration.get("sharing", "enabled"):
+                props.append(xmlutils.make_clark("CS:shared-to-me"))
+                if configuration.get("sharing", "notifications_enabled"):
+                    props.append(xmlutils.make_clark("CS:notification-URL"))
             # RFC 7809 Time Zones by Reference
             if configuration.get("tzdist", "enabled"):
                 props.append(xmlutils.make_clark("C:timezone-service-set"))
@@ -752,6 +753,26 @@ def xml_propfind_response(
                         _add_proxy_for_elements(element, user, "write",
                                                base_prefix, storage, configuration)
                     # Empty element is valid if no proxies
+                else:
+                    is404 = True
+            elif tag == xmlutils.make_clark("CS:shared-to-me"):
+                # CalendarServer: Returns calendars shared TO the current user
+                if is_collection and collection.is_principal and user:
+                    sharing_enabled = configuration.get("sharing", "enabled")
+                    if sharing_enabled:
+                        from radicale.sharing import SharingManager, InviteStatus
+                        sharing_manager = SharingManager(configuration)
+                        # Find all calendars shared with this user
+                        shared_paths = sharing_manager.get_calendars_shared_with(
+                            user, storage)
+                        for shared_path in shared_paths:
+                            child_element = ET.Element(xmlutils.make_clark("D:href"))
+                            child_element.text = xmlutils.make_href(
+                                base_prefix, shared_path)
+                            element.append(child_element)
+                        # Empty element is valid if no shares
+                    else:
+                        is404 = True
                 else:
                     is404 = True
             elif tag == xmlutils.make_clark("CS:notification-URL"):

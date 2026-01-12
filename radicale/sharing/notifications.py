@@ -61,6 +61,7 @@ class NotificationType(Enum):
     """Types of CalDAV sharing notifications."""
     INVITE = "invite-notification"
     INVITE_REPLY = "invite-reply"
+    INVITE_DELETED = "invite-deleted"  # Share was revoked
     RESOURCE_CHANGE = "resource-change"
 
 
@@ -82,6 +83,9 @@ class Notification:
     reply_from: Optional[str] = None  # Who replied
     reply_status: Optional[str] = None  # "accepted" or "declined"
 
+    # Optional comment/message from sharer
+    comment: Optional[str] = None
+
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON storage."""
         return {
@@ -95,6 +99,7 @@ class Notification:
             "access_level": self.access_level,
             "reply_from": self.reply_from,
             "reply_status": self.reply_status,
+            "comment": self.comment,
         }
 
     @classmethod
@@ -111,6 +116,7 @@ class Notification:
             access_level=data.get("access_level"),
             reply_from=data.get("reply_from"),
             reply_status=data.get("reply_status"),
+            comment=data.get("comment"),
         )
 
     def to_xml(self) -> ET.Element:
@@ -149,6 +155,8 @@ class Notification:
             self._build_invite_xml(root)
         elif self.notification_type == NotificationType.INVITE_REPLY:
             self._build_reply_xml(root)
+        elif self.notification_type == NotificationType.INVITE_DELETED:
+            self._build_deleted_xml(root)
 
         return root
 
@@ -192,6 +200,11 @@ class Notification:
             else:
                 ET.SubElement(access, xmlutils.make_clark("CS:read"))
 
+        # Optional comment/message from sharer
+        if self.comment:
+            comment_elem = ET.SubElement(invite, xmlutils.make_clark("CS:comment"))
+            comment_elem.text = self.comment
+
     def _build_reply_xml(self, root: ET.Element) -> None:
         """Build invite-reply XML content."""
         reply = ET.SubElement(root, xmlutils.make_clark("CS:invite-reply"))
@@ -219,12 +232,42 @@ class Notification:
             else:
                 ET.SubElement(reply, xmlutils.make_clark("CS:invite-declined"))
 
+    def _build_deleted_xml(self, root: ET.Element) -> None:
+        """Build invite-deleted XML content for share revocation."""
+        deleted = ET.SubElement(root, xmlutils.make_clark("CS:invite-deleted"))
+
+        # UID
+        uid_elem = ET.SubElement(deleted, xmlutils.make_clark("CS:uid"))
+        uid_elem.text = self.uid
+
+        # Shared resource that was unshared
+        if self.shared_collection_path:
+            hosturl = ET.SubElement(deleted, xmlutils.make_clark("CS:hosturl"))
+            href = ET.SubElement(hosturl, xmlutils.make_clark("D:href"))
+            href.text = self.shared_collection_path
+
+        # Summary (calendar name)
+        if self.shared_collection_name:
+            summary = ET.SubElement(deleted, xmlutils.make_clark("CS:summary"))
+            summary.text = self.shared_collection_name
+
+        # Who revoked the share
+        if self.sharer_username:
+            organizer = ET.SubElement(deleted, xmlutils.make_clark("CS:organizer"))
+            org_href = ET.SubElement(organizer, xmlutils.make_clark("D:href"))
+            org_href.text = f"/{self.sharer_username}/"
+            if self.sharer_cn:
+                cn = ET.SubElement(organizer, xmlutils.make_clark("CS:common-name"))
+                cn.text = self.sharer_cn
+
     def get_filename(self) -> str:
         """Get filename for this notification resource."""
         if self.notification_type == NotificationType.INVITE:
             return f"invite-{self.uid}.xml"
         elif self.notification_type == NotificationType.INVITE_REPLY:
             return f"reply-{self.uid}.xml"
+        elif self.notification_type == NotificationType.INVITE_DELETED:
+            return f"deleted-{self.uid}.xml"
         return f"notification-{self.uid}.xml"
 
 
@@ -326,6 +369,7 @@ class NotificationManager:
             sharer_username=sharer,
             sharer_cn=sharer_cn,
             access_level=share.access.value if hasattr(share, 'access') else "read",
+            comment=share.comment if hasattr(share, 'comment') else None,
         )
 
         # Store notification
@@ -374,6 +418,52 @@ class NotificationManager:
         if self._store_notification(owner, notification):
             logger.info("Created reply notification for %s from %s (%s)",
                        owner, sharee, "accepted" if accepted else "declined")
+            return notification.uid
+
+        return None
+
+    def create_revocation_notification(self, sharee: str,
+                                       collection_path: str,
+                                       collection_name: str,
+                                       owner: str,
+                                       owner_cn: Optional[str] = None) -> Optional[str]:
+        """
+        Create a revocation notification when a share is removed.
+
+        Notifies the sharee that their access to a calendar has been revoked.
+
+        Args:
+            sharee: User who lost access
+            collection_path: Path to the calendar
+            collection_name: Display name of calendar
+            owner: Calendar owner who revoked the share
+            owner_cn: Display name of owner
+
+        Returns:
+            Notification UID if created, None on failure
+        """
+        if not self.is_enabled():
+            return None
+
+        # Ensure notification collection exists
+        if not self.ensure_notification_collection(sharee):
+            return None
+
+        # Create notification
+        notification = Notification(
+            uid=str(uuid.uuid4()),
+            notification_type=NotificationType.INVITE_DELETED,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            shared_collection_path=collection_path,
+            shared_collection_name=collection_name,
+            sharer_username=owner,
+            sharer_cn=owner_cn,
+        )
+
+        # Store notification
+        if self._store_notification(sharee, notification):
+            logger.info("Created revocation notification for %s from %s",
+                       sharee, owner)
             return notification.uid
 
         return None

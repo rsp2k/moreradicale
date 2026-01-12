@@ -138,6 +138,18 @@ class SharingHandler:
             logger.warning("Empty sharee in share set")
             return httputils.BAD_REQUEST
 
+        # Validate that the sharee's principal exists
+        sharee_principal_path = f"/{sharee}/"
+        try:
+            with self.storage.acquire_lock("r", user):
+                sharee_exists = any(self.storage.discover(sharee_principal_path, depth="0"))
+        except Exception:
+            sharee_exists = False
+
+        if not sharee_exists:
+            logger.warning("Cannot share with non-existent user: %s", sharee)
+            return httputils.NOT_FOUND
+
         # Check access level
         if set_elem.find(xmlutils.make_clark("CS:read-write")) is not None:
             access = ShareAccess.READ_WRITE
@@ -148,9 +160,13 @@ class SharingHandler:
         cn_elem = set_elem.find(xmlutils.make_clark("CS:common-name"))
         cn = cn_elem.text if cn_elem is not None else None
 
+        # Get share comment/summary (optional message from sharer)
+        comment_elem = set_elem.find(xmlutils.make_clark("CS:summary"))
+        comment = comment_elem.text if comment_elem is not None else None
+
         # Add the share
         try:
-            self.sharing_manager.add_share(collection, user, sharee, access, cn)
+            self.sharing_manager.add_share(collection, user, sharee, access, cn, comment)
             logger.info("Added share: %s -> %s (%s) on %s",
                        user, sharee, access.value, collection.path)
 
@@ -201,6 +217,15 @@ class SharingHandler:
             if removed:
                 logger.info("Removed share: %s revoked from %s on %s",
                           user, sharee, collection.path)
+                # Notify the sharee that their access was revoked
+                collection_name = collection.get_meta("D:displayname") or collection.path
+                self.notification_manager.create_revocation_notification(
+                    sharee=sharee,
+                    collection_path=collection.path,
+                    collection_name=collection_name,
+                    owner=user,
+                    owner_cn=None
+                )
             else:
                 logger.debug("Share %s not found for removal on %s",
                            sharee, collection.path)

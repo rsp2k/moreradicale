@@ -62,6 +62,7 @@ class Share:
     status: InviteStatus = InviteStatus.PENDING
     invited_at: Optional[str] = None  # ISO timestamp
     accepted_at: Optional[str] = None  # ISO timestamp
+    comment: Optional[str] = None  # Optional message from sharer
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON storage."""
@@ -71,6 +72,7 @@ class Share:
             "status": self.status.value,
             "invited_at": self.invited_at,
             "accepted_at": self.accepted_at,
+            "comment": self.comment,
         }
 
     @classmethod
@@ -83,6 +85,7 @@ class Share:
             status=InviteStatus(data.get("status", "pending")),
             invited_at=data.get("invited_at"),
             accepted_at=data.get("accepted_at"),
+            comment=data.get("comment"),
         )
 
 
@@ -173,7 +176,8 @@ class SharingManager:
 
     def add_share(self, collection: "storage.BaseCollection",
                   owner: str, sharee: str, access: ShareAccess,
-                  cn: Optional[str] = None) -> bool:
+                  cn: Optional[str] = None,
+                  comment: Optional[str] = None) -> bool:
         """
         Add or update a share for a collection.
 
@@ -183,6 +187,7 @@ class SharingManager:
             sharee: Username to share with
             access: Access level (read or read-write)
             cn: Display name of sharee (optional)
+            comment: Message from sharer (optional, e.g. "Here's my work calendar")
 
         Returns:
             True if share was added/updated successfully
@@ -210,6 +215,8 @@ class SharingManager:
             shares[sharee].access = access
             if cn:
                 shares[sharee].cn = cn
+            if comment:
+                shares[sharee].comment = comment
             logger.info("Updated share: %s shared %s with %s (access=%s)",
                        owner, collection.path, sharee, access.value)
         else:
@@ -220,6 +227,7 @@ class SharingManager:
                 cn=cn,
                 status=InviteStatus.PENDING,
                 invited_at=now,
+                comment=comment,
             )
             logger.info("Added share: %s shared %s with %s (access=%s)",
                        owner, collection.path, sharee, access.value)

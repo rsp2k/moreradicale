@@ -6,8 +6,14 @@
   - `CS:notification-URL` property for discovering notification collection
   - `CS:invite-notification` XML for pending share invitations
   - `CS:invite-reply` XML for accept/decline responses to calendar owner
-  - Automatic notification creation when shares are added or replied to
+  - `CS:invite-deleted` XML for share revocation notifications
+  - Automatic notification creation when shares are added, replied to, or revoked
   - Configurable via `[sharing] notifications_enabled` option
+* Improve: CalDAV Sharing polish
+  - `CS:shared-to-me` property for efficient discovery of shared calendars
+  - `CS:summary` (share comment) support for descriptive messages when sharing
+  - Validate sharee principal exists before creating share (returns 404 if not)
+  - Notification DELETE handler allows users to acknowledge/dismiss notifications
 
 ## 3.5.12
 * Feature: Multi-Tenant Support with configurable isolation
