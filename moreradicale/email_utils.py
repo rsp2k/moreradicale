@@ -26,7 +26,7 @@ import base64
 import mimetypes
 import smtplib
 import ssl
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -356,7 +356,6 @@ def extract_attachments_from_icalendar(icalendar_text: str) -> List[Attachment]:
     Returns:
         List of Attachment objects
     """
-    import re
 
     attachments = []
 

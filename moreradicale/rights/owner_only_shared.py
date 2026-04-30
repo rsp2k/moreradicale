@@ -34,7 +34,7 @@ Delegation is controlled by RADICALE:schedule-delegates on principal collections
 """
 
 import json
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from moreradicale import pathutils
 from moreradicale.log import logger

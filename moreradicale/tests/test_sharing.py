@@ -27,10 +27,7 @@ Tests cover:
 """
 
 import json
-import shutil
-import tempfile
 
-from moreradicale import config
 from moreradicale.sharing import (
     SharingManager, Share, ShareAccess, InviteStatus, Delegation,
     SHARES_PROPERTY, PROXY_READ_PROPERTY, PROXY_WRITE_PROPERTY,

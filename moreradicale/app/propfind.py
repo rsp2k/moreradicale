@@ -796,7 +796,7 @@ def xml_propfind_response(
                 if is_collection and collection.is_principal and user:
                     sharing_enabled = configuration.get("sharing", "enabled")
                     if sharing_enabled:
-                        from moreradicale.sharing import SharingManager, InviteStatus
+                        from moreradicale.sharing import SharingManager
                         sharing_manager = SharingManager(configuration)
                         # Find all calendars shared with this user
                         shared_paths = sharing_manager.get_calendars_shared_with(

@@ -523,7 +523,6 @@ import hashlib
 import hmac
 import json
 from typing import Tuple
-from unittest.mock import MagicMock, patch
 
 from moreradicale import email_utils
 from moreradicale.itip import email_parser
@@ -2138,7 +2137,6 @@ END:VCALENDAR"""
 
         # Test the notification generation directly
         from moreradicale.itip.processor import ITIPProcessor
-        import vobject
 
         processor = ITIPProcessor(self.application._storage, self.application.configuration)
 
@@ -3682,7 +3680,6 @@ END:VCALENDAR"""
 
     def test_implicit_schedule_agent_client_skips(self):
         """Test implicit scheduling respects SCHEDULE-AGENT=CLIENT."""
-        from moreradicale.itip.models import ScheduleStatus
         from moreradicale.itip.processor import ITIPProcessor
 
         self.configure({"auth": {"type": "none"}})
@@ -4233,7 +4230,6 @@ END:VCALENDAR"""
 
     def test_add_method_respects_schedule_agent(self):
         """Test ADD method respects SCHEDULE-AGENT=CLIENT."""
-        from moreradicale.itip.models import ScheduleStatus
 
         self.configure({"auth": {"type": "none"}})
         self.configure({
@@ -6238,7 +6234,7 @@ END:VCALENDAR"""
     def test_available_occurrence_expansion(self):
         """Test expanding AVAILABLE recurrences within a time range."""
         from moreradicale.itip.availability import AvailablePeriod
-        from datetime import datetime, timedelta
+        from datetime import datetime
         from dateutil.tz import UTC
 
         # Create available period: every Monday 9am-5pm starting Jan 6, 2025
@@ -6265,7 +6261,7 @@ END:VCALENDAR"""
 
     def test_vavailability_priority_ordering(self):
         """Test that VAVAILABILITY components are sorted by priority."""
-        from moreradicale.itip.availability import VAvailability, BusyType
+        from moreradicale.itip.availability import VAvailability
         from datetime import datetime
         from dateutil.tz import UTC
 

@@ -18,7 +18,6 @@
 # along with Radicale.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-import shutil
 from tempfile import TemporaryDirectory
 
 from moreradicale import item as radicale_item

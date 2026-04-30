@@ -42,8 +42,7 @@ Usage:
 import imaplib
 import ssl
 import threading
-import time
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 from moreradicale.itip import email_parser
 from moreradicale.log import logger

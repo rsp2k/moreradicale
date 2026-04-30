@@ -23,13 +23,10 @@ with storage and rights systems.
 
 import os
 import tempfile
-from typing import Dict, Any
 
-import pytest
 
 from moreradicale import config, tenant
 from moreradicale.tenant import TenantContext
-from moreradicale.tenant.base import BaseTenantExtractor
 from moreradicale.tenant.domain import Extractor as DomainExtractor
 from moreradicale.tenant.path_prefix import Extractor as PathPrefixExtractor
 from moreradicale.tenant.header import Extractor as HeaderExtractor

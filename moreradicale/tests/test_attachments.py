@@ -29,7 +29,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import vobject
 
 from moreradicale.tests import BaseTest
-from moreradicale.tests.helpers import get_file_content
 
 
 SIMPLE_EVENT = """\

@@ -5,9 +5,8 @@ Stores subscriptions as JSON files organized by user and collection.
 """
 
 import json
-import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from moreradicale.log import logger
 

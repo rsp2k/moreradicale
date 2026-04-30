@@ -32,7 +32,7 @@ import xml.etree.ElementTree as ET
 from http import client
 from typing import Optional
 
-from moreradicale import httputils, item as radicale_item, storage, types, xmlutils
+from moreradicale import httputils, item as radicale_item, types, xmlutils
 from moreradicale.app.base import ApplicationBase
 
 logger = logging.getLogger(__name__)

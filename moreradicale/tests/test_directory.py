@@ -5,7 +5,6 @@ Tests vCard mapping, LDAP attribute handling, and gateway configuration.
 Note: Full LDAP integration tests require a running LDAP server.
 """
 
-import pytest
 
 
 class TestVCardBuilder:

@@ -10,7 +10,6 @@ Tests the VAVAILABILITY implementation including:
 
 from datetime import datetime, timezone, timedelta
 
-import pytest
 
 from moreradicale.tests import BaseTest
 

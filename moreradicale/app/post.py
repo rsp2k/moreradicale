@@ -23,7 +23,7 @@ import socket
 import xml.etree.ElementTree as ET
 from urllib.parse import parse_qs
 
-from moreradicale import httputils, storage, types, xmlutils
+from moreradicale import httputils, storage, types
 from moreradicale.app.base import ApplicationBase
 from moreradicale.log import logger
 

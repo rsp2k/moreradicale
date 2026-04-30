@@ -26,7 +26,7 @@ Handles POST requests with action= query parameters:
 import re
 import socket
 from http import client
-from typing import TYPE_CHECKING, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional
 from urllib.parse import parse_qs, unquote
 
 from moreradicale import httputils, storage, types
@@ -35,9 +35,7 @@ from moreradicale.attachments import (
     ATTACHMENT_REMOVE,
     ATTACHMENT_UPDATE,
     CAL_MANAGED_ID_HEADER,
-    AttachmentLimitError,
     AttachmentManager,
-    AttachmentNotFoundError,
     AttachmentSizeError,
     add_managed_attach,
     count_managed_attachments,

@@ -10,7 +10,6 @@ Tests the VPOLL implementation including:
 
 from datetime import datetime, timezone
 
-import pytest
 
 from moreradicale.tests import BaseTest
 
@@ -211,7 +210,7 @@ END:VCALENDAR"""
     def test_vpoll_serialization(self):
         """Test serializing a VPOLL to iCalendar format."""
         from moreradicale.vpoll.component import (
-            VPoll, Participant, Vote, PollItem,
+            VPoll, Participant, PollItem,
             ParticipantType, VPollStatus, PollMode
         )
 

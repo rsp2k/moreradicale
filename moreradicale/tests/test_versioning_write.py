@@ -20,15 +20,10 @@ Tests for RFC 3253 versioning write operations.
 Tests CHECKOUT, CHECKIN, UNCHECKOUT, and VERSION-CONTROL methods.
 """
 
-import os
 import subprocess
-import tempfile
-import xml.etree.ElementTree as ET
 
-import pytest
 
 from moreradicale.tests import BaseTest
-from moreradicale.tests.helpers import get_file_content
 
 # Sample calendar event for testing
 SIMPLE_VCALENDAR = """BEGIN:VCALENDAR
@@ -430,7 +425,7 @@ class TestCheckoutExpiration:
     def test_expired_checkout_cleared(self, tmp_path):
         """Test that expired checkouts are automatically cleared."""
         from datetime import datetime, timezone, timedelta
-        from moreradicale.versioning.checkout_manager import CheckoutManager, CheckoutInfo
+        from moreradicale.versioning.checkout_manager import CheckoutManager
         import json
 
         storage_folder = str(tmp_path)

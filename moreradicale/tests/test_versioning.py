@@ -27,7 +27,6 @@ Tests cover:
 import os
 import subprocess
 import tempfile
-import xml.etree.ElementTree as ET
 
 from moreradicale.tests import BaseTest
 from moreradicale.tests.helpers import get_file_content

@@ -29,9 +29,8 @@ Per RFC 3253 §4.4:
 import logging
 import xml.etree.ElementTree as ET
 from http import client
-from typing import Optional
 
-from moreradicale import httputils, storage, types, xmlutils
+from moreradicale import httputils, types, xmlutils
 from moreradicale.app.base import ApplicationBase
 
 logger = logging.getLogger(__name__)

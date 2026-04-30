@@ -10,7 +10,6 @@ Tests the quota reporting and enforcement features including:
 import os
 import tempfile
 
-import pytest
 
 from moreradicale import config
 from moreradicale.tests import BaseTest

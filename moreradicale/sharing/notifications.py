@@ -33,17 +33,17 @@ Supported Notification Types:
 
 import uuid
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from moreradicale import xmlutils
 from moreradicale.log import logger
 
 if TYPE_CHECKING:
     from moreradicale import config, storage
-    from moreradicale.sharing import Share, ShareAccess
+    from moreradicale.sharing import Share
 
 
 # CalendarServer namespace for sharing

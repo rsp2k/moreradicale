@@ -10,9 +10,8 @@ import time
 from datetime import datetime, timezone
 from http import client
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs
 
-from moreradicale import httputils
 from moreradicale.log import logger
 
 from . import SUPPORTED_FORMATS, TZDIST_VERSION, WELL_KNOWN_PATH

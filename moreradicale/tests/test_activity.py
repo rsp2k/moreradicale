@@ -16,7 +16,6 @@
 
 """Tests for RFC 3253 Activity support."""
 
-import os
 import subprocess
 
 from moreradicale.tests import BaseTest

@@ -5,14 +5,12 @@ Manages WebSocket connections and broadcasts change notifications
 to subscribed clients.
 """
 
-import asyncio
 import json
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
-from weakref import WeakSet
 
 from moreradicale.log import logger
 

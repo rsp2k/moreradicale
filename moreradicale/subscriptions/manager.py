@@ -8,7 +8,7 @@ the lifecycle of fetching, updating, and refreshing external feeds.
 import json
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional

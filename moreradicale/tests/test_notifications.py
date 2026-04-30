@@ -25,15 +25,13 @@ Tests cover:
 - CS:notification-URL PROPFIND property
 """
 
-import json
 import xml.etree.ElementTree as ET
 
-from moreradicale import config, xmlutils
+from moreradicale import xmlutils
 from moreradicale.sharing.notifications import (
     Notification, NotificationType, NotificationManager,
     NOTIFICATIONS_PROPERTY, NOTIFICATIONS_COLLECTION, CS, DAV
 )
-from moreradicale.sharing import Share, ShareAccess
 
 
 class TestNotificationType:

@@ -984,8 +984,6 @@ class ITIPProcessor:
                 logger.error(f"AutoScheduler failed, falling back to legacy implementation: {e}", exc_info=True)
 
         # Fallback to legacy implementation if AutoScheduler not available
-        from datetime import datetime
-        from vobject.icalendar import utc as vobj_utc
 
         for attendee in itip_msg.attendees:
             # Only process ROOM and RESOURCE types
@@ -1060,7 +1058,6 @@ class ITIPProcessor:
         Returns:
             True if conflicts exist, False otherwise
         """
-        from datetime import datetime, timedelta
 
         try:
             # Discover all calendar collections under resource's principal
@@ -1438,8 +1435,7 @@ class ITIPProcessor:
         Returns:
             HTTP response with schedule-response XML
         """
-        from moreradicale import httputils, xmlutils
-        import xml.etree.ElementTree as ET
+        from moreradicale import httputils
         from moreradicale.itip.validator import validate_itip_message
 
         try:
@@ -1789,7 +1785,7 @@ class ITIPProcessor:
                     break
 
             if not current_component:
-                logger.warning(f"Could not parse event component")
+                logger.warning("Could not parse event component")
                 return self._build_schedule_response_error(
                     base_prefix, "Invalid event data")
 
@@ -2600,10 +2596,8 @@ class ITIPProcessor:
             HTTP response with schedule-response containing VFREEBUSY for each attendee
         """
         from moreradicale import httputils, xmlutils
-        from moreradicale.item import filter as radicale_filter
         from http import client
         import xml.etree.ElementTree as ET
-        from datetime import datetime, timezone
 
         try:
             # Get the VFREEBUSY component
@@ -2722,12 +2716,9 @@ class ITIPProcessor:
         Returns:
             iCalendar text with METHOD:REPLY and VFREEBUSY component
         """
-        from moreradicale.item import filter as radicale_filter
         from moreradicale.itip import availability
         from vobject.icalendar import utc as vobj_utc
-        from datetime import datetime, timedelta
-        import xml.etree.ElementTree as ET
-        from moreradicale import xmlutils
+        from datetime import datetime
 
         # Build time-range filter element for the query
         # Convert datetime to ISO format strings
@@ -2912,7 +2903,6 @@ class ITIPProcessor:
         if hasattr(vevent, 'rrule'):
             try:
                 # Use dateutil for RRULE expansion
-                from dateutil import rrule as dateutil_rrule
 
                 # Get the rruleset from vobject
                 if hasattr(vevent, 'rruleset'):
@@ -3355,7 +3345,7 @@ class ITIPProcessor:
 
             if not updated or not delegate_added:
                 logger.warning(
-                    f"Delegation update incomplete"
+                    "Delegation update incomplete"
                     + (f" (RECURRENCE-ID: {recurrence_id})" if recurrence_id else "")
                 )
                 return None
@@ -3948,7 +3938,6 @@ class ITIPProcessor:
 
             # Parse recurrence_id and set as proper datetime/date
             from datetime import datetime as dt
-            from datetime import date as d
             from vobject.icalendar import utc as vobj_utc
 
             recurrence_dt = None

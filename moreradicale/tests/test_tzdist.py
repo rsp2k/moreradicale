@@ -4,7 +4,6 @@ Tests for RFC 7808 Time Zone Data Distribution Service (TZDIST).
 
 import json
 
-import pytest
 
 from moreradicale.tests import BaseTest
 

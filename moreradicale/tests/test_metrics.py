@@ -4,7 +4,6 @@ Tests for Prometheus Metrics.
 Tests the metrics collector, handler, and endpoint integration.
 """
 
-import pytest
 
 from moreradicale.tests import BaseTest
 

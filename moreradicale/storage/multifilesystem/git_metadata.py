@@ -30,7 +30,6 @@ Properties exposed (per RFC 3253):
 """
 
 import logging
-import os
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime

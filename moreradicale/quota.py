@@ -6,7 +6,6 @@ allowing clients to see storage usage and available space.
 """
 
 import os
-from pathlib import Path
 from typing import Optional, Tuple
 
 from moreradicale.log import logger

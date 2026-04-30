@@ -21,7 +21,6 @@ Uses mock IMAP server to test the polling logic without requiring
 a real mail server.
 """
 
-import email
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from unittest.mock import MagicMock, patch
@@ -30,11 +29,9 @@ import pytest
 
 from moreradicale.itip.imap_poller import (
     IMAPPoller,
-    IMAPConnectionError,
     IMAPAuthenticationError,
     get_imap_poller,
 )
-from moreradicale.tests import BaseTest
 
 
 # Sample iTIP REPLY message

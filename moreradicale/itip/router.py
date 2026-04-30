@@ -4,7 +4,6 @@ Attendee routing - determine if attendees are internal or external.
 
 import re
 from typing import Tuple, Optional
-from moreradicale import pathutils
 
 
 def extract_email(mailto_uri: str) -> Optional[str]:

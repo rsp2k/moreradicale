@@ -31,8 +31,7 @@ from typing import TYPE_CHECKING, Optional, Tuple
 from moreradicale import httputils, xmlutils
 from moreradicale.log import logger
 from moreradicale.sharing import (
-    SharingManager, ShareAccess, InviteStatus,
-    SHARES_PROPERTY
+    SharingManager, ShareAccess, InviteStatus
 )
 from moreradicale.sharing.notifications import NotificationManager
 

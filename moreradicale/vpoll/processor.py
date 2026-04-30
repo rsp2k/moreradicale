@@ -8,7 +8,6 @@ Handles iTIP methods for VPOLL consensus scheduling:
 - CANCEL: Terminate poll
 """
 
-import re
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
@@ -18,7 +17,6 @@ from moreradicale.vpoll.component import (
     VPollStatus,
     Participant,
     ParticipantType,
-    Vote,
     parse_vpoll,
 )
 

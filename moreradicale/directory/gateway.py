@@ -7,7 +7,7 @@ Appears as a virtual address book collection in Radicale.
 
 import ssl
 import threading
-from typing import Dict, Iterator, List, Optional, Tuple, Any
+from typing import Dict, Iterator, Optional, Tuple
 
 from moreradicale import config
 from moreradicale.log import logger

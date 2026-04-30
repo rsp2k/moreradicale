@@ -28,7 +28,6 @@ Checkout marker files are stored alongside resources:
 import json
 import logging
 import os
-import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Optional

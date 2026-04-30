@@ -5,12 +5,11 @@ Sends Web Push notifications to subscribed clients when calendar data changes.
 """
 
 import json
-from http import client
-from typing import Dict, List, Optional
+from typing import Optional
 
 from moreradicale.log import logger
 
-from . import DEFAULT_TTL, URGENCY_NORMAL
+from . import URGENCY_NORMAL
 from .storage import SubscriptionStorage
 from .subscription import PushSubscription
 from .vapid import VAPIDKeyManager
