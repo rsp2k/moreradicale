@@ -87,6 +87,7 @@ def _auto_version_item(configuration, path: str, user: str,
     except Exception as e:
         logger.warning("Auto-versioning failed for %s: %s", path, e)
 
+
 MIMETYPE_TAGS: Mapping[str, str] = {value: key for key, value in
                                     xmlutils.MIMETYPES.items()}
 

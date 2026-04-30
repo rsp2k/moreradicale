@@ -364,7 +364,7 @@ class TestVersioningWriteIntegration(BaseTest):
             "auth": {"type": "none"},
             "storage": {"versioning": "True"}
         })
-        storage_folder = self._init_git_storage()
+        self._init_git_storage()
 
         # Create user collection first
         status, _, _ = self.request("MKCOL", "/user/")

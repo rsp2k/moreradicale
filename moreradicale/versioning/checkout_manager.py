@@ -319,7 +319,7 @@ class CheckoutManager:
             for filename in files:
                 if filename.endswith(self.CHECKOUT_SUFFIX):
                     marker_path = os.path.join(root, filename)
-                    rel_marker = os.path.relpath(marker_path, self.storage_folder)
+                    os.path.relpath(marker_path, self.storage_folder)
 
                     # Derive resource path from marker path
                     # .event.ics.checkout -> event.ics
@@ -358,7 +358,7 @@ class CheckoutManager:
             for filename in files:
                 if filename.endswith(self.CHECKOUT_SUFFIX):
                     marker_path = os.path.join(root, filename)
-                    rel_marker = os.path.relpath(marker_path, self.storage_folder)
+                    os.path.relpath(marker_path, self.storage_folder)
 
                     # Derive resource path
                     basename = filename[1:-len(self.CHECKOUT_SUFFIX)]

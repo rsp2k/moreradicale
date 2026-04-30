@@ -600,7 +600,7 @@ class TestVersioningIntegration(BaseTest):
         )
         assert status == 201
         self._commit_storage("Add event v1")
-        sha_v1 = self._get_head_sha()[:8]
+        self._get_head_sha()[:8]
 
         # Update event (version 2)
         event_v2 = event_v1.replace("Event", "Updated Event")

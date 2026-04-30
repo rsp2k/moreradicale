@@ -6,7 +6,6 @@ Note: Full LDAP integration tests require a running LDAP server.
 """
 
 
-
 class TestVCardBuilder:
     """Tests for VCardBuilder."""
 

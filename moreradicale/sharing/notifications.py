@@ -544,7 +544,7 @@ class NotificationManager:
                 }
 
                 # Generate XML content
-                xml_content = ET.tostring(notification.to_xml(),
+                ET.tostring(notification.to_xml(),
                                           encoding="unicode")
 
                 # Store as item with XML content

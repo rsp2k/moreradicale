@@ -314,7 +314,7 @@ class TestSubdomainExtractor:
 
         # www is often not a tenant, but implementation may vary
         environ = {"HTTP_HOST": "www.example.com"}
-        ctx = extractor.extract(environ, "/", "")
+        extractor.extract(environ, "/", "")
 
         # This test documents current behavior
         # www is treated as a tenant unless specifically excluded

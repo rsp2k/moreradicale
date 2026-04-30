@@ -832,6 +832,7 @@ class EmailEvent:
 
 class EmailTodo:
     """Wrapper for VTODO items for email notifications."""
+
     def __init__(self,
                  todo: Todo,
                  ics_content: str,
@@ -843,6 +844,7 @@ class EmailTodo:
 
 class EmailJournal:
     """Wrapper for VJOURNAL items for email notifications."""
+
     def __init__(self,
                  journal: Journal,
                  ics_content: str,

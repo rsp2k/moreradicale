@@ -9,7 +9,6 @@ Tests the timezone-by-reference feature including:
 """
 
 
-
 from moreradicale.tests import BaseTest
 
 

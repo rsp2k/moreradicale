@@ -198,7 +198,7 @@ class AttachmentHandler:
             managed_id = self.manager.generate_managed_id()
 
             try:
-                metadata = self.attachment_storage.store(
+                self.attachment_storage.store(
                     owner=user,
                     managed_id=managed_id,
                     data=data,

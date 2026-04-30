@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from typing import List, Tuple
 
 
-
 def format_offset(seconds: int) -> str:
     """
     Format UTC offset in iCalendar format (+/-HHMM or +/-HHMMSS).

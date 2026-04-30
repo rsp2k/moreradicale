@@ -150,7 +150,7 @@ class ITIPProcessor:
             if cutype == 'GROUP' and att_email.lower() in [g.lower() for g in self.groups]:
                 # Expand this group
                 group_key = next(g for g in self.groups if g.lower() == att_email.lower())
-                group_def = self.groups[group_key]
+                self.groups[group_key]
                 members = self._get_group_members(group_key, set())
 
                 logger.info(f"Expanding group {att_email} into {len(members)} members")
@@ -2723,14 +2723,14 @@ class ITIPProcessor:
         # Build time-range filter element for the query
         # Convert datetime to ISO format strings
         if hasattr(dtstart, 'strftime'):
-            start_str = dtstart.strftime('%Y%m%dT%H%M%SZ')
+            dtstart.strftime('%Y%m%dT%H%M%SZ')
         else:
-            start_str = str(dtstart).replace('-', '').replace(':', '')
+            str(dtstart).replace('-', '').replace(':', '')
 
         if hasattr(dtend, 'strftime'):
-            end_str = dtend.strftime('%Y%m%dT%H%M%SZ')
+            dtend.strftime('%Y%m%dT%H%M%SZ')
         else:
-            end_str = str(dtend).replace('-', '').replace(':', '')
+            str(dtend).replace('-', '').replace(':', '')
 
         # Collect all busy periods
         busy_periods = []
@@ -2832,13 +2832,13 @@ class ITIPProcessor:
             fb = vfb.add('freebusy')
             # Format as PERIOD: start/end
             if hasattr(start, 'strftime'):
-                start_str = start.strftime('%Y%m%dT%H%M%SZ')
+                start.strftime('%Y%m%dT%H%M%SZ')
             else:
-                start_str = str(start)
+                str(start)
             if hasattr(end, 'strftime'):
-                end_str = end.strftime('%Y%m%dT%H%M%SZ')
+                end.strftime('%Y%m%dT%H%M%SZ')
             else:
-                end_str = str(end)
+                str(end)
 
             fb.value = [(start, end)]
             fb.params['FBTYPE'] = [fbtype]
@@ -3298,11 +3298,9 @@ class ITIPProcessor:
 
                 # Add delegate as new ATTENDEE with DELEGATED-FROM
                 # Get properties from delegator for the delegate
-                delegator_att = None
                 for att in attendees:
                     att_email = extract_email(att.value)
                     if att_email and att_email.lower() == delegator_email.lower():
-                        delegator_att = att
                         break
 
                 # Create new attendee for delegate

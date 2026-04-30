@@ -203,7 +203,7 @@ class ApplicationPartCheckout(ApplicationBase):
         """Return 409 Conflict response."""
         # Build DAV:error response
         error = ET.Element(xmlutils.make_clark("D:error"))
-        no_lock = ET.SubElement(error, xmlutils.make_clark("D:cannot-modify-version-controlled-content"))
+        ET.SubElement(error, xmlutils.make_clark("D:cannot-modify-version-controlled-content"))
         desc = ET.SubElement(error, xmlutils.make_clark("D:responsedescription"))
         desc.text = message or "Resource already checked out"
 

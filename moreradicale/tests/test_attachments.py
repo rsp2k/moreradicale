@@ -493,7 +493,7 @@ permissions: RrWw""")
             login="user:",
         )
         assert status == 201
-        managed_id = headers["Cal-Managed-ID"]
+        headers["Cal-Managed-ID"]
 
         # Verify the event has the attachment with correct filename
         _, event_data = self.get("/user/calendar/event.ics", login="user:")

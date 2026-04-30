@@ -218,8 +218,8 @@ def _limit_freebusy_set(item_text: str, start: datetime.datetime,
         for period_start, period_end in periods:
             fb = vfb.add('freebusy')
             # Format as PERIOD (start/end)
-            start_str = period_start.strftime('%Y%m%dT%H%M%SZ')
-            end_str = period_end.strftime('%Y%m%dT%H%M%SZ')
+            period_start.strftime('%Y%m%dT%H%M%SZ')
+            period_end.strftime('%Y%m%dT%H%M%SZ')
             fb.value = [(period_start, period_end)]
             if fb_type != 'BUSY':
                 fb.params['FBTYPE'] = [fb_type]

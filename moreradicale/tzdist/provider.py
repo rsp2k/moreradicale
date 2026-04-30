@@ -102,7 +102,6 @@ class ZoneinfoProvider(BaseTimezoneProvider):
 
         transitions = []
         prev_offset = None
-        prev_name = None
 
         # Sample every day to detect transitions
         current = datetime(start_year, 1, 1, tzinfo=tz)
@@ -124,7 +123,6 @@ class ZoneinfoProvider(BaseTimezoneProvider):
                     transitions.append((exact_dt, name or "", utc_offset, dst_offset))
 
             prev_offset = offset
-            prev_name = name
             current += timedelta(days=1)
 
         # If no transitions found, add the standard offset

@@ -155,7 +155,7 @@ class TestNotificationXML:
         )
 
         xml_elem = notification.to_xml()
-        xml_str = ET.tostring(xml_elem, encoding="unicode")
+        ET.tostring(xml_elem, encoding="unicode")
 
         # Verify root element
         assert xml_elem.tag == xmlutils.make_clark("CS:notification")
@@ -228,7 +228,7 @@ class TestNotificationXML:
         )
 
         xml_elem = notification.to_xml()
-        xml_str = ET.tostring(xml_elem, encoding="unicode")
+        ET.tostring(xml_elem, encoding="unicode")
 
         # Verify root element
         assert xml_elem.tag == xmlutils.make_clark("CS:notification")
