@@ -1116,8 +1116,8 @@ class EmailConfig:
         """
         Return a string representation of the EmailConfig.
         """
-        return f"EmailConfig(host={self.host}, port={self.port}, username={self.username}, " \
-        f"from_email={self.from_email}, send_mass_emails={self.send_mass_emails}, dryrun={self.dryrun})"
+        return (f"EmailConfig(host={self.host}, port={self.port}, username={self.username}, "
+                f"from_email={self.from_email}, send_mass_emails={self.send_mass_emails}, dryrun={self.dryrun})")
 
     def __repr__(self):
         return self.__str__()

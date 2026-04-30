@@ -194,7 +194,7 @@ def check_vapid_dependencies() -> Tuple[bool, str]:
         return False, "cryptography package required - install with: pip install cryptography"
 
     try:
-        import pywebpush
+        import pywebpush  # noqa: F401
         return True, "VAPID dependencies available"
     except ImportError:
         return False, "pywebpush package required - install with: pip install pywebpush"

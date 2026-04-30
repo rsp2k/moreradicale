@@ -545,7 +545,7 @@ class NotificationManager:
 
                 # Generate XML content
                 ET.tostring(notification.to_xml(),
-                                          encoding="unicode")
+                            encoding="unicode")
 
                 # Store as item with XML content
                 # Note: Using a simple approach - store metadata with props

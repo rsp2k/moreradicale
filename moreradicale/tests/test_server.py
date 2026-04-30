@@ -194,7 +194,7 @@ class TestBaseServerRequests(BaseTest):
                     continue
                 long_name = "--%s-%s" % (section, option.replace("_", "-"))
                 if with_bool_options and config.DEFAULT_CONFIG_SCHEMA.get(
-                        section, {}).get(option, {}).get("type") == bool:
+                        section, {}).get(option, {}).get("type") is bool:
                     if not cast(bool, self.configuration.get(section, option)):
                         long_name = "--no%s" % long_name[1:]
                     config_args.append(long_name)

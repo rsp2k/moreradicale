@@ -371,7 +371,6 @@ def time_range_fill(vobject_item: vobject.base.Component,
 
     def range_fn(range_start: datetime, range_end: datetime,
                  is_recurrence: bool) -> bool:
-        nonlocal ranges
         if start < range_end and range_start < end:
             ranges.append((range_start, range_end))
             if n > 0 and len(ranges) >= n:

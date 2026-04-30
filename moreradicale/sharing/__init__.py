@@ -29,7 +29,7 @@ RADICALE:schedule-delegates and RADICALE:calendar-proxy-* properties.
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Dict, List, Optional

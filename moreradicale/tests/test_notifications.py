@@ -293,7 +293,7 @@ class TestNotificationConstants:
         assert DAV == "DAV:"
 
 
-from moreradicale.tests import BaseTest
+from moreradicale.tests import BaseTest  # noqa: E402
 
 
 class TestNotificationManager(BaseTest):

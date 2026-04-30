@@ -155,7 +155,7 @@ class AutoScheduler:
         """Check if VAVAILABILITY support is available."""
         try:
             # Try importing availability module
-            from moreradicale.itip import availability
+            from moreradicale.itip import availability  # noqa: F401
             return True
         except ImportError:
             logger.debug("VAVAILABILITY support not available")

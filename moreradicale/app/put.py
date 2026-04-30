@@ -337,7 +337,7 @@ class ApplicationPartPut(ApplicationBase):
             props = prepared_props
             if prepared_exc_info:
                 # Use OverflowError as flag for max_resource_size
-                if prepared_exc_info[0] == OverflowError:
+                if prepared_exc_info[0] is OverflowError:
                     return httputils.PRECONDITION_FAILED
                 else:
                     logger.warning(

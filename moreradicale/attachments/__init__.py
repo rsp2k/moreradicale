@@ -31,11 +31,10 @@ Reference: https://www.rfc-editor.org/rfc/rfc8607.html
 """
 
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List
 
 from moreradicale.log import logger
 

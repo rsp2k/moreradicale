@@ -519,13 +519,13 @@ END:VCALENDAR"""
 # Email/Webhook Integration Tests (Phase 2)
 # =============================================================================
 
-import hashlib
-import hmac
-import json
-from typing import Tuple
+import hashlib  # noqa: E402
+import hmac  # noqa: E402
+import json  # noqa: E402
+from typing import Tuple  # noqa: E402
 
-from moreradicale import email_utils
-from moreradicale.itip import email_parser
+from moreradicale import email_utils  # noqa: E402
+from moreradicale.itip import email_parser  # noqa: E402
 
 
 class TestEmailMIMEBuilder:

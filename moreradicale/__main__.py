@@ -100,7 +100,7 @@ def run() -> None:
             with contextlib.suppress(KeyError):
                 del kwargs["internal"]
 
-            if kwargs["type"] == bool:
+            if kwargs["type"] is bool:
                 del kwargs["type"]
                 opposite_args = list(kwargs.pop("opposite_aliases", ()))
                 opposite_args.append("--no%s" % long_name[1:])
