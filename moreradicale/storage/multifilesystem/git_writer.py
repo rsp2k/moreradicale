@@ -328,89 +328,89 @@ class GitMetadataWriter:
         success, sha = self._run_git(["rev-parse", "HEAD"])
         return sha if success else None
 
-    def add_label(self, label_name: str, commit_sha: str, relative_path: Optional[str] = None, 
+    def add_label(self, label_name: str, commit_sha: str, relative_path: Optional[str] = None,
                   force: bool = False) -> bool:
         """
         Add a label (git tag) to a specific commit.
-        
+
         RFC 3253 §8.1: ADD operation adds a label to a version.
-        
+
         Args:
             label_name: Name of the label to add
             commit_sha: Commit SHA to label
             relative_path: Optional file path (for namespacing tags)
             force: If True, move existing label (set operation)
-        
+
         Returns:
             True if successful
         """
         if not self.is_available():
             logger.warning("Git not available for label operations")
             return False
-        
+
         # Validate inputs
         if not all(c.isalnum() or c in "-_." for c in label_name):
             logger.warning("Invalid label name: %s", label_name)
             return False
-        
+
         if not commit_sha or not commit_sha.isalnum():
             logger.warning("Invalid commit SHA: %s", commit_sha)
             return False
-        
+
         # Build full tag name
         if relative_path:
             normalized_path = relative_path.strip("/")
             tag_name = f"{normalized_path}/{label_name}"
         else:
             tag_name = label_name
-        
+
         # Create lightweight tag
         args = ["tag"]
         if force:
             args.append("-f")  # Force overwrites existing tag
         args.extend([tag_name, commit_sha])
-        
+
         success, output = self._run_git(args)
-        
+
         if success:
             logger.info(f"Label '{label_name}' added to commit {commit_sha[:8]} (path: {relative_path or 'global'})")
             return True
         else:
             logger.warning(f"Failed to add label '{label_name}': {output}")
             return False
-    
+
     def remove_label(self, label_name: str, relative_path: Optional[str] = None) -> bool:
         """
         Remove a label (delete git tag).
-        
+
         RFC 3253 §8.3: REMOVE operation removes a label from all versions.
-        
+
         Args:
             label_name: Name of the label to remove
             relative_path: Optional file path (for namespaced tags)
-        
+
         Returns:
             True if successful
         """
         if not self.is_available():
             logger.warning("Git not available for label operations")
             return False
-        
+
         # Validate label name
         if not all(c.isalnum() or c in "-_." for c in label_name):
             logger.warning("Invalid label name: %s", label_name)
             return False
-        
+
         # Build full tag name
         if relative_path:
             normalized_path = relative_path.strip("/")
             tag_name = f"{normalized_path}/{label_name}"
         else:
             tag_name = label_name
-        
+
         # Delete tag
         success, output = self._run_git(["tag", "-d", tag_name])
-        
+
         if success:
             logger.info(f"Label '{label_name}' removed (path: {relative_path or 'global'})")
             return True
@@ -421,61 +421,61 @@ class GitMetadataWriter:
                 return True
             logger.warning(f"Failed to remove label '{label_name}': {output}")
             return False
-    
+
     def set_label(self, label_name: str, commit_sha: str, relative_path: Optional[str] = None) -> bool:
         """
         Set a label to a specific commit (remove from others, add to this one).
-        
+
         RFC 3253 §8.2: SET operation moves a label to a different version.
-        
+
         Args:
             label_name: Name of the label
             commit_sha: Commit SHA to assign label to
             relative_path: Optional file path (for namespacing tags)
-        
+
         Returns:
             True if successful
         """
         # SET is just ADD with force=True (git tag -f)
         return self.add_label(label_name, commit_sha, relative_path, force=True)
-    
+
     def get_labels_for_commit(self, commit_sha: str, relative_path: Optional[str] = None) -> List[str]:
         """
         Get all labels pointing to a commit.
-        
+
         This is a convenience method - delegates to GitMetadataReader.
-        
+
         Args:
             commit_sha: Commit SHA
             relative_path: Optional file path filter
-        
+
         Returns:
             List of label names
         """
         if not self.is_available():
             return []
-        
+
         # Build full tag name filter if path specified
         if relative_path:
             normalized_path = relative_path.strip("/")
             tag_pattern = f"{normalized_path}/*"
         else:
             tag_pattern = "*"
-        
+
         # Get tags pointing to commit
         success, output = self._run_git([
             "tag", "--points-at", commit_sha, "-l", tag_pattern
         ])
-        
+
         if not success or not output:
             return []
-        
+
         tags = output.strip().splitlines()
-        
+
         # Strip path prefix if present
         if relative_path:
             normalized_path = relative_path.strip("/")
-            return [tag[len(normalized_path) + 1:] if tag.startswith(f"{normalized_path}/") else tag 
+            return [tag[len(normalized_path) + 1:] if tag.startswith(f"{normalized_path}/") else tag
                     for tag in tags]
-        
+
         return tags

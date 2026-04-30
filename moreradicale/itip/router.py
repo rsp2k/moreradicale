@@ -9,21 +9,21 @@ from typing import Tuple, Optional
 def extract_email(mailto_uri: str) -> Optional[str]:
     """
     Extract email address from mailto: URI.
-    
+
     Args:
         mailto_uri: URI like "mailto:user@example.com"
-        
+
     Returns:
         Email address or None
     """
     if not mailto_uri:
         return None
-    
+
     # Remove mailto: prefix if present
     email = mailto_uri.lower()
     if email.startswith('mailto:'):
         email = email[7:]
-    
+
     # Basic email validation
     # Allow both user@example.com and user@localhost formats
     if '@' in email and re.match(r'^[^@]+@[^@]+$', email):
@@ -35,28 +35,28 @@ def extract_email(mailto_uri: str) -> Optional[str]:
 def route_attendee(attendee_email: str, storage, base_prefix: str = "") -> Tuple[bool, Optional[str]]:
     """
     Determine if attendee is internal (local Radicale user).
-    
+
     For simplicity, we consider attendees internal if:
     1. Email username matches a principal path that exists
     2. For example: bob@localhost -> /bob/ principal exists
-    
+
     Args:
         attendee_email: Email address (e.g., "bob@localhost")
         storage: Radicale storage backend
         base_prefix: Base prefix for paths
-        
+
     Returns:
         Tuple of (is_internal, principal_path)
     """
     if not attendee_email or '@' not in attendee_email:
         return False, None
-    
+
     # Extract username from email
     username = attendee_email.split('@')[0]
-    
+
     # Try to find principal at /<username>/
     principal_path = f"/{username}/"
-    
+
     try:
         # Check if principal exists (no lock needed - we're already in PUT handler's lock)
         discovered = list(storage.discover(principal_path, depth="0"))
@@ -67,7 +67,7 @@ def route_attendee(attendee_email: str, storage, base_prefix: str = "") -> Tuple
                 return True, principal_path
     except Exception:
         pass
-    
+
     return False, None
 
 

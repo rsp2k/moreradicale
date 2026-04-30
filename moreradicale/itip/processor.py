@@ -235,10 +235,10 @@ class ITIPProcessor:
     def process_put(self, vcal_text: str, user: str, path: str) -> None:
         """
         Process a PUT request that may need scheduling.
-        
+
         This is called when an event/todo/journal is created or updated.
         If it has attendees and an organizer, we generate and deliver iTIP messages.
-        
+
         Args:
             vcal_text: iCalendar text being PUT
             user: User making the PUT request
@@ -248,11 +248,11 @@ class ITIPProcessor:
         if not needs_scheduling(vcal_text):
             logger.debug("Item doesn't need scheduling (no ORGANIZER+ATTENDEE)")
             return
-        
+
         try:
             # Parse the calendar object
             vcal = vobject.readOne(vcal_text)
-            
+
             # Get the component
             component = None
             comp_type_name = None
@@ -261,11 +261,11 @@ class ITIPProcessor:
                     component = getattr(vcal, comp_type)
                     comp_type_name = comp_type.upper()
                     break
-            
+
             if not component:
                 logger.warning("No schedulable component found")
                 return
-            
+
             # Extract organizer
             if not hasattr(component, 'organizer'):
                 logger.debug("No organizer, skipping scheduling")
@@ -340,15 +340,15 @@ class ITIPProcessor:
                 itip_attendee.principal_path = principal_path
 
                 itip_attendees.append(itip_attendee)
-            
+
             if not itip_attendees:
                 logger.debug("No valid attendees found")
                 return
-            
+
             # Get UID and SEQUENCE
             uid = component.uid.value
             sequence = component.sequence.value if hasattr(component, 'sequence') else 0
-            
+
             # Create iTIP message for REQUEST
             # For implicit scheduling, we generate REQUEST when organizer creates/updates event
             itip_msg = ITIPMessage(
@@ -360,7 +360,7 @@ class ITIPProcessor:
                 component_type=comp_type_name,
                 icalendar_text=self._generate_itip_request(vcal, component)
             )
-            
+
             # Deliver to internal attendees
             self._deliver_internal(itip_msg)
 
@@ -375,7 +375,7 @@ class ITIPProcessor:
                 logger.error(f"External delivery failed: {e}", exc_info=True)
 
             logger.info(f"Processed iTIP scheduling for {uid}: {len([a for a in itip_attendees if a.is_internal])} internal, {len([a for a in itip_attendees if not a.is_internal])} external")
-            
+
         except Exception as e:
             logger.error(f"Error processing iTIP scheduling: {e}", exc_info=True)
 
@@ -526,11 +526,11 @@ class ITIPProcessor:
     def _generate_itip_request(self, vcal: vobject.base.Component, component: vobject.base.Component) -> str:
         """
         Generate iTIP REQUEST message from calendar component.
-        
+
         Args:
             vcal: Parent VCALENDAR
             component: VEVENT/VTODO/VJOURNAL component
-            
+
         Returns:
             iCalendar text with METHOD:REQUEST
         """
@@ -539,11 +539,11 @@ class ITIPProcessor:
         itip_vcal.add('version').value = '2.0'
         itip_vcal.add('prodid').value = '-//Radicale//NONSGML Radicale Server//EN'
         itip_vcal.add('method').value = 'REQUEST'
-        
+
         # Clone the component
         comp_type = component.name.lower()
         itip_comp = itip_vcal.add(comp_type)
-        
+
         # Copy all properties
         for prop in component.getChildren():
             if prop.name.lower() not in ('method',):  # Skip METHOD at component level
@@ -552,7 +552,7 @@ class ITIPProcessor:
                 if hasattr(prop, 'params'):
                     for param_name, param_values in prop.params.items():
                         itip_comp.contents[prop.name.lower()][-1].params[param_name] = param_values
-        
+
         return itip_vcal.serialize()
 
     def _generate_itip_cancel(self, vcal: vobject.base.Component, component: vobject.base.Component) -> str:

@@ -6619,12 +6619,12 @@ END:VCALENDAR"""
 
 class TestVJOURNALScheduling(BaseTest):
     """Test VJOURNAL scheduling support (RFC 5546 §3.2).
-    
+
     VJOURNAL supports only 3 iTIP methods:
     - PUBLISH: Post a journal entry
     - ADD: Add instances to recurring journal
     - CANCEL: Cancel journal entry (via DELETE)
-    
+
     VJOURNAL does NOT support interactive scheduling:
     - REQUEST, REPLY, REFRESH, COUNTER, DECLINECOUNTER not applicable
     """
@@ -6824,7 +6824,7 @@ END:VCALENDAR"""
         # Find the CANCEL message and verify it's a VJOURNAL
         inbox_items = [href for href in responses.keys()
                       if href != "/bob/schedule-inbox/"]
-        
+
         if inbox_items:
             # Read the first inbox item
             item_href = inbox_items[0]

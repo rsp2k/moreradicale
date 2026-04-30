@@ -470,34 +470,34 @@ class GitMetadataReader:
     def get_labels_for_commit(self, commit_sha: str, relative_path: Optional[str] = None) -> List[str]:
         """
         Get all labels (git tags) pointing to a specific commit.
-        
+
         RFC 3253 §8: Labels are names that can be used to select a version.
         We implement this using git tags.
-        
+
         Args:
             commit_sha: Git commit SHA
             relative_path: Optional file path to filter labels
-        
+
         Returns:
             List of label names
         """
         if not self.is_available():
             return []
-        
+
         # Validate SHA
         if not commit_sha or not commit_sha.isalnum():
             return []
-        
+
         # Get all tags pointing to this commit
         success, output = self._run_git([
             "tag", "--points-at", commit_sha
         ])
-        
+
         if not success or not output:
             return []
-        
+
         tags = output.strip().splitlines()
-        
+
         # If relative_path specified, filter to tags for this file
         # We use tag naming convention: <relative-path>/<label-name>
         # Example: user/calendar.ics/event.ics/production
@@ -511,72 +511,72 @@ class GitMetadataReader:
                     label_name = tag[len(normalized_path) + 1:]
                     filtered_tags.append(label_name)
             return filtered_tags
-        
+
         return tags
-    
+
     def get_commit_for_label(self, label_name: str, relative_path: Optional[str] = None) -> Optional[str]:
         """
         Get the commit SHA for a given label.
-        
+
         Args:
             label_name: Label name to look up
             relative_path: Optional file path (tags are namespaced by path)
-        
+
         Returns:
             Commit SHA or None if label not found
         """
         if not self.is_available():
             return None
-        
+
         # Validate label name (alphanumeric, dash, underscore, dot)
         if not all(c.isalnum() or c in "-_." for c in label_name):
             logger.warning("Invalid label name: %s", label_name)
             return None
-        
+
         # Build full tag name
         if relative_path:
             normalized_path = relative_path.strip("/")
             tag_name = f"{normalized_path}/{label_name}"
         else:
             tag_name = label_name
-        
+
         # Get commit for tag
         success, output = self._run_git([
             "rev-list", "-n", "1", tag_name
         ])
-        
+
         if success and output:
             return output.strip()
         return None
-    
+
     def list_all_labels(self, relative_path: Optional[str] = None) -> List[Tuple[str, str]]:
         """
         List all labels in the repository.
-        
+
         Args:
             relative_path: Optional file path to filter labels
-        
+
         Returns:
             List of (label_name, commit_sha) tuples
         """
         if not self.is_available():
             return []
-        
+
         # Get all tags with commit SHAs
         success, output = self._run_git([
             "tag", "-l", "--format=%(refname:short)|%(objectname)"
         ])
-        
+
         if not success or not output:
             return []
-        
+
         results = []
         for line in output.strip().splitlines():
             if "|" not in line:
                 continue
-            
+
             tag_name, commit_sha = line.split("|", 1)
-            
+
             # Filter by relative_path if specified
             if relative_path:
                 normalized_path = relative_path.strip("/")
@@ -585,5 +585,5 @@ class GitMetadataReader:
                     results.append((label_name, commit_sha))
             else:
                 results.append((tag_name, commit_sha))
-        
+
         return results
