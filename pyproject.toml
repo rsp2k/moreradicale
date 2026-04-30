@@ -1,5 +1,5 @@
 [project]
-name = "Radicale"
+name = "moreradicale"
 # When the version is updated, a new section in the CHANGELOG.md file must be
 # added too.
 readme = "README.md"
@@ -44,7 +44,7 @@ argon2 = ["argon2-cffi"]
 ldap = ["ldap3"]
 
 [project.scripts]
-radicale = "radicale.__main__:run"
+moreradicale = "moreradicale.__main__:run"
 
 [build-system]
 requires = ["setuptools>=61.2"]
@@ -87,7 +87,7 @@ exclude = ["*.tests"] # *.tests.*; tests.*; tests
 namespaces = false
 
 [tool.setuptools.package-data]
-radicale = [
+moreradicale = [
     "web/internal_data/css/icon.png",
     "web/internal_data/css/loading.svg",
     "web/internal_data/css/logo.svg",
@@ -113,7 +113,7 @@ exclude = "(^|/)build($|/)"
 
 [tool.coverage.run]
 branch = true
-source = ["radicale"]
+source = ["moreradicale"]
 omit = ["tests/*", "*/tests/*"]
 
 [tool.coverage.report]

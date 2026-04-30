@@ -75,7 +75,7 @@ Failures are EXPECTED (Radicale server not running):
 1. **Start Radicale Server**
    ```bash
    cd /home/rpm/claude/radicale/Radicale
-   python3 -m radicale --config radicale.conf
+   python3 -m moreradicale --config radicale.conf
    ```
    Verify running at http://127.0.0.1:5232
 

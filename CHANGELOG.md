@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.5.14
+* Feature: RFC 3253 WebDAV Versioning (DeltaV) with git backend
+  - Read Operations: View version history, retrieve old content at `/.versions/` paths
+  - Write Operations: CHECKOUT, CHECKIN, UNCHECKOUT, VERSION-CONTROL methods
+  - Auto-versioning: Automatic git commits on PUT when enabled
+  - VERSION-TREE REPORT for RFC 3253 compliant version history queries
+  - PROPFIND support for `DAV:checked-in`, `DAV:version-history`, `DAV:version-name`
+  - Fork control policies: `forbidden`, `discouraged`, `ok` for concurrent checkouts
+  - Checkout expiration with configurable timeout
+  - Configuration options: `versioning`, `versioning_auto`, `versioning_checkout_fork`, `versioning_checkout_timeout`
+
 ## 3.5.13
 * Feature: CalDAV Sharing Notifications (Apple CalendarServer extension)
   - Notification collections at `/{user}/notifications/` for share invitations
@@ -19,7 +30,7 @@
 * Feature: Multi-Tenant Support with configurable isolation
   - Four tenant extraction methods: domain (user@tenant.com), path_prefix (/tenant/user/), header (X-Tenant-ID), subdomain (tenant.example.com)
   - Two isolation modes: logical (shared storage with rights-based access) and filesystem (separate tenant folders)
-  - Per-tenant configuration overrides from config_directory (e.g., /etc/radicale/tenants/acme.conf)
+  - Per-tenant configuration overrides from config_directory (e.g., /etc/moreradicale/tenants/acme.conf)
   - New `tenant_owner_only` rights backend preventing cross-tenant access
   - Per-tenant locking for high-concurrency multi-tenant deployments
   - Configurable default tenant fallback when extraction fails
@@ -471,7 +482,7 @@ See the upgrade checklist below.
     * `{` must be escaped as `{{` and `}` as `}}` in regexes
 * File system storage
   * The storage format is compatible with Radicale 2.x.x
-  * Run `radicale --verify-storage` to check for errors
+  * Run `moreradicale --verify-storage` to check for errors
 * Custom plugins:
   * `auth` and `web` plugins require minor adjustments
   * `rights` plugins must be adapted to the new permission model
@@ -482,7 +493,7 @@ See the upgrade checklist below.
 This release is compatible with version 2.0.0.
 
 * Update required versions for dependencies
-* Get `RADICALE_CONFIG` from WSGI environ
+* Get `MORERADICALE_CONFIG` from WSGI environ
 * Improve HTTP status codes
 * Fix race condition in storage lock creation
 * Raise default limits for content length and timeout

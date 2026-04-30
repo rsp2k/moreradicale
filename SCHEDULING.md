@@ -1,6 +1,6 @@
-# CalDAV Scheduling Guide for Radicale
+# CalDAV Scheduling Guide for moreradicale
 
-This guide explains how to configure and use the RFC 6638 CalDAV Scheduling features in Radicale, enabling meeting invitations, free/busy queries, resource booking, and more.
+This guide explains how to configure and use the RFC 6638 CalDAV Scheduling features in moreradicale, enabling meeting invitations, free/busy queries, resource booking, and more.
 
 ## Table of Contents
 
@@ -22,7 +22,7 @@ This guide explains how to configure and use the RFC 6638 CalDAV Scheduling feat
 
 ## Overview
 
-CalDAV Scheduling (RFC 6638) adds collaborative calendar features to Radicale:
+CalDAV Scheduling (RFC 6638) adds collaborative calendar features to moreradicale:
 
 - **Meeting Invitations**: Organizers can invite attendees to events
 - **RSVP Responses**: Attendees can accept, decline, or tentatively accept
@@ -35,7 +35,7 @@ CalDAV Scheduling (RFC 6638) adds collaborative calendar features to Radicale:
 
 1. **Organizer** creates an event with attendees in their calendar client
 2. **Client** sends the invitation via POST to `/user/schedule-outbox/`
-3. **Radicale** processes the iTIP message and routes it:
+3. **moreradicale** processes the iTIP message and routes it:
    - **Internal attendees**: Delivered to their `/user/schedule-inbox/`
    - **External attendees**: Sent via email (if configured)
    - **Resources (rooms/equipment)**: Auto-accepted if available
@@ -48,7 +48,7 @@ CalDAV Scheduling (RFC 6638) adds collaborative calendar features to Radicale:
 
 ### Minimal Configuration
 
-Add to your Radicale configuration file:
+Add to your moreradicale configuration file:
 
 ```ini
 [scheduling]
@@ -128,7 +128,7 @@ All options are in the `[scheduling]` section:
 
 ## Email Delivery for External Attendees
 
-When attendees are outside your `internal_domain`, Radicale can deliver invitations via email (RFC 6047 iMIP).
+When attendees are outside your `internal_domain`, moreradicale can deliver invitations via email (RFC 6047 iMIP).
 
 ### SMTP Configuration
 
@@ -194,6 +194,276 @@ Event attachments are automatically included in emails:
 
 ---
 
+## Inbound Email Processing (RFC 6047)
+
+When external attendees respond to meeting invitations, their REPLY messages need to reach moreradicale to update the organizer's calendar. R adicale supports two methods: **IMAP polling** and **HTTP webhooks**.
+
+### Why Inbound Processing Matters
+
+Without inbound processing:
+- Organizer sends invitation email to `external@gmail.com`
+- External attendee clicks "Accept" in Gmail
+- **Their REPLY email is lost** - organizer never knows they accepted
+
+With inbound processing:
+- REPLY email arrives at your mailbox or webhook
+- moreradicale processes it and updates PARTSTAT in organizer's calendar
+- Organizer sees "Accepted" status automatically
+
+### Method 1: IMAP Polling
+
+Poll an IMAP mailbox for incoming iTIP REPLY messages.
+
+#### Configuration
+
+```ini
+[scheduling]
+enabled = True
+internal_domain = example.com
+email_enabled = True
+
+# IMAP polling settings
+imap_enabled = True
+imap_server = imap.example.com
+imap_port = 993
+imap_security = ssl           # ssl, starttls, or plain
+imap_username = calendar@example.com
+imap_password = your-password
+imap_folder = INBOX
+imap_poll_interval = 60       # seconds between polls
+
+# Message handling
+imap_processed_folder = Processed  # Move processed messages here
+imap_failed_folder = Failed        # Move failed messages here
+```
+
+#### IMAP Security Options
+
+| Value | Port | Description |
+|-------|------|-------------|
+| `ssl` | 993 | Direct SSL connection (recommended) |
+| `starttls` | 143 | Plain connection upgraded to TLS |
+| `plain` | 143 | Unencrypted (not recommended) |
+
+#### IMAP Folder Management
+
+- **Processed**: Successfully processed REPLY messages
+- **Failed**: Messages that couldn't be processed
+- **No folder specified**: Messages are deleted after processing
+
+#### Starting the IMAP Poller
+
+The poller starts automatically when moreradicale starts if `imap_enabled = True`. Check logs for:
+
+```
+INFO  moreradicale.itip.imap_poller: IMAP poller started: calendar@example.com@imap.example.com:993/INBOX (interval=60s)
+INFO  moreradicale.itip.imap_poller: Processed 2 iTIP message(s) from IMAP
+```
+
+#### Manual Polling (Cron)
+
+For environments where background threads aren't ideal:
+
+```python
+# poll_imap.py
+from moreradicale import config, storage
+from moreradicale.itip.imap_poller import IMAPPoller
+
+cfg = config.Configuration({})
+st = storage.load(cfg)
+poller = IMAPPoller(cfg, st)
+count = poller.poll_once()
+print(f"Processed {count} messages")
+```
+
+Cron job:
+```cron
+*/5 * * * * /usr/bin/python3 /path/to/poll_imap.py >> /var/log/radicale-imap.log 2>&1
+```
+
+### Method 2: HTTP Webhooks
+
+Receive REPLY messages via HTTP POST from email webhook providers.
+
+#### Supported Providers
+
+- **Generic** - Any provider that can POST raw email
+- **SendGrid Inbound Parse** - Pre-parsed email data
+- **Mailgun Routes** - Pre-parsed with attachments
+- **Postmark Inbound** - Clean JSON format
+
+#### Configuration
+
+```ini
+[scheduling]
+enabled = True
+internal_domain = example.com
+
+# Webhook settings
+webhook_enabled = True
+webhook_path = /scheduling/webhook
+webhook_secret = your-random-secret-here
+webhook_allowed_ips = 192.168.1.0/24,10.0.0.0/8
+webhook_provider = generic      # generic, sendgrid, mailgun, postmark
+webhook_max_size = 10485760     # 10 MB
+```
+
+#### Security
+
+Webhooks use **dual authentication**:
+
+1. **IP Whitelist**: Only listed IPs can POST
+2. **HMAC Signature**: Cryptographic verification
+
+```bash
+# Generate HMAC signature (Python example)
+import hmac
+import hashlib
+
+signature = hmac.new(
+    secret.encode('utf-8'),
+    request_body.encode('utf-8'),
+    hashlib.sha256
+).hexdigest()
+```
+
+Include signature in request header:
+```
+X-moreradicale-Signature: sha256=<signature>
+```
+
+#### Provider Setup Examples
+
+**SendGrid Inbound Parse**:
+1. Go to Settings → Inbound Parse
+2. Add domain: `calendar.example.com`
+3. Destination URL: `https://radicale.example.com/scheduling/webhook`
+4. Set `webhook_provider = sendgrid`
+
+**Mailgun Routes**:
+1. Go to Sending → Routes
+2. Filter Expression: `match_recipient("calendar@example.com")`
+3. Actions: Forward to `https://radicale.example.com/scheduling/webhook`
+4. Set `webhook_provider = mailgun`
+
+**Postmark Inbound**:
+1. Go to Servers → Inbound
+2. Webhook URL: `https://radicale.example.com/scheduling/webhook`
+3. Set `webhook_provider = postmark`
+
+**Generic (Any Provider)**:
+1. Configure provider to POST raw email to webhook URL
+2. Set `webhook_provider = generic`
+3. Request body should be raw RFC 822 email
+
+#### Testing Webhooks
+
+```bash
+# Test with curl
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-moreradicale-Signature: sha256=$(echo -n '{...}' | openssl dgst -sha256 -hmac 'your-secret' | cut -d' ' -f2)" \
+  -d '{
+    "from": "external@gmail.com",
+    "to": "calendar@example.com",
+    "subject": "Re: Meeting Invitation",
+    "text/calendar": "BEGIN:VCALENDAR\nMETHOD:REPLY\n..."
+  }' \
+  https://radicale.example.com/scheduling/webhook
+```
+
+Check logs for:
+```
+INFO  moreradicale.app.webhook: Webhook received from 192.168.1.100
+INFO  moreradicale.itip.processor: External REPLY processed: external@gmail.com -> ACCEPTED for event meeting-123
+```
+
+### REPLY Processing Flow
+
+1. **Email arrives** at IMAP or webhook
+2. **Parse iTIP** - Extract METHOD:REPLY
+3. **Validate sender** - Email must match ATTENDEE in iTIP
+4. **Validate organizer** - Must be internal user
+5. **Find event** - Look up by UID in organizer's calendar
+6. **Update PARTSTAT** - Change NEEDS-ACTION → ACCEPTED/DECLINED/etc.
+7. **Save** - Commit updated event
+
+### Security Validation
+
+moreradicale enforces strict security:
+
+| Check | Purpose |
+|-------|---------|
+| Sender matches ATTENDEE | Prevents spoofing responses |
+| Organizer is internal | External → external not allowed |
+| Event exists | Prevents creating fake events |
+| UID matches | Ensures REPLY is for correct event |
+
+If any check fails, REPLY is rejected and logged.
+
+### Troubleshooting Inbound Email
+
+**IMAP: "Authentication failed"**
+- Check username/password
+- Verify IMAP is enabled on email server
+- Try `imap_security = plain` temporarily to diagnose
+
+**IMAP: "No messages processed"**
+- Check email client's sent folder for actual REPLY
+- Verify REPLY has `METHOD:REPLY` in iCalendar part
+- Check logs for parsing errors
+
+**Webhook: 403 Forbidden**
+- Verify IP is in `webhook_allowed_ips`
+- Check HMAC signature calculation
+- Test with `curl` to isolate provider issues
+
+**REPLY ignored**
+- Check sender email matches ATTENDEE
+- Verify organizer is internal user
+- Look for "External REPLY sender mismatch" in logs
+
+### Complete Example
+
+```ini
+[scheduling]
+# Core scheduling
+enabled = True
+internal_domain = example.com
+
+# Outbound email (invitations)
+email_enabled = True
+
+# Inbound email (responses) - IMAP
+imap_enabled = True
+imap_server = imap.example.com
+imap_port = 993
+imap_security = ssl
+imap_username = calendar@example.com
+imap_password = secret
+imap_folder = INBOX
+imap_poll_interval = 30
+imap_processed_folder = Processed
+imap_failed_folder = Failed
+
+# Alternative: Webhook
+webhook_enabled = False
+webhook_path = /scheduling/webhook
+webhook_secret = random-secret-256-bits
+webhook_allowed_ips = 192.168.1.0/24
+webhook_provider = sendgrid
+```
+
+With this setup:
+1. Alice (internal) invites `bob@gmail.com`
+2. Email sent to Bob via SMTP
+3. Bob clicks "Accept" in Gmail
+4. REPLY email arrives in calendar@example.com INBOX
+5. IMAP poller processes it every 30 seconds
+6. Alice's calendar shows Bob as "Accepted"
+
+---
+
 ## Group Expansion
 
 Invite entire teams with a single email address using `CUTYPE=GROUP`.
@@ -223,13 +493,13 @@ Invite entire teams with a single email address using `CUTYPE=GROUP`.
 }
 ```
 
-2. Configure Radicale to use it:
+2. Configure moreradicale to use it:
 
 ```ini
 [scheduling]
 enabled = True
 internal_domain = example.com
-groups_file = /etc/radicale/groups.json
+groups_file = /etc/moreradicale/groups.json
 ```
 
 ### Features
@@ -246,7 +516,7 @@ In your calendar client, invite `engineering@example.com` with `CUTYPE=GROUP`:
 ATTENDEE;CUTYPE=GROUP:mailto:engineering@example.com
 ```
 
-Radicale expands this to individual invitations for alice, bob, and charlie.
+moreradicale expands this to individual invitations for alice, bob, and charlie.
 
 ---
 
@@ -259,7 +529,7 @@ Conference rooms, projectors, and other resources can automatically accept or de
 1. Create a "user" for each resource (e.g., `room101`, `projector1`)
 2. Give the resource a calendar
 3. Invite the resource with `CUTYPE=ROOM` or `CUTYPE=RESOURCE` and `SCHEDULE-AGENT=SERVER`
-4. Radicale's AutoScheduler automatically:
+4. moreradicale's AutoScheduler automatically:
    - Checks the resource's calendar for conflicts
    - Checks VAVAILABILITY constraints (if defined)
    - **Accepts** if the time slot is free (based on policy)
@@ -307,7 +577,7 @@ Configure the file path:
 
 ```ini
 [scheduling]
-resource_policies_file = /etc/radicale/resource-policies.json
+resource_policies_file = /etc/moreradicale/resource-policies.json
 ```
 
 ### Setup
@@ -343,7 +613,7 @@ Resources can define availability patterns using RFC 7953 VAVAILABILITY componen
 ```ical
 BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Radicale//RFC7953//EN
+PRODID:-//moreradicale//RFC7953//EN
 BEGIN:VAVAILABILITY
 UID:room101-availability
 DTSTAMP:20250101T000000Z
@@ -371,7 +641,7 @@ Control how scheduling is processed:
 
 | Value | Behavior |
 |-------|----------|
-| **SERVER** (default) | Radicale handles scheduling automatically |
+| **SERVER** (default) | moreradicale handles scheduling automatically |
 | **CLIENT** | Client handles scheduling, server skips auto-accept |
 | **NONE** | No scheduling processing at all |
 
@@ -392,7 +662,7 @@ Check attendee availability before scheduling meetings.
 ### How It Works
 
 1. Client sends a `VFREEBUSY` REQUEST to schedule-outbox
-2. Radicale queries each attendee's calendars
+2. moreradicale queries each attendee's calendars
 3. Returns busy periods in the response
 
 ### Example Request
@@ -414,7 +684,7 @@ END:VCALENDAR
 
 ### Response
 
-Radicale returns each attendee's busy times:
+moreradicale returns each attendee's busy times:
 
 ```
 FREEBUSY;FBTYPE=BUSY:20251229T100000Z/20251229T110000Z
@@ -526,7 +796,7 @@ Times outside work hours also show as busy-unavailable.
 You can create VAVAILABILITY using the helper function:
 
 ```python
-from radicale.itip.availability import create_vavailability_ics
+from moreradicale.itip.availability import create_vavailability_ics
 
 ics = create_vavailability_ics(
     uid='work-hours',
@@ -548,7 +818,7 @@ ics = create_vavailability_ics(
 
 ## RFC 7986 Extended Properties
 
-Radicale fully supports RFC 7986 - New Properties for iCalendar, which adds rich metadata to calendar events:
+moreradicale fully supports RFC 7986 - New Properties for iCalendar, which adds rich metadata to calendar events:
 
 ### COLOR Property
 
@@ -820,7 +1090,7 @@ curl -X PROPFIND \
 
 ### Organizer Validation
 
-Radicale validates that the authenticated user matches the ORGANIZER in iTIP messages. This prevents:
+moreradicale validates that the authenticated user matches the ORGANIZER in iTIP messages. This prevents:
 - Spoofing invitations from other users
 - Unauthorized access to others' outboxes
 
@@ -895,11 +1165,11 @@ hosts = 0.0.0.0:5232
 
 [auth]
 type = htpasswd
-htpasswd_filename = /etc/radicale/users
+htpasswd_filename = /etc/moreradicale/users
 htpasswd_encryption = bcrypt
 
 [storage]
-filesystem_folder = /var/lib/radicale/collections
+filesystem_folder = /var/lib/moreradicale/collections
 
 [hook]
 # SMTP for external attendee emails
@@ -920,7 +1190,7 @@ email_enabled = True
 email_subject_prefix = [Calendar]
 
 # Group expansion
-groups_file = /etc/radicale/groups.json
+groups_file = /etc/moreradicale/groups.json
 
 [logging]
 level = info
@@ -930,7 +1200,7 @@ level = info
 
 ## Calendar Sharing and Delegation
 
-Radicale supports two collaboration features beyond basic scheduling:
+moreradicale supports two collaboration features beyond basic scheduling:
 
 ### Calendar Sharing
 
@@ -996,12 +1266,12 @@ Allow a delegate (e.g., assistant) to send meeting invitations on behalf of anot
 
 1. **Boss configures delegate**: Boss adds Secretary to their schedule-delegates
 2. **Secretary creates meeting**: Secretary creates event with Boss as ORGANIZER
-3. **Radicale validates**: Secretary is authorized as Boss's delegate
+3. **moreradicale validates**: Secretary is authorized as Boss's delegate
 4. **Invitations sent**: Meeting requests go out from Boss
 
 #### Delegate Properties
 
-Stored in principal's `.Radicale.props`:
+Stored in principal's `.moreradicale.props`:
 
 ```json
 {
@@ -1036,7 +1306,7 @@ Permission levels:
 
 ## Managed Attachments (RFC 8607)
 
-Radicale supports RFC 8607 CalDAV Managed Attachments, enabling server-side storage of event attachments. Instead of embedding large files as base64 in calendar events, attachments are stored separately and referenced by URL. This reduces calendar synchronization bandwidth and improves performance.
+moreradicale supports RFC 8607 CalDAV Managed Attachments, enabling server-side storage of event attachments. Instead of embedding large files as base64 in calendar events, attachments are stored separately and referenced by URL. This reduces calendar synchronization bandwidth and improves performance.
 
 ### Overview
 
@@ -1049,12 +1319,12 @@ Radicale supports RFC 8607 CalDAV Managed Attachments, enabling server-side stor
 
 ### Configuration
 
-Add to your Radicale configuration:
+Add to your moreradicale configuration:
 
 ```ini
 [attachments]
 enabled = True
-filesystem_folder = /var/lib/radicale/attachments
+filesystem_folder = /var/lib/moreradicale/attachments
 max_size = 10000000
 max_per_resource = 20
 ```
@@ -1062,7 +1332,7 @@ max_per_resource = 20
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `False` | Enable managed attachments |
-| `filesystem_folder` | `/var/lib/radicale/attachments` | Directory for attachment storage |
+| `filesystem_folder` | `/var/lib/moreradicale/attachments` | Directory for attachment storage |
 | `max_size` | `10000000` | Maximum attachment size in bytes (default 10MB) |
 | `max_per_resource` | `20` | Maximum attachments per calendar event |
 | `base_url` | `""` | Base URL for attachment serving (auto-detected if empty) |
@@ -1070,7 +1340,7 @@ max_per_resource = 20
 ### Storage Layout
 
 ```
-/var/lib/radicale/attachments/
+/var/lib/moreradicale/attachments/
 ├── alice/
 │   ├── abc123-def4-5678-90ab-cdef12345678
 │   ├── .metadata/
@@ -1135,7 +1405,7 @@ curl -u alice:password \
 
 ### iCalendar ATTACH Property
 
-When you add a managed attachment, Radicale updates the event's ATTACH property:
+When you add a managed attachment, moreradicale updates the event's ATTACH property:
 
 ```
 BEGIN:VEVENT
@@ -1258,5 +1528,5 @@ curl -X POST -u alice:password \
 
 ## Support
 
-- GitHub Issues: https://github.com/Kozea/Radicale/issues
-- Discussions: https://github.com/Kozea/Radicale/discussions
+- GitHub Issues: https://github.com/Kozea/moreradicale/issues
+- Discussions: https://github.com/Kozea/moreradicale/discussions

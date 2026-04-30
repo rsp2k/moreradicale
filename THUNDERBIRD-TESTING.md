@@ -10,7 +10,7 @@
 
 ```bash
 cd /home/rpm/claude/radicale/Radicale
-python3 -m radicale -C test-scheduling-config.ini
+python3 -m moreradicale -C test-scheduling-config.ini
 ```
 
 **Expected output:**

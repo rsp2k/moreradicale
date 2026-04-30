@@ -1,0 +1,261 @@
+# This file is part of Radicale - CalDAV and CardDAV server
+# Copyright © 2008 Nicolas Kandel
+# Copyright © 2008 Pascal Halter
+# Copyright © 2008-2017 Guillaume Ayoub
+# Copyright © 2017-2022 Unrud <unrud@outlook.com>
+# Copyright © 2024-2025 Peter Bieringer <pb@bieringer.de>
+#
+# This library is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Radicale.  If not, see <http://www.gnu.org/licenses/>.
+
+"""
+Helper functions for HTTP.
+
+"""
+
+import contextlib
+import os
+import pathlib
+import sys
+import time
+from http import client
+from typing import List, Mapping, Union, cast
+
+from moreradicale import config, pathutils, types, utils
+from moreradicale.log import logger
+
+if sys.version_info < (3, 9):
+    import pkg_resources
+
+    _TRAVERSABLE_LIKE_TYPE = pathlib.Path
+else:
+    import importlib.abc
+    from importlib import resources
+
+    if sys.version_info < (3, 13):
+        _TRAVERSABLE_LIKE_TYPE = Union[importlib.abc.Traversable, pathlib.Path]
+    else:
+        _TRAVERSABLE_LIKE_TYPE = Union[importlib.resources.abc.Traversable, pathlib.Path]
+
+NOT_ALLOWED: types.WSGIResponse = (
+    client.FORBIDDEN, (("Content-Type", "text/plain"),),
+    "Access to the requested resource forbidden.", None)
+FORBIDDEN: types.WSGIResponse = (
+    client.FORBIDDEN, (("Content-Type", "text/plain"),),
+    "Action on the requested resource refused.", None)
+BAD_REQUEST: types.WSGIResponse = (
+    client.BAD_REQUEST, (("Content-Type", "text/plain"),), "Bad Request", None)
+NOT_FOUND: types.WSGIResponse = (
+    client.NOT_FOUND, (("Content-Type", "text/plain"),),
+    "The requested resource could not be found.", None)
+CONFLICT: types.WSGIResponse = (
+    client.CONFLICT, (("Content-Type", "text/plain"),),
+    "Conflict in the request.", None)
+METHOD_NOT_ALLOWED: types.WSGIResponse = (
+    client.METHOD_NOT_ALLOWED, (("Content-Type", "text/plain"),),
+    "The method is not allowed on the requested resource.", None)
+PRECONDITION_FAILED: types.WSGIResponse = (
+    client.PRECONDITION_FAILED,
+    (("Content-Type", "text/plain"),), "Precondition failed.", None)
+REQUEST_TIMEOUT: types.WSGIResponse = (
+    client.REQUEST_TIMEOUT, (("Content-Type", "text/plain"),),
+    "Connection timed out.", None)
+REQUEST_ENTITY_TOO_LARGE: types.WSGIResponse = (
+    client.REQUEST_ENTITY_TOO_LARGE, (("Content-Type", "text/plain"),),
+    "Request body too large.", None)
+REMOTE_DESTINATION: types.WSGIResponse = (
+    client.BAD_GATEWAY, (("Content-Type", "text/plain"),),
+    "Remote destination not supported.", None)
+DIRECTORY_LISTING: types.WSGIResponse = (
+    client.FORBIDDEN, (("Content-Type", "text/plain"),),
+    "Directory listings are not supported.", None)
+INSUFFICIENT_STORAGE: types.WSGIResponse = (
+    client.INSUFFICIENT_STORAGE, (("Content-Type", "text/plain"),),
+    "Insufficient Storage.  Please contact the administrator.", None)
+INTERNAL_SERVER_ERROR: types.WSGIResponse = (
+    client.INTERNAL_SERVER_ERROR, (("Content-Type", "text/plain"),),
+    "A server error occurred.  Please contact the administrator.", None)
+
+DAV_HEADERS: str = "1, 2, 3, calendar-access, addressbook, extended-mkcol"
+
+
+NOT_IMPLEMENTED: types.WSGIResponse = (
+    client.NOT_IMPLEMENTED, (("Content-Type", "text/plain"),),
+    "Feature not implemented.", None)
+
+
+def get_dav_headers(configuration) -> str:
+    """Get DAV headers with optional feature support."""
+    headers = DAV_HEADERS
+    if configuration.get("scheduling", "enabled"):
+        headers += ", calendar-schedule"
+    if configuration.get("attachments", "enabled"):
+        headers += ", calendar-managed-attachments"
+    # RFC 7809: Advertise timezone-by-reference when TZDIST is enabled
+    if configuration.get("tzdist", "enabled"):
+        headers += ", calendar-no-timezone"
+    return headers
+
+
+MIMETYPES: Mapping[str, str] = {
+    ".css": "text/css",
+    ".eot": "application/vnd.ms-fontobject",
+    ".gif": "image/gif",
+    ".html": "text/html",
+    ".js": "application/javascript",
+    ".manifest": "text/cache-manifest",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".ttf": "application/font-sfnt",
+    ".txt": "text/plain",
+    ".woff": "application/font-woff",
+    ".woff2": "font/woff2",
+    ".xml": "text/xml"}
+FALLBACK_MIMETYPE: str = "application/octet-stream"
+
+
+def decode_request(configuration: "config.Configuration",
+                   environ: types.WSGIEnviron, text: bytes) -> str:
+    """Try to magically decode ``text`` according to given ``environ``."""
+    # List of charsets to try
+    charsets: List[str] = []
+
+    # First append content charset given in the request
+    content_type = environ.get("CONTENT_TYPE")
+    if content_type and "charset=" in content_type:
+        charsets.append(
+            content_type.split("charset=")[1].split(";")[0].strip())
+    # Then append default Radicale charset
+    charsets.append(cast(str, configuration.get("encoding", "request")))
+    # Then append various fallbacks
+    charsets.append("utf-8")
+    charsets.append("iso8859-1")
+    # Remove duplicates
+    for i, s in reversed(list(enumerate(charsets))):
+        if s in charsets[:i]:
+            del charsets[i]
+
+    # Try to decode
+    for charset in charsets:
+        with contextlib.suppress(UnicodeDecodeError):
+            return text.decode(charset)
+    raise UnicodeDecodeError("decode_request", text, 0, len(text),
+                             "all codecs failed [%s]" % ", ".join(charsets))
+
+
+def read_raw_request_body(configuration: "config.Configuration",
+                          environ: types.WSGIEnviron) -> bytes:
+    content_length = int(environ.get("CONTENT_LENGTH") or 0)
+    if not content_length:
+        return b""
+    content = environ["wsgi.input"].read(content_length)
+    if len(content) < content_length:
+        raise RuntimeError("Request body too short: %d" % len(content))
+    return content
+
+
+def read_request_body(configuration: "config.Configuration",
+                      environ: types.WSGIEnviron) -> str:
+    content = decode_request(configuration, environ,
+                             read_raw_request_body(configuration, environ))
+    if configuration.get("logging", "request_content_on_debug"):
+        logger.debug("Request content:\n%s", utils.textwrap_str(content))
+    else:
+        logger.debug("Request content: suppressed by config/option [logging] request_content_on_debug")
+    return content
+
+
+def redirect(location: str, status: int = client.FOUND) -> types.WSGIResponse:
+    return (status,
+            {"Location": location, "Content-Type": "text/plain"},
+            "Redirected to %s" % location, None)
+
+
+def _serve_traversable(
+        traversable: _TRAVERSABLE_LIKE_TYPE, base_prefix: str, path: str,
+        path_prefix: str, index_file: str, mimetypes: Mapping[str, str],
+        fallback_mimetype: str) -> types.WSGIResponse:
+    if path != path_prefix and not path.startswith(path_prefix):
+        raise ValueError("path must start with path_prefix: %r --> %r" %
+                         (path_prefix, path))
+    assert pathutils.sanitize_path(path) == path
+    parts_path = path[len(path_prefix):].strip('/')
+    parts = parts_path.split("/") if parts_path else []
+    for part in parts:
+        if not pathutils.is_safe_filesystem_path_component(part):
+            logger.debug("Web content with unsafe path %r requested", path)
+            return NOT_FOUND
+        if (not traversable.is_dir() or
+                all(part != entry.name for entry in traversable.iterdir())):
+            return NOT_FOUND
+        traversable = traversable.joinpath(part)
+    if traversable.is_dir():
+        if not path.endswith("/"):
+            return redirect(base_prefix + path + "/")
+        if not index_file:
+            return NOT_FOUND
+        traversable = traversable.joinpath(index_file)
+    if not traversable.is_file():
+        return NOT_FOUND
+    content_type = MIMETYPES.get(
+        os.path.splitext(traversable.name)[1].lower(), FALLBACK_MIMETYPE)
+    headers = {"Content-Type": content_type}
+    if isinstance(traversable, pathlib.Path):
+        headers["Last-Modified"] = time.strftime(
+            "%a, %d %b %Y %H:%M:%S GMT",
+            time.gmtime(traversable.stat().st_mtime))
+    answer = traversable.read_bytes()
+    if path == "/.web/index.html" or path == "/.web/":
+        # enable link on the fly in index.html if InfCloud index.html is existing
+        # class="infcloudlink-hidden" -> class="infcloudlink"
+        path_posix = str(traversable)
+        path_posix_infcloud = path_posix.replace("/internal_data/index.html", "/internal_data/infcloud/index.html")
+        if os.path.isfile(path_posix_infcloud):
+            # logger.debug("Enable InfCloud link in served page: %r", path)
+            answer = answer.replace(b"infcloudlink-hidden", b"infcloud")
+    elif path == "/.web/infcloud/config.js":
+        # adjust on the fly default config.js of InfCloud installation
+        # logger.debug("Adjust on-the-fly default InfCloud config.js in served page: %r", path)
+        answer = answer.replace(b"location.pathname.replace(RegExp('/+[^/]+/*(index\\.html)?$'),'')+", b"location.pathname.replace(RegExp('/\\.web\\.infcloud/(index\\.html)?$'),'')+")
+        answer = answer.replace(b"'/caldav.php/',", b"'/',")
+        answer = answer.replace(b"settingsAccount: true,", b"settingsAccount: false,")
+    elif path == "/.web/infcloud/main.js":
+        # adjust on the fly default main.js of InfCloud installation
+        logger.debug("Adjust on-the-fly default InfCloud main.js in served page: %r", path)
+        answer = answer.replace(b"'InfCloud - the open source CalDAV/CardDAV web client'", b"'InfCloud - the open source CalDAV/CardDAV web client - served through Radicale CalDAV/CardDAV server'")
+    return client.OK, headers, answer, None
+
+
+def serve_resource(
+        package: str, resource: str, base_prefix: str, path: str,
+        path_prefix: str = "/.web", index_file: str = "index.html",
+        mimetypes: Mapping[str, str] = MIMETYPES,
+        fallback_mimetype: str = FALLBACK_MIMETYPE) -> types.WSGIResponse:
+    if sys.version_info < (3, 9):
+        traversable = pathlib.Path(
+            pkg_resources.resource_filename(package, resource))
+    else:
+        traversable = resources.files(package).joinpath(resource)
+    return _serve_traversable(traversable, base_prefix, path, path_prefix,
+                              index_file, mimetypes, fallback_mimetype)
+
+
+def serve_folder(
+        folder: str, base_prefix: str, path: str,
+        path_prefix: str = "/.web", index_file: str = "index.html",
+        mimetypes: Mapping[str, str] = MIMETYPES,
+        fallback_mimetype: str = FALLBACK_MIMETYPE) -> types.WSGIResponse:
+    # deprecated: use `serve_resource` instead
+    traversable = pathlib.Path(folder)
+    return _serve_traversable(traversable, base_prefix, path, path_prefix,
+                              index_file, mimetypes, fallback_mimetype)

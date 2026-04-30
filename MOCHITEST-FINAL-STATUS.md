@@ -98,7 +98,7 @@ Our contribution to the Radicale project includes **FOUR levels of testing**:
 **48 pytest tests** - Complete RFC 6638 validation
 ```bash
 cd /home/rpm/claude/radicale/Radicale
-python3 -m pytest radicale/tests/test_scheduling.py -v
+python3 -m pytest moreradicale/tests/test_scheduling.py -v
 # RESULT: 48/48 passing
 ```
 
