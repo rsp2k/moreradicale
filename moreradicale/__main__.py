@@ -204,7 +204,7 @@ def run() -> None:
             if not configuration.get("scheduling", "imap_enabled"):
                 logger.error("IMAP polling is not enabled in configuration")
                 logger.info("Set [scheduling] imap_enabled = True and configure "
-                           "IMAP server details")
+                            "IMAP server details")
                 sys.exit(1)
 
             storage_ = storage.load(configuration)

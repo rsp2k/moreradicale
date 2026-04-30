@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import vobject
 
 from moreradicale.hook import (BaseHook, HookNotificationItem,
-                           HookNotificationItemTypes)
+                               HookNotificationItemTypes)
 from moreradicale.log import logger
 
 PLUGIN_CONFIG_SCHEMA = {
@@ -1115,7 +1115,7 @@ class EmailConfig:
         Return a string representation of the EmailConfig.
         """
         return f"EmailConfig(host={self.host}, port={self.port}, username={self.username}, " \
-               f"from_email={self.from_email}, send_mass_emails={self.send_mass_emails}, dryrun={self.dryrun})"
+        f"from_email={self.from_email}, send_mass_emails={self.send_mass_emails}, dryrun={self.dryrun})"
 
     def __repr__(self):
         return self.__str__()

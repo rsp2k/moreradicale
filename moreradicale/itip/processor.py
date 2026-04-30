@@ -934,8 +934,8 @@ class ITIPProcessor:
             return False, ScheduleStatus.DELIVERY_FAILED
 
     def _process_resource_auto_accept(self, itip_msg: ITIPMessage,
-                                       vcal: vobject.base.Component,
-                                       component: vobject.base.Component) -> None:
+                                      vcal: vobject.base.Component,
+                                      component: vobject.base.Component) -> None:
         """
         Auto-accept/decline for resource attendees (CUTYPE=ROOM or CUTYPE=RESOURCE).
 
@@ -1041,10 +1041,10 @@ class ITIPProcessor:
 
             except Exception as e:
                 logger.error(f"Error processing resource auto-accept for {attendee.email}: {e}",
-                           exc_info=True)
+                             exc_info=True)
 
     def _check_resource_conflict(self, principal_path: str, resource_email: str,
-                                  event_start, event_end, exclude_uid: str) -> bool:
+                                 event_start, event_end, exclude_uid: str) -> bool:
         """
         Check if a resource has conflicting events in the specified time range.
 
@@ -1145,10 +1145,10 @@ class ITIPProcessor:
         return s1 < e2 and s2 < e1
 
     def _add_event_to_resource_calendar(self, principal_path: str,
-                                         vcal: vobject.base.Component,
-                                         component: vobject.base.Component,
-                                         resource_email: str,
-                                         uid: str) -> bool:
+                                        vcal: vobject.base.Component,
+                                        component: vobject.base.Component,
+                                        resource_email: str,
+                                        uid: str) -> bool:
         """
         Add an event to the resource's default calendar with PARTSTAT=ACCEPTED.
 
@@ -2097,7 +2097,7 @@ class ITIPProcessor:
             return httputils.INTERNAL_SERVER_ERROR
 
     def _process_publish(self, vcal: vobject.base.Component, user: str,
-                        base_prefix: str, ical_text: str):
+                         base_prefix: str, ical_text: str):
         """
         Process iTIP PUBLISH message for one-way calendar publication.
 
@@ -2377,7 +2377,7 @@ class ITIPProcessor:
             return 500, {}, b"Internal Server Error", None
 
     def _process_vevent_request(self, vcal: vobject.base.Component, user: str,
-                                 base_prefix: str, ical_text: str):
+                                base_prefix: str, ical_text: str):
         """
         Process iTIP REQUEST message for meeting invitations.
 
@@ -2620,7 +2620,7 @@ class ITIPProcessor:
             dtend = vfreebusy.dtend.value
 
             logger.info(f"Processing VFREEBUSY REQUEST from {organizer_email} "
-                       f"for {dtstart} to {dtend}")
+                        f"for {dtstart} to {dtend}")
 
             # Extract ATTENDEEs
             if not hasattr(vfreebusy, 'attendee'):
@@ -2676,7 +2676,7 @@ class ITIPProcessor:
 
                 except Exception as e:
                     logger.error(f"Failed to calculate free/busy for {attendee_email}: {e}",
-                               exc_info=True)
+                                 exc_info=True)
                     request_status = ET.SubElement(response_elem,
                                                    xmlutils.make_clark("C:request-status"))
                     request_status.text = "5.3;No scheduling support for user"
@@ -2806,7 +2806,7 @@ class ITIPProcessor:
                 principal_path, dtstart, dtend, busy_periods
             )
             logger.debug(f"Applied VAVAILABILITY for {principal_path}, "
-                        f"resulting in {len(busy_periods)} busy periods")
+                         f"resulting in {len(busy_periods)} busy periods")
         except Exception as e:
             logger.warning(f"Error processing VAVAILABILITY for {principal_path}: {e}")
             # Continue with event-only busy periods
@@ -3373,8 +3373,8 @@ class ITIPProcessor:
             return None
 
     def _send_delegation_request(self, vcal: vobject.base.Component,
-                                  delegate_email: str, delegator_email: str,
-                                  base_prefix: str) -> None:
+                                 delegate_email: str, delegator_email: str,
+                                 base_prefix: str) -> None:
         """
         Send a REQUEST to the delegate inviting them to the event.
 
@@ -3472,7 +3472,7 @@ class ITIPProcessor:
             logger.error(f"Error sending delegation request: {e}", exc_info=True)
 
     def _generate_itip_request_for_delegation(self, vcal: vobject.base.Component,
-                                               delegate_email: str) -> str:
+                                              delegate_email: str) -> str:
         """
         Generate iTIP REQUEST for a delegated attendee.
 
@@ -4285,7 +4285,7 @@ class ITIPProcessor:
         return client.OK, headers, ET.tostring(response, encoding="utf-8"), None
 
     def _build_schedule_response_error(self, base_prefix: str, error_msg: str,
-                                        schedule_status: str = "5.3"):
+                                       schedule_status: str = "5.3"):
         """Build error RFC 6638 schedule-response.
 
         Args:

@@ -124,9 +124,9 @@ END:VCALENDAR"""
             dtstamp=datetime.now(timezone.utc),
             items=[
                 PollItem(poll_item_id=1, component_type="VEVENT",
-                        uid="item1", summary="Option A"),
+                         uid="item1", summary="Option A"),
                 PollItem(poll_item_id=2, component_type="VEVENT",
-                        uid="item2", summary="Option B"),
+                         uid="item2", summary="Option B"),
             ]
         )
 
@@ -175,9 +175,9 @@ END:VCALENDAR"""
             dtstamp=datetime.now(timezone.utc),
             items=[
                 PollItem(poll_item_id=1, component_type="VEVENT",
-                        uid="item1", summary="Loser"),
+                         uid="item1", summary="Loser"),
                 PollItem(poll_item_id=2, component_type="VEVENT",
-                        uid="item2", summary="Winner"),
+                         uid="item2", summary="Winner"),
             ]
         )
 

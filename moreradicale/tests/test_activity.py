@@ -191,11 +191,11 @@ class TestActivityIntegration(BaseTest):
         """Initialize git repository in storage folder."""
         storage_folder = self.configuration.get("storage", "filesystem_folder")
         subprocess.run(["git", "init"], cwd=storage_folder, check=True,
-                      capture_output=True)
+                       capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test User"],
-                      cwd=storage_folder, check=True, capture_output=True)
+                       cwd=storage_folder, check=True, capture_output=True)
         subprocess.run(["git", "config", "user.email", "test@example.com"],
-                      cwd=storage_folder, check=True, capture_output=True)
+                       cwd=storage_folder, check=True, capture_output=True)
 
     def _commit_item(self, item_path: str, message: str = "Test commit"):
         """Commit an item to git."""
@@ -203,9 +203,9 @@ class TestActivityIntegration(BaseTest):
         # Path should be relative to storage folder (includes collection-root)
         relative_path = "collection-root" + item_path
         subprocess.run(["git", "add", relative_path], cwd=storage_folder,
-                      check=True, capture_output=True)
+                       check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", message], cwd=storage_folder,
-                      check=True, capture_output=True)
+                       check=True, capture_output=True)
 
     def test_checkout_with_activity_context(self):
         """Test CHECKOUT with activity context."""
@@ -338,7 +338,7 @@ END:VCALENDAR"""
 
         # Update event
         updated_event = event_ics.replace("Checkin Activity Test",
-                                         "Updated Activity Test")
+                                          "Updated Activity Test")
         status, _, _ = self.request(
             "PUT", "/test/calendar.ics/event.ics",
             updated_event,
@@ -373,11 +373,11 @@ class TestActivityPropfind(BaseTest):
         """Initialize git repository in storage folder."""
         storage_folder = self.configuration.get("storage", "filesystem_folder")
         subprocess.run(["git", "init"], cwd=storage_folder, check=True,
-                      capture_output=True)
+                       capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test User"],
-                      cwd=storage_folder, check=True, capture_output=True)
+                       cwd=storage_folder, check=True, capture_output=True)
         subprocess.run(["git", "config", "user.email", "test@example.com"],
-                      cwd=storage_folder, check=True, capture_output=True)
+                       cwd=storage_folder, check=True, capture_output=True)
 
     def _commit_item(self, item_path: str, message: str = "Test commit"):
         """Commit an item to git."""
@@ -385,9 +385,9 @@ class TestActivityPropfind(BaseTest):
         # Path should be relative to storage folder (includes collection-root)
         relative_path = "collection-root" + item_path
         subprocess.run(["git", "add", relative_path], cwd=storage_folder,
-                      check=True, capture_output=True)
+                       check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", message], cwd=storage_folder,
-                      check=True, capture_output=True)
+                       check=True, capture_output=True)
 
     def test_propfind_activity_set_property(self):
         """Test PROPFIND returns activity-set property."""

@@ -50,8 +50,8 @@ class SharingHandler:
         self.notification_manager = NotificationManager(configuration, storage)
 
     def handle_sharing_post(self, user: str, xml_content: ET.Element,
-                           collection: "storage.BaseCollection",
-                           base_prefix: str) -> Tuple[int, dict, str]:
+                            collection: "storage.BaseCollection",
+                            base_prefix: str) -> Tuple[int, dict, str]:
         """
         Handle a sharing POST request.
 
@@ -97,7 +97,7 @@ class SharingHandler:
         # Verify user is the owner
         if collection.owner != user:
             logger.warning("User %s attempted to modify shares on %s (owner: %s)",
-                         user, collection.path, collection.owner)
+                           user, collection.path, collection.owner)
             return httputils.FORBIDDEN
 
         # Process each child element
@@ -112,14 +112,14 @@ class SharingHandler:
                     return result
 
         logger.info("Share resource request completed for %s by %s",
-                   collection.path, user)
+                    collection.path, user)
 
         # Return success
         return client.OK, {"Content-Type": "text/plain"}, ""
 
     def _process_share_set(self, user: str, set_elem: ET.Element,
-                          collection: "storage.BaseCollection"
-                          ) -> Tuple[int, dict, str]:
+                           collection: "storage.BaseCollection"
+                           ) -> Tuple[int, dict, str]:
         """Process a CS:set element to add or update a share."""
         # Extract sharee from href
         href_elem = set_elem.find(xmlutils.make_clark("D:href"))
@@ -167,7 +167,7 @@ class SharingHandler:
         try:
             self.sharing_manager.add_share(collection, user, sharee, access, cn, comment)
             logger.info("Added share: %s -> %s (%s) on %s",
-                       user, sharee, access.value, collection.path)
+                        user, sharee, access.value, collection.path)
 
             # Create invite notification for sharee
             share = self.sharing_manager.get_shares(collection).get(sharee)
@@ -192,8 +192,8 @@ class SharingHandler:
         return client.OK, {}, ""
 
     def _process_share_remove(self, user: str, remove_elem: ET.Element,
-                             collection: "storage.BaseCollection"
-                             ) -> Tuple[int, dict, str]:
+                              collection: "storage.BaseCollection"
+                              ) -> Tuple[int, dict, str]:
         """Process a CS:remove element to remove a share."""
         # Extract sharee from href
         href_elem = remove_elem.find(xmlutils.make_clark("D:href"))
@@ -215,7 +215,7 @@ class SharingHandler:
             removed = self.sharing_manager.remove_share(collection, user, sharee)
             if removed:
                 logger.info("Removed share: %s revoked from %s on %s",
-                          user, sharee, collection.path)
+                            user, sharee, collection.path)
                 # Notify the sharee that their access was revoked
                 collection_name = collection.get_meta("D:displayname") or collection.path
                 self.notification_manager.create_revocation_notification(
@@ -227,7 +227,7 @@ class SharingHandler:
                 )
             else:
                 logger.debug("Share %s not found for removal on %s",
-                           sharee, collection.path)
+                             sharee, collection.path)
         except PermissionError as e:
             logger.warning("Permission denied for share removal: %s", e)
             return httputils.FORBIDDEN
@@ -235,8 +235,8 @@ class SharingHandler:
         return client.OK, {}, ""
 
     def _handle_share_reply(self, user: str, xml_content: ET.Element,
-                           collection: "storage.BaseCollection",
-                           base_prefix: str) -> Tuple[int, dict, str]:
+                            collection: "storage.BaseCollection",
+                            base_prefix: str) -> Tuple[int, dict, str]:
         """
         Handle CS:share-reply request to accept or decline an invitation.
 
@@ -260,13 +260,13 @@ class SharingHandler:
         shares = self.sharing_manager.get_shares(collection)
         if user not in shares:
             logger.warning("User %s has no share invitation for %s",
-                         user, collection.path)
+                           user, collection.path)
             return httputils.NOT_FOUND
 
         user_share = shares[user]
         if user_share.status != InviteStatus.PENDING:
             logger.warning("Share invitation for %s on %s already %s",
-                         user, collection.path, user_share.status.value)
+                           user, collection.path, user_share.status.value)
             return httputils.CONFLICT
 
         # Process the reply

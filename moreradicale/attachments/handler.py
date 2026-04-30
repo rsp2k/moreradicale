@@ -136,7 +136,7 @@ class AttachmentHandler:
         # Check size before reading
         if content_length > self.manager.max_size:
             logger.warning("Attachment too large: %d > %d",
-                          content_length, self.manager.max_size)
+                           content_length, self.manager.max_size)
             return (client.REQUEST_ENTITY_TOO_LARGE,
                     {"Content-Type": "text/plain"},
                     f"Attachment exceeds maximum size of {self.manager.max_size} bytes",
@@ -179,7 +179,7 @@ class AttachmentHandler:
             current_count = count_managed_attachments(item.vobject_item)
             if current_count >= self.manager.max_per_resource:
                 logger.warning("Attachment limit reached: %d >= %d",
-                              current_count, self.manager.max_per_resource)
+                               current_count, self.manager.max_per_resource)
                 return (client.INSUFFICIENT_STORAGE,
                         {"Content-Type": "text/plain"},
                         f"Maximum of {self.manager.max_per_resource} attachments per resource",
@@ -230,7 +230,7 @@ class AttachmentHandler:
             self._save_item(item, path, user)
 
             logger.info("Added attachment %s to %s (size=%d, type=%s)",
-                       managed_id, path, len(data), content_type)
+                        managed_id, path, len(data), content_type)
 
             # Return 201 Created with Cal-Managed-ID header
             return (client.CREATED,
@@ -434,7 +434,7 @@ class AttachmentHandler:
 
         # Try RFC 5987 filename* parameter first (UTF-8 encoded)
         match = re.search(r"filename\*=(?:UTF-8''|utf-8'')([^;\s]+)",
-                         content_disposition, re.IGNORECASE)
+                          content_disposition, re.IGNORECASE)
         if match:
             return unquote(match.group(1))
 

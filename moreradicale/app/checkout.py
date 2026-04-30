@@ -139,10 +139,10 @@ class ApplicationPartCheckout(ApplicationBase):
                 if activity_manager:
                     if activity_manager.add_checkout(activity_id, relative_path):
                         logger.info("Associated checkout %s with activity %s",
-                                  path, activity_id[:8])
+                                    path, activity_id[:8])
                     else:
                         logger.warning("Failed to associate checkout with activity %s",
-                                     activity_id)
+                                       activity_id)
 
             # Build success response
             return self._checkout_success_response(

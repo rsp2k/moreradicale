@@ -121,7 +121,7 @@ class ApplicationPartCheckin(ApplicationBase):
                 for activity_id in activity_ids:
                     if activity_manager.add_version(activity_id, new_sha):
                         logger.info("Added version %s to activity %s",
-                                  new_sha[:8], activity_id[:8])
+                                    new_sha[:8], activity_id[:8])
                     # Remove checkout from activity
                     activity_manager.remove_checkout(activity_id, relative_path)
 

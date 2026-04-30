@@ -277,7 +277,7 @@ END:VCALENDAR"""
         """Test DAV:label-name-set property returns labels."""
         self.configure({"auth": {"type": "none"}})
         self.configure({"storage": {"versioning": "True",
-                                     "versioning_include_in_allprop": "True"}})
+                                    "versioning_include_in_allprop": "True"}})
         self._init_git_repo()
 
         # Create calendar and event

@@ -40,8 +40,8 @@ class ApplicationPartVersionControl(ApplicationBase):
     """Handle VERSION-CONTROL requests for RFC 3253 versioning."""
 
     def do_VERSION_CONTROL(self, environ: types.WSGIEnviron, base_prefix: str,
-                            path: str, user: str, remote_host: str,
-                            remote_useragent: str) -> types.WSGIResponse:
+                           path: str, user: str, remote_host: str,
+                           remote_useragent: str) -> types.WSGIResponse:
         """
         Handle VERSION-CONTROL request (RFC 3253 §3.5).
 

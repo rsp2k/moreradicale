@@ -121,7 +121,7 @@ class PushSender:
 
         if failed_subs:
             logger.warning("Failed to send %d notifications for %s",
-                          len(failed_subs), collection_path)
+                           len(failed_subs), collection_path)
 
         logger.info("Sent %d push notifications for %s change", sent, change_type)
         return sent
@@ -178,7 +178,7 @@ class PushSender:
             )
 
             logger.debug("Push notification sent to %s: %s",
-                        subscription.endpoint[:50], response.status_code)
+                         subscription.endpoint[:50], response.status_code)
             return True
 
         except WebPushException as e:
@@ -196,7 +196,7 @@ class PushSender:
                     logger.warning("Rate limited for subscription %s", subscription.id)
                 else:
                     logger.warning("Push failed for %s: %s (HTTP %d)",
-                                  subscription.id, e, status)
+                                   subscription.id, e, status)
             else:
                 logger.warning("Push failed for %s: %s", subscription.id, e)
 
@@ -204,7 +204,7 @@ class PushSender:
 
         except Exception as e:
             logger.error("Unexpected error sending push to %s: %s",
-                        subscription.id, e)
+                         subscription.id, e)
             return False
 
     def send_test_notification(self, subscription_id: str) -> bool:

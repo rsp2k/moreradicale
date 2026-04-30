@@ -34,7 +34,7 @@ import vobject
 
 import moreradicale.item as radicale_item
 from moreradicale import (httputils, pathutils, rights, storage, types, utils,
-                      xmlutils)
+                          xmlutils)
 from moreradicale.app.base import Access, ApplicationBase
 from moreradicale.hook import HookNotificationItem, HookNotificationItemTypes
 from moreradicale.log import logger

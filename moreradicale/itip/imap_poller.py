@@ -217,7 +217,7 @@ class IMAPPoller:
             status, data = imap.select(self._folder)
             if status != "OK":
                 logger.error("Failed to select IMAP folder %s: %s",
-                            self._folder, data)
+                             self._folder, data)
                 return 0
 
             # Search for all messages

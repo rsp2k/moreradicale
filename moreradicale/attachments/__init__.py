@@ -186,7 +186,7 @@ class AttachmentManager:
         return self._storage_path / safe_owner / ".metadata" / f"{safe_id}.json"
 
     def get_attachment_url(self, base_prefix: str, owner: str,
-                          managed_id: str) -> str:
+                           managed_id: str) -> str:
         """
         Get the URL for retrieving an attachment.
 

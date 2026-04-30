@@ -54,7 +54,7 @@ class ZoneinfoProvider(BaseTimezoneProvider):
         self._cache: Dict[str, ZoneInfo] = {}
         self._available: Set[str] = available_timezones()
         logger.debug("ZoneinfoProvider initialized with %d timezones",
-                    len(self._available))
+                     len(self._available))
 
     def list_timezones(self) -> List[str]:
         """Return all available timezone identifiers, sorted."""
@@ -84,7 +84,7 @@ class ZoneinfoProvider(BaseTimezoneProvider):
         return sorted([
             tzid for tzid in self._available
             if fnmatch.fnmatch(tzid, pattern) or
-               fnmatch.fnmatch(tzid.lower(), pattern.lower())
+            fnmatch.fnmatch(tzid.lower(), pattern.lower())
         ])
 
     def get_transitions(

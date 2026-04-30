@@ -139,7 +139,7 @@ class SyncEngine:
 
             # Fetch with timeout
             with urlopen(request, timeout=self._timeout,
-                        context=ssl_context) as response:
+                         context=ssl_context) as response:
                 # Check content length
                 content_length = response.headers.get("Content-Length")
                 if content_length and int(content_length) > self._max_size:
@@ -247,7 +247,7 @@ class SyncEngine:
 
                 # Extract UID
                 uid_match = re.search(r"^UID:(.+?)(?:\r?\n)", component_data,
-                                     re.MULTILINE)
+                                      re.MULTILINE)
                 if uid_match:
                     uid = uid_match.group(1).strip()
 

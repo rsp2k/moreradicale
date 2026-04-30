@@ -185,7 +185,7 @@ class TestGitMetadataWriter:
 
         # Initialize git repo
         subprocess.run(["git", "init"], cwd=tmp_path, check=True,
-                      capture_output=True)
+                       capture_output=True)
         subprocess.run(
             ["git", "config", "user.email", "test@example.com"],
             cwd=tmp_path, check=True, capture_output=True
@@ -216,7 +216,7 @@ class TestVersioningWriteIntegration(BaseTest):
         """Initialize git in the storage folder."""
         storage_folder = self.configuration.get("storage", "filesystem_folder")
         subprocess.run(["git", "init"], cwd=storage_folder, check=True,
-                      capture_output=True)
+                       capture_output=True)
         subprocess.run(
             ["git", "config", "user.email", "radicale@test.local"],
             cwd=storage_folder, check=True, capture_output=True
@@ -463,7 +463,7 @@ class TestAutoVersioning(BaseTest):
         """Initialize git in the storage folder."""
         storage_folder = self.configuration.get("storage", "filesystem_folder")
         subprocess.run(["git", "init"], cwd=storage_folder, check=True,
-                      capture_output=True)
+                       capture_output=True)
         subprocess.run(
             ["git", "config", "user.email", "radicale@test.local"],
             cwd=storage_folder, check=True, capture_output=True

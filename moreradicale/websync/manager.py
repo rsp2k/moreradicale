@@ -100,7 +100,7 @@ class WebSyncConnection:
                 return True
             except Exception as e:
                 logger.debug("Failed to send to connection %s: %s",
-                           self.connection_id, e)
+                             self.connection_id, e)
         return False
 
     def subscribe(self, path: str):
@@ -186,7 +186,7 @@ class WebSyncManager:
             self._total_connections += 1
 
         logger.info("WebSync: Registered connection %s for user %s",
-                   connection_id, user)
+                    connection_id, user)
         return conn
 
     def unregister_connection(self, connection_id: str):
@@ -231,7 +231,7 @@ class WebSyncManager:
             self._subscriptions[path].add(connection_id)
 
         logger.debug("WebSync: Connection %s subscribed to %s",
-                    connection_id, path)
+                     connection_id, path)
         return True
 
     def unsubscribe(self, connection_id: str, path: str) -> bool:
@@ -250,7 +250,7 @@ class WebSyncManager:
                 self._subscriptions[path].discard(connection_id)
 
         logger.debug("WebSync: Connection %s unsubscribed from %s",
-                    connection_id, path)
+                     connection_id, path)
         return True
 
     def notify(
@@ -305,7 +305,7 @@ class WebSyncManager:
 
         if notified > 0:
             logger.debug("WebSync: Notified %d clients of %s on %s",
-                        notified, notification_type.value, path)
+                         notified, notification_type.value, path)
 
     def get_connection_count(self) -> int:
         """Get current number of active connections."""

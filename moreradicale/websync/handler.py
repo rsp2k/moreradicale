@@ -96,7 +96,7 @@ class WebSyncHandler:
         }
 
         logger.info("WebSync: Upgrade request from user %s, connection %s",
-                   user, connection_id)
+                    user, connection_id)
 
         return 101, headers, b""
 

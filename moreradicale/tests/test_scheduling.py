@@ -214,7 +214,7 @@ END:VCALENDAR"""
         vcal = vobject.readOne(ical_text)
 
         with pytest.raises(validator.ITIPValidationError,
-                          match="REQUEST requires at least one ATTENDEE"):
+                           match="REQUEST requires at least one ATTENDEE"):
             validator.validate_itip_message(vcal)
 
 
@@ -2250,7 +2250,7 @@ END:VCALENDAR"""
 
         # Should have at least one item (the decline notification)
         inbox_items = [p for p in responses.keys()
-                      if p != "/bob/schedule-inbox/" and not p.endswith("/")]
+                       if p != "/bob/schedule-inbox/" and not p.endswith("/")]
         assert len(inbox_items) >= 1, \
             f"Expected decline notification in Bob's inbox. Paths: {list(responses.keys())}"
 
@@ -2509,7 +2509,7 @@ END:VCALENDAR"""
 
         # Carol should now be in the exception
         has_carol = any("carol@example.com" in att.value.lower()
-                       for att in exception.attendee_list)
+                        for att in exception.attendee_list)
         assert has_carol, "Carol should be added to existing exception"
 
     def test_delegation_master_not_affected(self):
@@ -2607,7 +2607,7 @@ END:VCALENDAR"""
 
         # Master should NOT have Carol
         has_carol = any("carol@example.com" in att.value.lower()
-                       for att in master.attendee_list)
+                        for att in master.attendee_list)
         assert not has_carol, "Carol should NOT be in master"
 
         # Master Bob should still be ACCEPTED
@@ -6823,7 +6823,7 @@ END:VCALENDAR"""
 
         # Find the CANCEL message and verify it's a VJOURNAL
         inbox_items = [href for href in responses.keys()
-                      if href != "/bob/schedule-inbox/"]
+                       if href != "/bob/schedule-inbox/"]
 
         if inbox_items:
             # Read the first inbox item

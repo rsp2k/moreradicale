@@ -330,7 +330,7 @@ class NotificationManager:
                 return True
         except Exception as e:
             logger.warning("Failed to create notification collection for %s: %s",
-                          username, e)
+                           username, e)
             return False
 
     def create_invite_notification(self, sharee: str, share: "Share",
@@ -375,7 +375,7 @@ class NotificationManager:
         # Store notification
         if self._store_notification(sharee, notification):
             logger.info("Created invite notification for %s from %s",
-                       sharee, sharer)
+                        sharee, sharer)
             return notification.uid
 
         return None
@@ -417,7 +417,7 @@ class NotificationManager:
         # Store notification
         if self._store_notification(owner, notification):
             logger.info("Created reply notification for %s from %s (%s)",
-                       owner, sharee, "accepted" if accepted else "declined")
+                        owner, sharee, "accepted" if accepted else "declined")
             return notification.uid
 
         return None
@@ -463,7 +463,7 @@ class NotificationManager:
         # Store notification
         if self._store_notification(sharee, notification):
             logger.info("Created revocation notification for %s from %s",
-                       sharee, owner)
+                        sharee, owner)
             return notification.uid
 
         return None
@@ -520,7 +520,7 @@ class NotificationManager:
                                 # Delete the item
                                 self.storage.delete_collection(item.path)
                                 logger.info("Deleted notification %s for %s",
-                                           uid, username)
+                                            uid, username)
                                 return True
         except Exception as e:
             logger.warning("Failed to delete notification %s: %s", uid, e)
@@ -528,7 +528,7 @@ class NotificationManager:
         return False
 
     def _store_notification(self, username: str,
-                           notification: Notification) -> bool:
+                            notification: Notification) -> bool:
         """Store a notification as a resource."""
         import json
 
@@ -545,7 +545,7 @@ class NotificationManager:
 
                 # Generate XML content
                 xml_content = ET.tostring(notification.to_xml(),
-                                         encoding="unicode")
+                                          encoding="unicode")
 
                 # Store as item with XML content
                 # Note: Using a simple approach - store metadata with props
@@ -558,7 +558,7 @@ class NotificationManager:
 
 
 def get_notification_manager(configuration: "config.Configuration",
-                            storage: "storage.BaseStorage"
-                            ) -> NotificationManager:
+                             storage: "storage.BaseStorage"
+                             ) -> NotificationManager:
     """Get NotificationManager instance."""
     return NotificationManager(configuration, storage)

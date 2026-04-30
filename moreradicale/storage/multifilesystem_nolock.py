@@ -40,7 +40,7 @@ class RwLock(pathutils.RwLock):
             raise ValueError("Invalid mode: %r" % mode)
         with self._cond:
             self._cond.wait_for(lambda: not self._writer and (
-                                    mode == "r" or self._readers == 0))
+                mode == "r" or self._readers == 0))
             if mode == "r":
                 self._readers += 1
             else:

@@ -109,7 +109,7 @@ class ActivityManager:
         return os.path.exists(self._activity_file_path(activity_id))
 
     def create_activity(self, creator: str, display_name: str,
-                       description: str = "") -> ActivityInfo:
+                        description: str = "") -> ActivityInfo:
         """
         Create a new activity.
 
@@ -186,7 +186,7 @@ class ActivityManager:
             activity.checkouts.append(resource_path)
             self._save_activity(activity)
             logger.debug("Added checkout %s to activity %s",
-                        resource_path, activity_id[:8])
+                         resource_path, activity_id[:8])
 
         return True
 
@@ -210,7 +210,7 @@ class ActivityManager:
             activity.checkouts.remove(resource_path)
             self._save_activity(activity)
             logger.debug("Removed checkout %s from activity %s",
-                        resource_path, activity_id[:8])
+                         resource_path, activity_id[:8])
 
         return True
 
@@ -234,7 +234,7 @@ class ActivityManager:
             activity.versions.append(version_sha)
             self._save_activity(activity)
             logger.debug("Added version %s to activity %s",
-                        version_sha[:8], activity_id[:8])
+                         version_sha[:8], activity_id[:8])
 
         return True
 
@@ -337,5 +337,5 @@ class ActivityManager:
                 json.dump(activity.to_dict(), f, indent=2)
         except OSError as e:
             logger.error("Failed to save activity %s: %s",
-                        activity.activity_id, e)
+                         activity.activity_id, e)
             raise

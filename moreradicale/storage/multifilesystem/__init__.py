@@ -40,7 +40,7 @@ from moreradicale.storage.multifilesystem.discover import StoragePartDiscover
 from moreradicale.storage.multifilesystem.get import CollectionPartGet
 from moreradicale.storage.multifilesystem.history import CollectionPartHistory
 from moreradicale.storage.multifilesystem.lock import (CollectionPartLock,
-                                                   StoragePartLock)
+                                                       StoragePartLock)
 from moreradicale.storage.multifilesystem.meta import CollectionPartMeta
 from moreradicale.storage.multifilesystem.move import StoragePartMove
 from moreradicale.storage.multifilesystem.sync import CollectionPartSync

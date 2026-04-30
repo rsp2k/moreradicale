@@ -451,7 +451,7 @@ def visit_time_ranges(vobject_item: vobject.base.Component, child_name: str,
         return filter(should_include, child.getrruleset(addRDate=True)), False
 
     def get_children(components: Iterable[vobject.base.Component]) -> Iterator[
-                         Tuple[vobject.base.Component, bool, List[date], Optional[date]]]:
+            Tuple[vobject.base.Component, bool, List[date], Optional[date]]]:
         """Separate main component from recurrence overrides.
 
         Returns tuples of (component, is_recurrence, ignore_dates, thisandfuture_cutoff)

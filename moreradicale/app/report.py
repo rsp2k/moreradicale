@@ -105,7 +105,7 @@ def _limit_recurrence_set(item_text: str, start: datetime.datetime,
         if isinstance(dtstart, datetime.date) and not isinstance(dtstart, datetime.datetime):
             # All-day event: treat as starting at midnight UTC
             dtstart = datetime.datetime.combine(dtstart, datetime.time.min,
-                                                 tzinfo=datetime.timezone.utc)
+                                                tzinfo=datetime.timezone.utc)
 
         # Ensure timezone awareness
         if dtstart.tzinfo is None:
@@ -118,7 +118,7 @@ def _limit_recurrence_set(item_text: str, start: datetime.datetime,
             dtend = vevent.dtend.value
             if isinstance(dtend, datetime.date) and not isinstance(dtend, datetime.datetime):
                 dtend = datetime.datetime.combine(dtend, datetime.time.min,
-                                                   tzinfo=datetime.timezone.utc)
+                                                  tzinfo=datetime.timezone.utc)
             if dtend.tzinfo is None:
                 dtend = dtend.replace(tzinfo=datetime.timezone.utc)
             else:
@@ -134,7 +134,7 @@ def _limit_recurrence_set(item_text: str, start: datetime.datetime,
             filtered_overrides.append(vevent)
         else:
             logger.debug("Filtering out override at %s (outside %s - %s)",
-                        vevent.recurrence_id.value, start, end)
+                         vevent.recurrence_id.value, start, end)
 
     # Rebuild the calendar with filtered events
     cal.vevent_list = [master_event] + filtered_overrides

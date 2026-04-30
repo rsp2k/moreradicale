@@ -248,6 +248,6 @@ class ApplicationPartGet(ApplicationBase):
             headers["Content-Disposition"] = disposition
 
         logger.debug("Serving attachment %s for %s (size=%d, type=%s)",
-                    managed_id, owner, len(data), metadata.content_type)
+                     managed_id, owner, len(data), metadata.content_type)
 
         return client.OK, headers, data, None

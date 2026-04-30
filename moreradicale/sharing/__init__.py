@@ -171,7 +171,7 @@ class SharingManager:
             }
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.warning("Failed to parse shares for %s: %s",
-                          collection.path, e)
+                           collection.path, e)
             return {}
 
     def add_share(self, collection: "storage.BaseCollection",
@@ -218,7 +218,7 @@ class SharingManager:
             if comment:
                 shares[sharee].comment = comment
             logger.info("Updated share: %s shared %s with %s (access=%s)",
-                       owner, collection.path, sharee, access.value)
+                        owner, collection.path, sharee, access.value)
         else:
             # New share
             shares[sharee] = Share(
@@ -230,7 +230,7 @@ class SharingManager:
                 comment=comment,
             )
             logger.info("Added share: %s shared %s with %s (access=%s)",
-                       owner, collection.path, sharee, access.value)
+                        owner, collection.path, sharee, access.value)
 
         # Save to collection metadata
         self._save_shares(collection, shares)
@@ -265,7 +265,7 @@ class SharingManager:
         self._save_shares(collection, shares)
 
         logger.info("Removed share: %s unshared %s from %s",
-                   owner, collection.path, sharee)
+                    owner, collection.path, sharee)
         return True
 
     def accept_share(self, collection: "storage.BaseCollection",
@@ -296,7 +296,7 @@ class SharingManager:
         self._save_shares(collection, shares)
 
         logger.info("Share accepted: %s accepted share of %s",
-                   sharee, collection.path)
+                    sharee, collection.path)
         return True
 
     def decline_share(self, collection: "storage.BaseCollection",
@@ -320,7 +320,7 @@ class SharingManager:
         self._save_shares(collection, shares)
 
         logger.info("Share declined: %s declined share of %s",
-                   sharee, collection.path)
+                    sharee, collection.path)
         return True
 
     def check_share_access(self, username: str,
@@ -344,8 +344,8 @@ class SharingManager:
         return None
 
     def get_calendars_shared_with(self, username: str,
-                                   storage: "storage.BaseStorage"
-                                   ) -> List[str]:
+                                  storage: "storage.BaseStorage"
+                                  ) -> List[str]:
         """
         Get all calendar paths shared with a user.
 
@@ -410,7 +410,7 @@ class SharingManager:
             return json.loads(delegates_json)
         except json.JSONDecodeError as e:
             logger.warning("Failed to parse delegates for %s: %s",
-                          principal.path, e)
+                           principal.path, e)
             return []
 
     def add_delegate(self, principal: "storage.BaseCollection",
@@ -444,7 +444,7 @@ class SharingManager:
         self._save_delegates(principal, delegates)
 
         logger.info("Delegate added: %s granted scheduling to %s",
-                   owner, delegate)
+                    owner, delegate)
         return True
 
     def remove_delegate(self, principal: "storage.BaseCollection",
@@ -472,7 +472,7 @@ class SharingManager:
         self._save_delegates(principal, delegates)
 
         logger.info("Delegate removed: %s revoked scheduling from %s",
-                   owner, delegate)
+                    owner, delegate)
         return True
 
     def is_delegate_for(self, username: str,

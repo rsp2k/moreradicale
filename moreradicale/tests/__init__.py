@@ -90,7 +90,7 @@ class BaseTest:
         encoding: str = self.configuration.get("encoding", "request")
         if login:
             environ["HTTP_AUTHORIZATION"] = "Basic " + base64.b64encode(
-                    login.encode(encoding)).decode()
+                login.encode(encoding)).decode()
         if http_if_match:
             environ["HTTP_IF_MATCH"] = http_if_match
         if remote_useragent:

@@ -161,11 +161,11 @@ def validate_organizer_permission(organizer_email: str, user: str,
 
         if _check_delegation(user, organizer_username, storage, logger):
             logger.info("User %s authorized as delegate for organizer %s",
-                       user, organizer_email)
+                        user, organizer_email)
             return True
 
     logger.warning("User %s attempted to send iTIP as organizer %s (not authorized)",
-                  user, organizer_email)
+                   user, organizer_email)
     return False
 
 
@@ -208,11 +208,11 @@ def _check_delegation(delegate_user: str, organizer_user: str,
         delegates = json.loads(delegates_json)
         if delegate_user in delegates:
             logger.debug("User %s is a schedule-delegate for %s",
-                        delegate_user, organizer_user)
+                         delegate_user, organizer_user)
             return True
 
     except Exception as e:
         logger.debug("Error checking delegation for %s -> %s: %s",
-                    delegate_user, organizer_user, e)
+                     delegate_user, organizer_user, e)
 
     return False

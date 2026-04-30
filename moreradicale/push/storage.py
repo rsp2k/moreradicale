@@ -86,7 +86,7 @@ class SubscriptionStorage:
                 json.dump(subscription.to_dict(), f, indent=2)
 
             logger.info("Added push subscription %s for %s on %s",
-                       subscription.id, subscription.user, subscription.collection_path)
+                        subscription.id, subscription.user, subscription.collection_path)
             return True
 
         except Exception as e:

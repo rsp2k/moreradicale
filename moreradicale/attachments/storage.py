@@ -108,7 +108,7 @@ class AttachmentStorage:
             self._atomic_write(meta_path, meta_json.encode("utf-8"), binary=True)
 
             logger.info("Stored attachment %s for %s (size=%d, type=%s)",
-                       managed_id, owner, len(data), content_type)
+                        managed_id, owner, len(data), content_type)
 
             return metadata
 

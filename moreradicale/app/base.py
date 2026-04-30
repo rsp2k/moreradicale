@@ -23,7 +23,7 @@ import xml.etree.ElementTree as ET
 from typing import Optional
 
 from moreradicale import (auth, config, hook, httputils, pathutils, rights,
-                      storage, types, utils, web, xmlutils)
+                          storage, types, utils, web, xmlutils)
 from moreradicale.log import logger
 
 # HACK: https://github.com/tiran/defusedxml/issues/54

@@ -40,7 +40,7 @@ class VPollProcessor:
         self._configuration = configuration
 
     def process_request(self, ical_data: str, user: str,
-                       calendar_path: str) -> Tuple[bool, str]:
+                        calendar_path: str) -> Tuple[bool, str]:
         """
         Process a VPOLL REQUEST method.
 
@@ -62,7 +62,7 @@ class VPollProcessor:
             return False, "Failed to parse VPOLL data"
 
         logger.info("Processing VPOLL REQUEST for poll %s from %s",
-                   vpoll.uid, user)
+                    vpoll.uid, user)
 
         # Check if this is a new poll or update
         existing = self._find_existing_vpoll(vpoll.uid, calendar_path)
@@ -75,7 +75,7 @@ class VPollProcessor:
             return self._create_poll(vpoll, user, calendar_path)
 
     def process_reply(self, ical_data: str, user: str,
-                     calendar_path: str) -> Tuple[bool, str]:
+                      calendar_path: str) -> Tuple[bool, str]:
         """
         Process a VPOLL REPLY method.
 
@@ -96,7 +96,7 @@ class VPollProcessor:
             return False, "Failed to parse VPOLL REPLY"
 
         logger.info("Processing VPOLL REPLY for poll %s from %s",
-                   vpoll.uid, user)
+                    vpoll.uid, user)
 
         # Find the existing poll
         existing = self._find_existing_vpoll(vpoll.uid, calendar_path)
@@ -133,13 +133,13 @@ class VPollProcessor:
         success = self._save_vpoll(existing, calendar_path)
         if success:
             logger.info("Recorded %d votes from %s for poll %s",
-                       len(voter.votes), voter.email, vpoll.uid)
+                        len(voter.votes), voter.email, vpoll.uid)
             return True, "Votes recorded successfully"
         else:
             return False, "Failed to save votes"
 
     def process_cancel(self, ical_data: str, user: str,
-                      calendar_path: str) -> Tuple[bool, str]:
+                       calendar_path: str) -> Tuple[bool, str]:
         """
         Process a VPOLL CANCEL method.
 
@@ -158,7 +158,7 @@ class VPollProcessor:
             return False, "Failed to parse VPOLL CANCEL"
 
         logger.info("Processing VPOLL CANCEL for poll %s from %s",
-                   vpoll.uid, user)
+                    vpoll.uid, user)
 
         # Find the existing poll
         existing = self._find_existing_vpoll(vpoll.uid, calendar_path)
@@ -186,7 +186,7 @@ class VPollProcessor:
             return False, "Failed to cancel poll"
 
     def confirm_winner(self, poll_uid: str, calendar_path: str,
-                      winner_id: Optional[int] = None) -> Tuple[bool, str]:
+                       winner_id: Optional[int] = None) -> Tuple[bool, str]:
         """
         Confirm the winning choice for a poll.
 
@@ -229,13 +229,13 @@ class VPollProcessor:
         success = self._save_vpoll(existing, calendar_path)
         if success:
             logger.info("Poll %s confirmed with winner %d (%s)",
-                       poll_uid, winner_id, winner_item.summary)
+                        poll_uid, winner_id, winner_item.summary)
             return True, f"Winner confirmed: {winner_item.summary}"
         else:
             return False, "Failed to confirm winner"
 
     def get_poll_status(self, poll_uid: str,
-                       calendar_path: str) -> Optional[VPoll]:
+                        calendar_path: str) -> Optional[VPoll]:
         """
         Get the current status of a poll.
 
@@ -263,7 +263,7 @@ class VPollProcessor:
         return poll.to_ical(method="STATUS")
 
     def _create_poll(self, vpoll: VPoll, user: str,
-                    calendar_path: str) -> Tuple[bool, str]:
+                     calendar_path: str) -> Tuple[bool, str]:
         """Create a new poll."""
         # Ensure poll has an owner
         if not vpoll.owner:
@@ -286,13 +286,13 @@ class VPollProcessor:
         success = self._save_vpoll(vpoll, calendar_path)
         if success:
             logger.info("Created new poll %s with %d items and %d participants",
-                       vpoll.uid, len(vpoll.items), len(vpoll.participants))
+                        vpoll.uid, len(vpoll.items), len(vpoll.participants))
             return True, "Poll created successfully"
         else:
             return False, "Failed to create poll"
 
     def _update_poll(self, vpoll: VPoll, existing: VPoll, user: str,
-                    calendar_path: str) -> Tuple[bool, str]:
+                     calendar_path: str) -> Tuple[bool, str]:
         """Update an existing poll."""
         # Verify user is the owner
         owner = existing.owner
@@ -340,7 +340,7 @@ class VPollProcessor:
             return False, "Failed to update poll"
 
     def _find_existing_vpoll(self, uid: str,
-                            calendar_path: str) -> Optional[VPoll]:
+                             calendar_path: str) -> Optional[VPoll]:
         """Find an existing VPOLL by UID in the calendar."""
         try:
             # Discover items in the calendar
