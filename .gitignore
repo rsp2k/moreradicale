@@ -30,3 +30,6 @@ pytestdebug.log
 test-email-config.ini
 test-email-delivery.sh
 test-imap-reply.sh
+
+# Claude Code conversation history backup
+HIST/
