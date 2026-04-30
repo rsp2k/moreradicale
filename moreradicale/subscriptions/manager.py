@@ -8,7 +8,7 @@ the lifecycle of fetching, updating, and refreshing external feeds.
 import json
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -141,7 +141,7 @@ class SubscriptionManager:
                 )
 
             logger.info("Syncing subscription %s from %s",
-                       collection_path, source_url)
+                        collection_path, source_url)
 
             # Load sync state
             state = self._load_state(collection_path)
@@ -174,13 +174,13 @@ class SubscriptionManager:
                 state.consecutive_failures += 1
                 self._save_state(collection_path, state)
                 logger.warning("Subscription sync failed for %s: %s",
-                              collection_path, result.message)
+                               collection_path, result.message)
                 return result
 
             # Check if content actually changed
             if result.content_hash == state.content_hash:
                 logger.debug("Subscription %s content hash unchanged",
-                            collection_path)
+                             collection_path)
                 state.consecutive_failures = 0
                 self._save_state(collection_path, state)
                 return SyncResult(
@@ -203,16 +203,16 @@ class SubscriptionManager:
             self._save_state(collection_path, state)
 
             logger.info("Synced %s: +%d ~%d -%d items",
-                       collection_path,
-                       import_result.items_added,
-                       import_result.items_updated,
-                       import_result.items_deleted)
+                        collection_path,
+                        import_result.items_added,
+                        import_result.items_updated,
+                        import_result.items_deleted)
 
             return import_result
 
         except Exception as e:
             logger.error("Error syncing %s: %s", collection_path, e,
-                        exc_info=True)
+                         exc_info=True)
             return SyncResult(
                 status=SyncStatus.ERROR,
                 message=f"Internal error: {e}"
@@ -433,7 +433,7 @@ class SubscriptionManager:
                             self.sync_collection(collection_path)
                         except Exception as e:
                             logger.warning("Background sync error for %s: %s",
-                                          collection_path, e)
+                                           collection_path, e)
 
                     # Brief pause between syncs
                     time.sleep(1)

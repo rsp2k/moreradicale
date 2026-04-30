@@ -354,7 +354,7 @@ class TestBaseAuthRequests(BaseTest):
                 ) as mock_socket:
             if "socket" in broken:
                 mock_socket["connect"].side_effect = socket.error(
-                        "Testing error with the socket"
+                    "Testing error with the socket"
                 )
             mock_socket["recv"].side_effect = [handshake, response]
             status, _, answer = self.request(
@@ -384,8 +384,8 @@ class TestBaseAuthRequests(BaseTest):
     @pytest.mark.skipif(sys.platform == 'win32', reason="Not supported on Windows")
     def test_dovecot_broken_handshake_duplicate(self):
         self._test_dovecot(
-                "user", "password", 207, response=b'OK\t1',
-                broken=["duplicate"]
+            "user", "password", 207, response=b'OK\t1',
+            broken=["duplicate"]
         )
 
     @pytest.mark.skipif(sys.platform == 'win32', reason="Not supported on Windows")
@@ -411,8 +411,8 @@ class TestBaseAuthRequests(BaseTest):
     @pytest.mark.skipif(sys.platform == 'win32', reason="Not supported on Windows")
     def test_dovecot_auth_good2(self):
         self._test_dovecot(
-                "user", "password", 207, response=b'OK\t1',
-                mech=[b'PLAIN\nEXTRA\tTERM']
+            "user", "password", 207, response=b'OK\t1',
+            mech=[b'PLAIN\nEXTRA\tTERM']
         )
 
         self._test_dovecot("user", "password", 207, response=b'OK\t1')

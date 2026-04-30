@@ -371,7 +371,6 @@ def time_range_fill(vobject_item: vobject.base.Component,
 
     def range_fn(range_start: datetime, range_end: datetime,
                  is_recurrence: bool) -> bool:
-        nonlocal ranges
         if start < range_end and range_start < end:
             ranges.append((range_start, range_end))
             if n > 0 and len(ranges) >= n:
@@ -451,7 +450,7 @@ def visit_time_ranges(vobject_item: vobject.base.Component, child_name: str,
         return filter(should_include, child.getrruleset(addRDate=True)), False
 
     def get_children(components: Iterable[vobject.base.Component]) -> Iterator[
-                         Tuple[vobject.base.Component, bool, List[date], Optional[date]]]:
+            Tuple[vobject.base.Component, bool, List[date], Optional[date]]]:
         """Separate main component from recurrence overrides.
 
         Returns tuples of (component, is_recurrence, ignore_dates, thisandfuture_cutoff)

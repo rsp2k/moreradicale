@@ -86,7 +86,7 @@ class StoragePartDiscover(StorageBase):
 
         # RFC 6638: Auto-create scheduling collections for principals
         logger.debug("Checking scheduling auto-create: is_principal=%s, depth=%s, path=%s",
-                    collection.is_principal, depth, collection.path)
+                     collection.is_principal, depth, collection.path)
         if collection.is_principal:
             logger.debug("Principal discovered with depth=%s, calling _ensure_scheduling_collections", depth)
             self._ensure_scheduling_collections(collection, folder, sane_path)
@@ -137,7 +137,7 @@ class StoragePartDiscover(StorageBase):
                         yield shared_collection
 
     def _ensure_scheduling_collections(self, principal_collection, folder: str,
-                                      sane_path: str) -> None:
+                                       sane_path: str) -> None:
         """Ensure schedule-inbox and schedule-outbox exist for principal.
 
         RFC 6638 requires principals to have inbox and outbox collections
@@ -156,7 +156,7 @@ class StoragePartDiscover(StorageBase):
             return
 
         for collection_name, tag in [("schedule-inbox", "SCHEDULING-INBOX"),
-                                      ("schedule-outbox", "SCHEDULING-OUTBOX")]:
+                                     ("schedule-outbox", "SCHEDULING-OUTBOX")]:
             sane_child_path = posixpath.join(sane_path, collection_name)
             child_path = pathutils.unstrip_path(sane_child_path, True)
 
@@ -175,7 +175,7 @@ class StoragePartDiscover(StorageBase):
                 cast(multifilesystem.Storage, self).create_collection(
                     child_path, props=props)
                 logger.debug("Created scheduling collection: %s (tag=%s)",
-                           child_path, tag)
+                             child_path, tag)
             except Exception as e:
                 logger.warning("Failed to create %s: %s", collection_name, e)
 

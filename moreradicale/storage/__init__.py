@@ -45,7 +45,7 @@ INTERNAL_TYPES: Sequence[str] = ("multifilesystem", "multifilesystem_nolock",)
 CACHE_VERSION_MORERADICALE = "3.3.1"
 
 CACHE_VERSION: bytes = (
-            "%s=%s;%s=%s;" % ("moreradicale", CACHE_VERSION_MORERADICALE, "vobject", utils.package_version("vobject"))).encode()
+    "%s=%s;%s=%s;" % ("moreradicale", CACHE_VERSION_MORERADICALE, "vobject", utils.package_version("vobject"))).encode()
 
 
 def load(configuration: "config.Configuration") -> "BaseStorage":

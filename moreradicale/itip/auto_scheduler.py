@@ -29,7 +29,7 @@ Related RFCs:
 
 import logging
 from datetime import datetime
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from enum import Enum
 
 try:
@@ -155,7 +155,7 @@ class AutoScheduler:
         """Check if VAVAILABILITY support is available."""
         try:
             # Try importing availability module
-            from moreradicale.itip import availability
+            from moreradicale.itip import availability  # noqa: F401
             return True
         except ImportError:
             logger.debug("VAVAILABILITY support not available")
@@ -402,7 +402,6 @@ class AutoScheduler:
         Returns:
             True if conflicts exist
         """
-        from datetime import datetime, date
 
         try:
             # Discover all calendar collections
@@ -533,7 +532,7 @@ class AutoScheduler:
 
     def _times_overlap(self, start1, end1, start2, end2) -> bool:
         """Check if two time ranges overlap."""
-        from datetime import date, datetime
+        from datetime import date
 
         # Normalize to comparable types
         def to_datetime(dt):

@@ -7,7 +7,6 @@ the extract() method to identify tenants from requests.
 
 from typing import Optional, TYPE_CHECKING
 
-from moreradicale.log import logger
 
 if TYPE_CHECKING:
     from moreradicale import config, types

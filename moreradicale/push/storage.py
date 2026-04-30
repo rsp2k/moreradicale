@@ -5,9 +5,8 @@ Stores subscriptions as JSON files organized by user and collection.
 """
 
 import json
-import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from moreradicale.log import logger
 
@@ -87,7 +86,7 @@ class SubscriptionStorage:
                 json.dump(subscription.to_dict(), f, indent=2)
 
             logger.info("Added push subscription %s for %s on %s",
-                       subscription.id, subscription.user, subscription.collection_path)
+                        subscription.id, subscription.user, subscription.collection_path)
             return True
 
         except Exception as e:

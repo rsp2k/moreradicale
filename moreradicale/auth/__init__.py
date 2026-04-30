@@ -50,19 +50,19 @@ INTERNAL_TYPES: Sequence[str] = ("none", "remote_user", "http_x_remote_user",
                                  "dovecot")
 
 CACHE_LOGIN_TYPES: Sequence[str] = (
-                                    "dovecot",
-                                    "ldap",
-                                    "htpasswd",
-                                    "imap",
-                                    "oauth2",
-                                    "pam",
-                                   )
+    "dovecot",
+    "ldap",
+    "htpasswd",
+    "imap",
+    "oauth2",
+    "pam",
+    )
 
 INSECURE_IF_NO_LOOPBACK_TYPES: Sequence[str] = (
-                                    "remote_user",
-                                    "http_remote_user",
-                                    "http_x_remote_user",
-                                   )
+    "remote_user",
+    "http_remote_user",
+    "http_x_remote_user",
+    )
 
 AUTH_SOCKET_FAMILY: Sequence[str] = ("AF_UNIX", "AF_INET", "AF_INET6")
 

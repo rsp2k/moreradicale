@@ -23,13 +23,10 @@ with storage and rights systems.
 
 import os
 import tempfile
-from typing import Dict, Any
 
-import pytest
 
 from moreradicale import config, tenant
 from moreradicale.tenant import TenantContext
-from moreradicale.tenant.base import BaseTenantExtractor
 from moreradicale.tenant.domain import Extractor as DomainExtractor
 from moreradicale.tenant.path_prefix import Extractor as PathPrefixExtractor
 from moreradicale.tenant.header import Extractor as HeaderExtractor
@@ -317,7 +314,7 @@ class TestSubdomainExtractor:
 
         # www is often not a tenant, but implementation may vary
         environ = {"HTTP_HOST": "www.example.com"}
-        ctx = extractor.extract(environ, "/", "")
+        extractor.extract(environ, "/", "")
 
         # This test documents current behavior
         # www is treated as a tenant unless specifically excluded

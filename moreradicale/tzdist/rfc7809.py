@@ -9,7 +9,7 @@ VTIMEZONE components that are available from the TZDIST service.
 """
 
 import re
-from typing import Optional, Set
+from typing import Set
 
 from moreradicale.log import logger
 

@@ -34,7 +34,7 @@ import vobject
 
 import moreradicale.item as radicale_item
 from moreradicale import (httputils, pathutils, rights, storage, types, utils,
-                      xmlutils)
+                          xmlutils)
 from moreradicale.app.base import Access, ApplicationBase
 from moreradicale.hook import HookNotificationItem, HookNotificationItemTypes
 from moreradicale.log import logger
@@ -86,6 +86,7 @@ def _auto_version_item(configuration, path: str, user: str,
             logger.debug("Auto-versioned %s -> %s", path, sha[:8])
     except Exception as e:
         logger.warning("Auto-versioning failed for %s: %s", path, e)
+
 
 MIMETYPE_TAGS: Mapping[str, str] = {value: key for key, value in
                                     xmlutils.MIMETYPES.items()}
@@ -336,7 +337,7 @@ class ApplicationPartPut(ApplicationBase):
             props = prepared_props
             if prepared_exc_info:
                 # Use OverflowError as flag for max_resource_size
-                if prepared_exc_info[0] == OverflowError:
+                if prepared_exc_info[0] is OverflowError:
                     return httputils.PRECONDITION_FAILED
                 else:
                     logger.warning(

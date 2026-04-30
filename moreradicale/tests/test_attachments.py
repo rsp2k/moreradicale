@@ -29,7 +29,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import vobject
 
 from moreradicale.tests import BaseTest
-from moreradicale.tests.helpers import get_file_content
 
 
 SIMPLE_EVENT = """\
@@ -494,7 +493,7 @@ permissions: RrWw""")
             login="user:",
         )
         assert status == 201
-        managed_id = headers["Cal-Managed-ID"]
+        headers["Cal-Managed-ID"]
 
         # Verify the event has the attachment with correct filename
         _, event_data = self.get("/user/calendar/event.ics", login="user:")

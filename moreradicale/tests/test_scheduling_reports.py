@@ -44,7 +44,7 @@ class TestSchedulingReports(BaseTest):
         }})
 
     def _create_invitation_in_inbox(self, user: str, uid: str, summary: str,
-                                     dtstart: str, dtend: str) -> str:
+                                    dtstart: str, dtend: str) -> str:
         """Create an iTIP invitation in user's schedule-inbox.
 
         Args:

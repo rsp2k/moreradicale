@@ -393,7 +393,7 @@ def parse_postmark_webhook(payload: dict) -> Optional[ParsedEmail]:
                 if content:
                     try:
                         content = base64.b64decode(content).decode('utf-8')
-                    except:
+                    except (ValueError, UnicodeDecodeError):
                         pass  # Maybe not base64
 
                 if 'BEGIN:VCALENDAR' in content:

@@ -11,7 +11,7 @@ import hashlib
 import json
 import struct
 import uuid
-from typing import Callable, Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from moreradicale import config
 from moreradicale.log import logger
@@ -96,7 +96,7 @@ class WebSyncHandler:
         }
 
         logger.info("WebSync: Upgrade request from user %s, connection %s",
-                   user, connection_id)
+                    user, connection_id)
 
         return 101, headers, b""
 

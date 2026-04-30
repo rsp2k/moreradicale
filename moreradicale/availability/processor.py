@@ -5,8 +5,8 @@ RFC 7953 Section 5 defines how VAVAILABILITY affects
 free-busy query results.
 """
 
-from datetime import datetime, timezone, timedelta
-from typing import List, Optional, Tuple, Dict
+from datetime import datetime, timezone
+from typing import List, Optional, Tuple
 
 from moreradicale.log import logger
 from moreradicale.availability.component import (

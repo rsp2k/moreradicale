@@ -108,7 +108,7 @@ class AttachmentStorage:
             self._atomic_write(meta_path, meta_json.encode("utf-8"), binary=True)
 
             logger.info("Stored attachment %s for %s (size=%d, type=%s)",
-                       managed_id, owner, len(data), content_type)
+                        managed_id, owner, len(data), content_type)
 
             return metadata
 
@@ -134,7 +134,7 @@ class AttachmentStorage:
             AttachmentNotFoundError: If attachment doesn't exist
         """
         data_path = self.manager.get_attachment_path(owner, managed_id)
-        meta_path = self.manager.get_metadata_path(owner, managed_id)
+        self.manager.get_metadata_path(owner, managed_id)
 
         if not data_path.exists():
             raise AttachmentNotFoundError(

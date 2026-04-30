@@ -31,11 +31,10 @@ Reference: https://www.rfc-editor.org/rfc/rfc8607.html
 """
 
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List
 
 from moreradicale.log import logger
 
@@ -186,7 +185,7 @@ class AttachmentManager:
         return self._storage_path / safe_owner / ".metadata" / f"{safe_id}.json"
 
     def get_attachment_url(self, base_prefix: str, owner: str,
-                          managed_id: str) -> str:
+                           managed_id: str) -> str:
         """
         Get the URL for retrieving an attachment.
 

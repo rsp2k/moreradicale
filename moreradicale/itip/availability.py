@@ -40,7 +40,7 @@ See: https://datatracker.ietf.org/doc/html/rfc7953
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, date, timezone
-from typing import List, Optional, Tuple, Set
+from typing import List, Optional, Tuple
 from enum import Enum
 
 try:

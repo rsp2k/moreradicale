@@ -8,13 +8,9 @@ Tests the subscription sync engine and manager including:
 - HTTP caching behavior
 """
 
-import json
 from datetime import datetime, timezone, timedelta
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from threading import Thread
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-import pytest
 
 from moreradicale.tests import BaseTest
 

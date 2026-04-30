@@ -32,6 +32,7 @@ class TestWebSyncManager:
         from moreradicale.websync.manager import websync_manager
 
         messages = []
+
         def send(msg):
             messages.append(msg)
 

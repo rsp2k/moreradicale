@@ -34,7 +34,7 @@ Delegation is controlled by RADICALE:schedule-delegates on principal collections
 """
 
 import json
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from moreradicale import pathutils
 from moreradicale.log import logger
@@ -139,18 +139,18 @@ class Rights(owner_only.Rights):
         status = user_share.get("status", "pending")
         if status != "accepted":
             logger.debug("Share for %s on %s not yet accepted (status=%s)",
-                        user, collection_path, status)
+                         user, collection_path, status)
             return ""
 
         # Return permissions based on access level
         access = user_share.get("access", "read")
         if access == "read-write":
             logger.debug("Shared read-write access for %s on %s",
-                        user, collection_path)
+                         user, collection_path)
             return "rw"
         else:
             logger.debug("Shared read-only access for %s on %s",
-                        user, collection_path)
+                         user, collection_path)
             return "r"
 
     def _check_proxy_access(self, user: str, sane_path: str) -> str:

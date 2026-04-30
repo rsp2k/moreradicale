@@ -35,12 +35,12 @@ if sys.platform != "win32":
 _T_co = TypeVar("_T_co", covariant=True)
 
 MORERADICALE_MODULES: Sequence[str] = ("moreradicale", "vobject", "passlib", "defusedxml",
-                                   "bcrypt",
-                                   "argon2-cffi",
-                                   "pika",
-                                   "ldap",
-                                   "ldap3",
-                                   "pam")
+                                       "bcrypt",
+                                       "argon2-cffi",
+                                       "pika",
+                                       "ldap",
+                                       "ldap3",
+                                       "pam")
 
 
 # IPv4 (host, port) and IPv6 (host, port, flowinfo, scopeid)

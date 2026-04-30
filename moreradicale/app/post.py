@@ -23,7 +23,7 @@ import socket
 import xml.etree.ElementTree as ET
 from urllib.parse import parse_qs
 
-from moreradicale import httputils, storage, types, xmlutils
+from moreradicale import httputils, storage, types
 from moreradicale.app.base import ApplicationBase
 from moreradicale.log import logger
 
@@ -68,21 +68,21 @@ class ApplicationPartPost(ApplicationBase):
         # POST only valid on schedule-outbox for iTIP
         if item.tag != "SCHEDULING-OUTBOX":
             logger.debug("POST attempted on non-outbox collection: %s (tag=%s)",
-                       path, item.tag)
+                         path, item.tag)
             return httputils.METHOD_NOT_ALLOWED
 
         # Verify this is the user's own outbox (security check)
         if not item.owner or item.owner != user:
             logger.warning("User %s attempted to POST to %s's outbox",
-                         user, item.owner)
+                           user, item.owner)
             return httputils.FORBIDDEN
 
         # Handle the iTIP POST
         return self._handle_scheduling_post(environ, base_prefix, path, user)
 
     def _handle_xml_post(self, environ: types.WSGIEnviron, base_prefix: str,
-                        path: str, user: str,
-                        collection: storage.BaseCollection) -> types.WSGIResponse:
+                         path: str, user: str,
+                         collection: storage.BaseCollection) -> types.WSGIResponse:
         """Handle XML POST requests (sharing operations)."""
         from moreradicale.sharing.handler import SharingHandler, is_sharing_request
 
@@ -128,8 +128,8 @@ class ApplicationPartPost(ApplicationBase):
         return httputils.METHOD_NOT_ALLOWED
 
     def _handle_scheduling_post(self, environ: types.WSGIEnviron,
-                               base_prefix: str, path: str,
-                               user: str) -> types.WSGIResponse:
+                                base_prefix: str, path: str,
+                                user: str) -> types.WSGIResponse:
         """Handle iTIP message POST to schedule-outbox.
 
         Args:

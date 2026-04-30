@@ -101,8 +101,8 @@ class Auth(auth.BaseAuth):
                     if first == b'VERSION':
                         if seen_part[0]:
                             logger.warning(
-                                    "Server presented multiple VERSION "
-                                    "tokens, ignoring"
+                                "Server presented multiple VERSION "
+                                "tokens, ignoring"
                             )
                             continue
                         version = parts
@@ -111,7 +111,7 @@ class Auth(auth.BaseAuth):
                         ))
                         if int(version[0]) != 1:
                             logger.fatal(
-                                    "Only Dovecot 1.x versions are supported!"
+                                "Only Dovecot 1.x versions are supported!"
                             )
                             return ""
                         seen_part[0] += 1
@@ -126,8 +126,8 @@ class Auth(auth.BaseAuth):
                         seen_part[2] += 1
                         if not (seen_part[0] and seen_part[1]):
                             logger.fatal(
-                                    "An unexpected end of the server "
-                                    "handshake received!"
+                                "An unexpected end of the server "
+                                "handshake received!"
                             )
                             return ""
                         done = True
@@ -137,13 +137,13 @@ class Auth(auth.BaseAuth):
                     return ""
 
                 logger.debug(
-                        "Supported auth methods: '{}'"
-                        .format((b"', '".join(supported_mechs)).decode())
+                    "Supported auth methods: '{}'"
+                    .format((b"', '".join(supported_mechs)).decode())
                 )
                 if b'PLAIN' not in supported_mechs:
                     logger.info(
-                            "Authentication method 'PLAIN' is not supported, "
-                            "but is required!"
+                        "Authentication method 'PLAIN' is not supported, "
+                        "but is required!"
                     )
                     return ""
 
@@ -155,8 +155,8 @@ class Auth(auth.BaseAuth):
 
                 request_id = next(self.request_id_gen)
                 logger.debug(
-                        "Authenticating with request id: '{}'"
-                        .format(request_id)
+                    "Authenticating with request id: '{}'"
+                    .format(request_id)
                 )
                 rip = b''
                 if self.use_x_remote_addr and context.x_remote_addr:
@@ -168,11 +168,11 @@ class Auth(auth.BaseAuth):
                 if rip:
                     rip = b'\trip=' + re.sub(br'\s', b'', rip)
                 sock.send(
-                        b'AUTH\t%u\tPLAIN\tservice=moreradicale%s\tresp=%b\n' %
-                        (
-                            request_id, rip, base64.b64encode(
-                                    b'\0%b\0%b' %
-                                    (login.encode(), password.encode())
+                    b'AUTH\t%u\tPLAIN\tservice=moreradicale%s\tresp=%b\n' %
+                    (
+                        request_id, rip, base64.b64encode(
+                            b'\0%b\0%b' %
+                            (login.encode(), password.encode())
                             )
                         )
                 )
@@ -182,19 +182,19 @@ class Auth(auth.BaseAuth):
                 line = buf.split(b'\n', 1)[0]
                 parts = line.split(b'\t')[:2]
                 resp, reply_id, params = (
-                        parts[0], int(parts[1]),
-                        dict(part.split('=', 1) for part in parts[2:])
+                    parts[0], int(parts[1]),
+                    dict(part.split('=', 1) for part in parts[2:])
                 )
 
                 logger.debug(
-                        "Auth response: result='{}', id='{}', parameters={}"
-                        .format(resp.decode(), reply_id, params)
+                    "Auth response: result='{}', id='{}', parameters={}"
+                    .format(resp.decode(), reply_id, params)
                 )
                 if request_id != reply_id:
                     logger.fatal(
-                            "Unexpected reply ID {} received (expected {})"
-                            .format(
-                                    reply_id, request_id
+                        "Unexpected reply ID {} received (expected {})"
+                        .format(
+                            reply_id, request_id
                             )
                     )
                     return ""
@@ -204,8 +204,8 @@ class Auth(auth.BaseAuth):
 
             except socket.error as e:
                 logger.fatal(
-                        "Failed to communicate with Dovecot: %s" %
-                        (e)
+                    "Failed to communicate with Dovecot: %s" %
+                    (e)
                 )
 
         return ""

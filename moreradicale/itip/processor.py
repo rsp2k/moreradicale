@@ -150,7 +150,7 @@ class ITIPProcessor:
             if cutype == 'GROUP' and att_email.lower() in [g.lower() for g in self.groups]:
                 # Expand this group
                 group_key = next(g for g in self.groups if g.lower() == att_email.lower())
-                group_def = self.groups[group_key]
+                self.groups[group_key]
                 members = self._get_group_members(group_key, set())
 
                 logger.info(f"Expanding group {att_email} into {len(members)} members")
@@ -235,10 +235,10 @@ class ITIPProcessor:
     def process_put(self, vcal_text: str, user: str, path: str) -> None:
         """
         Process a PUT request that may need scheduling.
-        
+
         This is called when an event/todo/journal is created or updated.
         If it has attendees and an organizer, we generate and deliver iTIP messages.
-        
+
         Args:
             vcal_text: iCalendar text being PUT
             user: User making the PUT request
@@ -248,11 +248,11 @@ class ITIPProcessor:
         if not needs_scheduling(vcal_text):
             logger.debug("Item doesn't need scheduling (no ORGANIZER+ATTENDEE)")
             return
-        
+
         try:
             # Parse the calendar object
             vcal = vobject.readOne(vcal_text)
-            
+
             # Get the component
             component = None
             comp_type_name = None
@@ -261,11 +261,11 @@ class ITIPProcessor:
                     component = getattr(vcal, comp_type)
                     comp_type_name = comp_type.upper()
                     break
-            
+
             if not component:
                 logger.warning("No schedulable component found")
                 return
-            
+
             # Extract organizer
             if not hasattr(component, 'organizer'):
                 logger.debug("No organizer, skipping scheduling")
@@ -340,15 +340,15 @@ class ITIPProcessor:
                 itip_attendee.principal_path = principal_path
 
                 itip_attendees.append(itip_attendee)
-            
+
             if not itip_attendees:
                 logger.debug("No valid attendees found")
                 return
-            
+
             # Get UID and SEQUENCE
             uid = component.uid.value
             sequence = component.sequence.value if hasattr(component, 'sequence') else 0
-            
+
             # Create iTIP message for REQUEST
             # For implicit scheduling, we generate REQUEST when organizer creates/updates event
             itip_msg = ITIPMessage(
@@ -360,7 +360,7 @@ class ITIPProcessor:
                 component_type=comp_type_name,
                 icalendar_text=self._generate_itip_request(vcal, component)
             )
-            
+
             # Deliver to internal attendees
             self._deliver_internal(itip_msg)
 
@@ -375,7 +375,7 @@ class ITIPProcessor:
                 logger.error(f"External delivery failed: {e}", exc_info=True)
 
             logger.info(f"Processed iTIP scheduling for {uid}: {len([a for a in itip_attendees if a.is_internal])} internal, {len([a for a in itip_attendees if not a.is_internal])} external")
-            
+
         except Exception as e:
             logger.error(f"Error processing iTIP scheduling: {e}", exc_info=True)
 
@@ -526,11 +526,11 @@ class ITIPProcessor:
     def _generate_itip_request(self, vcal: vobject.base.Component, component: vobject.base.Component) -> str:
         """
         Generate iTIP REQUEST message from calendar component.
-        
+
         Args:
             vcal: Parent VCALENDAR
             component: VEVENT/VTODO/VJOURNAL component
-            
+
         Returns:
             iCalendar text with METHOD:REQUEST
         """
@@ -539,11 +539,11 @@ class ITIPProcessor:
         itip_vcal.add('version').value = '2.0'
         itip_vcal.add('prodid').value = '-//Radicale//NONSGML Radicale Server//EN'
         itip_vcal.add('method').value = 'REQUEST'
-        
+
         # Clone the component
         comp_type = component.name.lower()
         itip_comp = itip_vcal.add(comp_type)
-        
+
         # Copy all properties
         for prop in component.getChildren():
             if prop.name.lower() not in ('method',):  # Skip METHOD at component level
@@ -552,7 +552,7 @@ class ITIPProcessor:
                 if hasattr(prop, 'params'):
                     for param_name, param_values in prop.params.items():
                         itip_comp.contents[prop.name.lower()][-1].params[param_name] = param_values
-        
+
         return itip_vcal.serialize()
 
     def _generate_itip_cancel(self, vcal: vobject.base.Component, component: vobject.base.Component) -> str:
@@ -934,8 +934,8 @@ class ITIPProcessor:
             return False, ScheduleStatus.DELIVERY_FAILED
 
     def _process_resource_auto_accept(self, itip_msg: ITIPMessage,
-                                       vcal: vobject.base.Component,
-                                       component: vobject.base.Component) -> None:
+                                      vcal: vobject.base.Component,
+                                      component: vobject.base.Component) -> None:
         """
         Auto-accept/decline for resource attendees (CUTYPE=ROOM or CUTYPE=RESOURCE).
 
@@ -984,8 +984,6 @@ class ITIPProcessor:
                 logger.error(f"AutoScheduler failed, falling back to legacy implementation: {e}", exc_info=True)
 
         # Fallback to legacy implementation if AutoScheduler not available
-        from datetime import datetime
-        from vobject.icalendar import utc as vobj_utc
 
         for attendee in itip_msg.attendees:
             # Only process ROOM and RESOURCE types
@@ -1043,10 +1041,10 @@ class ITIPProcessor:
 
             except Exception as e:
                 logger.error(f"Error processing resource auto-accept for {attendee.email}: {e}",
-                           exc_info=True)
+                             exc_info=True)
 
     def _check_resource_conflict(self, principal_path: str, resource_email: str,
-                                  event_start, event_end, exclude_uid: str) -> bool:
+                                 event_start, event_end, exclude_uid: str) -> bool:
         """
         Check if a resource has conflicting events in the specified time range.
 
@@ -1060,7 +1058,6 @@ class ITIPProcessor:
         Returns:
             True if conflicts exist, False otherwise
         """
-        from datetime import datetime, timedelta
 
         try:
             # Discover all calendar collections under resource's principal
@@ -1148,10 +1145,10 @@ class ITIPProcessor:
         return s1 < e2 and s2 < e1
 
     def _add_event_to_resource_calendar(self, principal_path: str,
-                                         vcal: vobject.base.Component,
-                                         component: vobject.base.Component,
-                                         resource_email: str,
-                                         uid: str) -> bool:
+                                        vcal: vobject.base.Component,
+                                        component: vobject.base.Component,
+                                        resource_email: str,
+                                        uid: str) -> bool:
         """
         Add an event to the resource's default calendar with PARTSTAT=ACCEPTED.
 
@@ -1438,8 +1435,7 @@ class ITIPProcessor:
         Returns:
             HTTP response with schedule-response XML
         """
-        from moreradicale import httputils, xmlutils
-        import xml.etree.ElementTree as ET
+        from moreradicale import httputils
         from moreradicale.itip.validator import validate_itip_message
 
         try:
@@ -1789,7 +1785,7 @@ class ITIPProcessor:
                     break
 
             if not current_component:
-                logger.warning(f"Could not parse event component")
+                logger.warning("Could not parse event component")
                 return self._build_schedule_response_error(
                     base_prefix, "Invalid event data")
 
@@ -2101,7 +2097,7 @@ class ITIPProcessor:
             return httputils.INTERNAL_SERVER_ERROR
 
     def _process_publish(self, vcal: vobject.base.Component, user: str,
-                        base_prefix: str, ical_text: str):
+                         base_prefix: str, ical_text: str):
         """
         Process iTIP PUBLISH message for one-way calendar publication.
 
@@ -2381,7 +2377,7 @@ class ITIPProcessor:
             return 500, {}, b"Internal Server Error", None
 
     def _process_vevent_request(self, vcal: vobject.base.Component, user: str,
-                                 base_prefix: str, ical_text: str):
+                                base_prefix: str, ical_text: str):
         """
         Process iTIP REQUEST message for meeting invitations.
 
@@ -2600,10 +2596,8 @@ class ITIPProcessor:
             HTTP response with schedule-response containing VFREEBUSY for each attendee
         """
         from moreradicale import httputils, xmlutils
-        from moreradicale.item import filter as radicale_filter
         from http import client
         import xml.etree.ElementTree as ET
-        from datetime import datetime, timezone
 
         try:
             # Get the VFREEBUSY component
@@ -2626,7 +2620,7 @@ class ITIPProcessor:
             dtend = vfreebusy.dtend.value
 
             logger.info(f"Processing VFREEBUSY REQUEST from {organizer_email} "
-                       f"for {dtstart} to {dtend}")
+                        f"for {dtstart} to {dtend}")
 
             # Extract ATTENDEEs
             if not hasattr(vfreebusy, 'attendee'):
@@ -2682,7 +2676,7 @@ class ITIPProcessor:
 
                 except Exception as e:
                     logger.error(f"Failed to calculate free/busy for {attendee_email}: {e}",
-                               exc_info=True)
+                                 exc_info=True)
                     request_status = ET.SubElement(response_elem,
                                                    xmlutils.make_clark("C:request-status"))
                     request_status.text = "5.3;No scheduling support for user"
@@ -2722,24 +2716,21 @@ class ITIPProcessor:
         Returns:
             iCalendar text with METHOD:REPLY and VFREEBUSY component
         """
-        from moreradicale.item import filter as radicale_filter
         from moreradicale.itip import availability
         from vobject.icalendar import utc as vobj_utc
-        from datetime import datetime, timedelta
-        import xml.etree.ElementTree as ET
-        from moreradicale import xmlutils
+        from datetime import datetime
 
         # Build time-range filter element for the query
         # Convert datetime to ISO format strings
         if hasattr(dtstart, 'strftime'):
-            start_str = dtstart.strftime('%Y%m%dT%H%M%SZ')
+            dtstart.strftime('%Y%m%dT%H%M%SZ')
         else:
-            start_str = str(dtstart).replace('-', '').replace(':', '')
+            str(dtstart).replace('-', '').replace(':', '')
 
         if hasattr(dtend, 'strftime'):
-            end_str = dtend.strftime('%Y%m%dT%H%M%SZ')
+            dtend.strftime('%Y%m%dT%H%M%SZ')
         else:
-            end_str = str(dtend).replace('-', '').replace(':', '')
+            str(dtend).replace('-', '').replace(':', '')
 
         # Collect all busy periods
         busy_periods = []
@@ -2815,7 +2806,7 @@ class ITIPProcessor:
                 principal_path, dtstart, dtend, busy_periods
             )
             logger.debug(f"Applied VAVAILABILITY for {principal_path}, "
-                        f"resulting in {len(busy_periods)} busy periods")
+                         f"resulting in {len(busy_periods)} busy periods")
         except Exception as e:
             logger.warning(f"Error processing VAVAILABILITY for {principal_path}: {e}")
             # Continue with event-only busy periods
@@ -2841,13 +2832,13 @@ class ITIPProcessor:
             fb = vfb.add('freebusy')
             # Format as PERIOD: start/end
             if hasattr(start, 'strftime'):
-                start_str = start.strftime('%Y%m%dT%H%M%SZ')
+                start.strftime('%Y%m%dT%H%M%SZ')
             else:
-                start_str = str(start)
+                str(start)
             if hasattr(end, 'strftime'):
-                end_str = end.strftime('%Y%m%dT%H%M%SZ')
+                end.strftime('%Y%m%dT%H%M%SZ')
             else:
-                end_str = str(end)
+                str(end)
 
             fb.value = [(start, end)]
             fb.params['FBTYPE'] = [fbtype]
@@ -2912,7 +2903,6 @@ class ITIPProcessor:
         if hasattr(vevent, 'rrule'):
             try:
                 # Use dateutil for RRULE expansion
-                from dateutil import rrule as dateutil_rrule
 
                 # Get the rruleset from vobject
                 if hasattr(vevent, 'rruleset'):
@@ -3308,11 +3298,9 @@ class ITIPProcessor:
 
                 # Add delegate as new ATTENDEE with DELEGATED-FROM
                 # Get properties from delegator for the delegate
-                delegator_att = None
                 for att in attendees:
                     att_email = extract_email(att.value)
                     if att_email and att_email.lower() == delegator_email.lower():
-                        delegator_att = att
                         break
 
                 # Create new attendee for delegate
@@ -3355,7 +3343,7 @@ class ITIPProcessor:
 
             if not updated or not delegate_added:
                 logger.warning(
-                    f"Delegation update incomplete"
+                    "Delegation update incomplete"
                     + (f" (RECURRENCE-ID: {recurrence_id})" if recurrence_id else "")
                 )
                 return None
@@ -3383,8 +3371,8 @@ class ITIPProcessor:
             return None
 
     def _send_delegation_request(self, vcal: vobject.base.Component,
-                                  delegate_email: str, delegator_email: str,
-                                  base_prefix: str) -> None:
+                                 delegate_email: str, delegator_email: str,
+                                 base_prefix: str) -> None:
         """
         Send a REQUEST to the delegate inviting them to the event.
 
@@ -3482,7 +3470,7 @@ class ITIPProcessor:
             logger.error(f"Error sending delegation request: {e}", exc_info=True)
 
     def _generate_itip_request_for_delegation(self, vcal: vobject.base.Component,
-                                               delegate_email: str) -> str:
+                                              delegate_email: str) -> str:
         """
         Generate iTIP REQUEST for a delegated attendee.
 
@@ -3948,7 +3936,6 @@ class ITIPProcessor:
 
             # Parse recurrence_id and set as proper datetime/date
             from datetime import datetime as dt
-            from datetime import date as d
             from vobject.icalendar import utc as vobj_utc
 
             recurrence_dt = None
@@ -4296,7 +4283,7 @@ class ITIPProcessor:
         return client.OK, headers, ET.tostring(response, encoding="utf-8"), None
 
     def _build_schedule_response_error(self, base_prefix: str, error_msg: str,
-                                        schedule_status: str = "5.3"):
+                                       schedule_status: str = "5.3"):
         """Build error RFC 6638 schedule-response.
 
         Args:

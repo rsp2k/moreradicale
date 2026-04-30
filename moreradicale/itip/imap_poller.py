@@ -42,8 +42,7 @@ Usage:
 import imaplib
 import ssl
 import threading
-import time
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 from moreradicale.itip import email_parser
 from moreradicale.log import logger
@@ -218,7 +217,7 @@ class IMAPPoller:
             status, data = imap.select(self._folder)
             if status != "OK":
                 logger.error("Failed to select IMAP folder %s: %s",
-                            self._folder, data)
+                             self._folder, data)
                 return 0
 
             # Search for all messages

@@ -13,7 +13,6 @@ from moreradicale.log import logger
 from .storage import SubscriptionStorage
 from .subscription import (
     PushSubscription,
-    generate_pushkey,
     generate_subscription_id,
     parse_subscription_request
 )

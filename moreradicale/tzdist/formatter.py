@@ -7,8 +7,6 @@ Converts timezone transition data to RFC 5545 VTIMEZONE components.
 from datetime import datetime, timezone
 from typing import List, Tuple
 
-from moreradicale.log import logger
-
 
 def format_offset(seconds: int) -> str:
     """

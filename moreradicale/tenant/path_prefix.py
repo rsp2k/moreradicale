@@ -14,7 +14,6 @@ Configuration:
 import re
 from typing import Optional, TYPE_CHECKING
 
-from moreradicale import pathutils
 from moreradicale.log import logger
 from moreradicale.tenant import TenantContext
 from moreradicale.tenant.base import BaseTenantExtractor

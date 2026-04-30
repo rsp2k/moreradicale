@@ -214,7 +214,7 @@ END:VCALENDAR"""
         vcal = vobject.readOne(ical_text)
 
         with pytest.raises(validator.ITIPValidationError,
-                          match="REQUEST requires at least one ATTENDEE"):
+                           match="REQUEST requires at least one ATTENDEE"):
             validator.validate_itip_message(vcal)
 
 
@@ -519,14 +519,13 @@ END:VCALENDAR"""
 # Email/Webhook Integration Tests (Phase 2)
 # =============================================================================
 
-import hashlib
-import hmac
-import json
-from typing import Tuple
-from unittest.mock import MagicMock, patch
+import hashlib  # noqa: E402
+import hmac  # noqa: E402
+import json  # noqa: E402
+from typing import Tuple  # noqa: E402
 
-from moreradicale import email_utils
-from moreradicale.itip import email_parser
+from moreradicale import email_utils  # noqa: E402
+from moreradicale.itip import email_parser  # noqa: E402
 
 
 class TestEmailMIMEBuilder:
@@ -2138,7 +2137,6 @@ END:VCALENDAR"""
 
         # Test the notification generation directly
         from moreradicale.itip.processor import ITIPProcessor
-        import vobject
 
         processor = ITIPProcessor(self.application._storage, self.application.configuration)
 
@@ -2252,7 +2250,7 @@ END:VCALENDAR"""
 
         # Should have at least one item (the decline notification)
         inbox_items = [p for p in responses.keys()
-                      if p != "/bob/schedule-inbox/" and not p.endswith("/")]
+                       if p != "/bob/schedule-inbox/" and not p.endswith("/")]
         assert len(inbox_items) >= 1, \
             f"Expected decline notification in Bob's inbox. Paths: {list(responses.keys())}"
 
@@ -2511,7 +2509,7 @@ END:VCALENDAR"""
 
         # Carol should now be in the exception
         has_carol = any("carol@example.com" in att.value.lower()
-                       for att in exception.attendee_list)
+                        for att in exception.attendee_list)
         assert has_carol, "Carol should be added to existing exception"
 
     def test_delegation_master_not_affected(self):
@@ -2609,7 +2607,7 @@ END:VCALENDAR"""
 
         # Master should NOT have Carol
         has_carol = any("carol@example.com" in att.value.lower()
-                       for att in master.attendee_list)
+                        for att in master.attendee_list)
         assert not has_carol, "Carol should NOT be in master"
 
         # Master Bob should still be ACCEPTED
@@ -3682,7 +3680,6 @@ END:VCALENDAR"""
 
     def test_implicit_schedule_agent_client_skips(self):
         """Test implicit scheduling respects SCHEDULE-AGENT=CLIENT."""
-        from moreradicale.itip.models import ScheduleStatus
         from moreradicale.itip.processor import ITIPProcessor
 
         self.configure({"auth": {"type": "none"}})
@@ -4233,7 +4230,6 @@ END:VCALENDAR"""
 
     def test_add_method_respects_schedule_agent(self):
         """Test ADD method respects SCHEDULE-AGENT=CLIENT."""
-        from moreradicale.itip.models import ScheduleStatus
 
         self.configure({"auth": {"type": "none"}})
         self.configure({
@@ -6238,7 +6234,7 @@ END:VCALENDAR"""
     def test_available_occurrence_expansion(self):
         """Test expanding AVAILABLE recurrences within a time range."""
         from moreradicale.itip.availability import AvailablePeriod
-        from datetime import datetime, timedelta
+        from datetime import datetime
         from dateutil.tz import UTC
 
         # Create available period: every Monday 9am-5pm starting Jan 6, 2025
@@ -6265,7 +6261,7 @@ END:VCALENDAR"""
 
     def test_vavailability_priority_ordering(self):
         """Test that VAVAILABILITY components are sorted by priority."""
-        from moreradicale.itip.availability import VAvailability, BusyType
+        from moreradicale.itip.availability import VAvailability
         from datetime import datetime
         from dateutil.tz import UTC
 
@@ -6623,12 +6619,12 @@ END:VCALENDAR"""
 
 class TestVJOURNALScheduling(BaseTest):
     """Test VJOURNAL scheduling support (RFC 5546 §3.2).
-    
+
     VJOURNAL supports only 3 iTIP methods:
     - PUBLISH: Post a journal entry
     - ADD: Add instances to recurring journal
     - CANCEL: Cancel journal entry (via DELETE)
-    
+
     VJOURNAL does NOT support interactive scheduling:
     - REQUEST, REPLY, REFRESH, COUNTER, DECLINECOUNTER not applicable
     """
@@ -6827,8 +6823,8 @@ END:VCALENDAR"""
 
         # Find the CANCEL message and verify it's a VJOURNAL
         inbox_items = [href for href in responses.keys()
-                      if href != "/bob/schedule-inbox/"]
-        
+                       if href != "/bob/schedule-inbox/"]
+
         if inbox_items:
             # Read the first inbox item
             item_href = inbox_items[0]

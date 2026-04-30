@@ -8,9 +8,6 @@ Tests the timezone-by-reference feature including:
 - VTIMEZONE stripping
 """
 
-import re
-
-import pytest
 
 from moreradicale.tests import BaseTest
 

@@ -8,7 +8,6 @@ and WebDAV property discovery.
 import json
 import os
 import tempfile
-from io import BytesIO
 
 import pytest
 

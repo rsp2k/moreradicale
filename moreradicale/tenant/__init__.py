@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Sequence, TYPE_CHECKING
 
 from moreradicale import utils
-from moreradicale.log import logger
 
 if TYPE_CHECKING:
     from moreradicale import config

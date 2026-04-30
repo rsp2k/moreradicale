@@ -25,15 +25,13 @@ Tests cover:
 - CS:notification-URL PROPFIND property
 """
 
-import json
 import xml.etree.ElementTree as ET
 
-from moreradicale import config, xmlutils
+from moreradicale import xmlutils
 from moreradicale.sharing.notifications import (
     Notification, NotificationType, NotificationManager,
     NOTIFICATIONS_PROPERTY, NOTIFICATIONS_COLLECTION, CS, DAV
 )
-from moreradicale.sharing import Share, ShareAccess
 
 
 class TestNotificationType:
@@ -157,7 +155,7 @@ class TestNotificationXML:
         )
 
         xml_elem = notification.to_xml()
-        xml_str = ET.tostring(xml_elem, encoding="unicode")
+        ET.tostring(xml_elem, encoding="unicode")
 
         # Verify root element
         assert xml_elem.tag == xmlutils.make_clark("CS:notification")
@@ -230,7 +228,7 @@ class TestNotificationXML:
         )
 
         xml_elem = notification.to_xml()
-        xml_str = ET.tostring(xml_elem, encoding="unicode")
+        ET.tostring(xml_elem, encoding="unicode")
 
         # Verify root element
         assert xml_elem.tag == xmlutils.make_clark("CS:notification")
@@ -295,7 +293,7 @@ class TestNotificationConstants:
         assert DAV == "DAV:"
 
 
-from moreradicale.tests import BaseTest
+from moreradicale.tests import BaseTest  # noqa: E402
 
 
 class TestNotificationManager(BaseTest):

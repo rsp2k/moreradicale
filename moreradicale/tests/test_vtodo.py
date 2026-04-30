@@ -4,8 +4,6 @@ Tests for Enhanced VTODO Support.
 Tests task relationships (RFC 9253), filtering, and property extraction.
 """
 
-import datetime
-import pytest
 import vobject
 
 

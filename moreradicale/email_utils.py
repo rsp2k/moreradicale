@@ -26,7 +26,7 @@ import base64
 import mimetypes
 import smtplib
 import ssl
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -356,7 +356,6 @@ def extract_attachments_from_icalendar(icalendar_text: str) -> List[Attachment]:
     Returns:
         List of Attachment objects
     """
-    import re
 
     attachments = []
 
@@ -458,8 +457,8 @@ def extract_attachments_from_icalendar(icalendar_text: str) -> List[Attachment]:
 
 
 def add_attachments_to_message(message: MIMEMultipart,
-                                attachments: List[Attachment],
-                                include_uri_refs: bool = True) -> None:
+                               attachments: List[Attachment],
+                               include_uri_refs: bool = True) -> None:
     """
     Add attachments to a MIME message.
 

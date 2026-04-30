@@ -31,7 +31,7 @@ from moreradicale import config, httputils, pathutils, rights, storage, types, x
 from moreradicale.app.base import Access, ApplicationBase
 from moreradicale.log import logger
 from moreradicale.sharing import (SHARES_PROPERTY, PROXY_READ_PROPERTY,
-                               PROXY_WRITE_PROPERTY, InviteStatus, ShareAccess)
+                                  PROXY_WRITE_PROPERTY, InviteStatus, ShareAccess)
 
 # RFC 3253 versioning support - lazy import
 _git_metadata_reader = None
@@ -181,7 +181,7 @@ def xml_propfind_response(
     if isinstance(item, storage.BaseCollection):
         is_collection = True
         is_leaf = item.tag in ("VADDRESSBOOK", "VCALENDAR", "VSUBSCRIBED",
-                                "SCHEDULING-INBOX", "SCHEDULING-OUTBOX")
+                               "SCHEDULING-INBOX", "SCHEDULING-OUTBOX")
         collection = item
         # Some clients expect collections to end with `/`
         uri = pathutils.unstrip_path(item.path, True)
@@ -776,7 +776,7 @@ def xml_propfind_response(
                     if delegation_enabled:
                         # Scan all principals to find who has granted us read proxy
                         _add_proxy_for_elements(element, user, "read",
-                                               base_prefix, storage, configuration)
+                                                base_prefix, storage, configuration)
                     # Empty element is valid if no proxies
                 else:
                     is404 = True
@@ -787,7 +787,7 @@ def xml_propfind_response(
                     if delegation_enabled:
                         # Scan all principals to find who has granted us write proxy
                         _add_proxy_for_elements(element, user, "write",
-                                               base_prefix, storage, configuration)
+                                                base_prefix, storage, configuration)
                     # Empty element is valid if no proxies
                 else:
                     is404 = True
@@ -796,7 +796,7 @@ def xml_propfind_response(
                 if is_collection and collection.is_principal and user:
                     sharing_enabled = configuration.get("sharing", "enabled")
                     if sharing_enabled:
-                        from moreradicale.sharing import SharingManager, InviteStatus
+                        from moreradicale.sharing import SharingManager
                         sharing_manager = SharingManager(configuration)
                         # Find all calendars shared with this user
                         shared_paths = sharing_manager.get_calendars_shared_with(

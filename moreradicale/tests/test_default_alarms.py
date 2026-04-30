@@ -8,7 +8,6 @@ Tests the default alarm properties used by iOS/macOS clients:
 - default-alarm-vtodo-date
 """
 
-import pytest
 
 from moreradicale.tests import BaseTest
 
