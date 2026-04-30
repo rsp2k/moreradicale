@@ -1,6 +1,6 @@
-# Advanced Features Guide for Radicale
+# Advanced Features Guide for moreradicale
 
-This guide covers advanced features added to Radicale beyond the core CalDAV/CardDAV functionality: Prometheus metrics, enhanced VTODO support, CardDAV directory gateway, and WebSocket real-time sync.
+This guide covers advanced features added to moreradicale beyond the core CalDAV/CardDAV functionality: Prometheus metrics, enhanced VTODO support, CardDAV directory gateway, WebSocket real-time sync, and RFC 3253 versioning.
 
 ## Table of Contents
 
@@ -22,13 +22,22 @@ This guide covers advanced features added to Radicale beyond the core CalDAV/Car
    - [Protocol Overview](#websocket-protocol)
    - [Client Integration](#client-integration)
    - [JavaScript Example](#javascript-example)
-5. [Troubleshooting](#troubleshooting)
+5. [RFC 3253 Versioning (DeltaV)](#rfc-3253-versioning-deltav)
+   - [Overview](#versioning-overview)
+   - [Configuration](#versioning-configuration)
+   - [Read-Only Versioning](#read-only-versioning)
+   - [Write Operations (CHECKOUT/CHECKIN)](#write-operations-checkoutcheckin)
+   - [Auto-Versioning](#auto-versioning)
+   - [Version Properties](#version-properties)
+   - [Version Labels](#version-labels-rfc-3253-8)
+   - [Activities (Change Sets)](#activities-change-sets)
+6. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Prometheus Metrics
 
-Radicale exposes operational metrics in Prometheus format for monitoring server health, performance, and usage patterns.
+moreradicale exposes operational metrics in Prometheus format for monitoring server health, performance, and usage patterns.
 
 ### Metrics Quick Start
 
@@ -75,13 +84,13 @@ require_auth = True
 
 [auth]
 type = htpasswd
-htpasswd_filename = /etc/radicale/users
+htpasswd_filename = /etc/moreradicale/users
 htpasswd_encryption = bcrypt
 ```
 
 ### Available Metrics
 
-Radicale exposes the following Prometheus metrics:
+moreradicale exposes the following Prometheus metrics:
 
 #### Request Metrics
 
@@ -139,7 +148,7 @@ Radicale exposes the following Prometheus metrics:
 
 #### Prometheus Configuration
 
-Add Radicale as a scrape target in `prometheus.yml`:
+Add moreradicale as a scrape target in `prometheus.yml`:
 
 ```yaml
 scrape_configs:
@@ -224,7 +233,7 @@ radicale_websync_connections 12
 
 ## Enhanced VTODO Support (RFC 9253)
 
-Radicale implements RFC 9253 Task Extensions, providing structured task relationships, dependencies, and hierarchies for VTODO components.
+moreradicale implements RFC 9253 Task Extensions, providing structured task relationships, dependencies, and hierarchies for VTODO components.
 
 ### Task Relationships
 
@@ -256,10 +265,10 @@ END:VTODO
 
 #### Building Task Hierarchies
 
-Radicale provides utilities for building and querying task hierarchies:
+moreradicale provides utilities for building and querying task hierarchies:
 
 ```python
-from radicale.vtodo.relationships import (
+from moreradicale.vtodo.relationships import (
     extract_relationships,
     build_task_hierarchy,
     validate_no_cycles,
@@ -290,7 +299,7 @@ is_valid = validate_no_cycles(hierarchy)
 Extract and manipulate VTODO properties programmatically:
 
 ```python
-from radicale.vtodo.properties import get_task_properties
+from moreradicale.vtodo.properties import get_task_properties
 
 properties = get_task_properties(vtodo_component)
 # Returns: {
@@ -326,7 +335,7 @@ properties = get_task_properties(vtodo_component)
 #### Filter by Status
 
 ```python
-from radicale.vtodo.properties import filter_tasks_by_status
+from moreradicale.vtodo.properties import filter_tasks_by_status
 
 # Get incomplete tasks
 incomplete = filter_tasks_by_status(vtodo_list, ["NEEDS-ACTION", "IN-PROCESS"])
@@ -338,7 +347,7 @@ completed = filter_tasks_by_status(vtodo_list, ["COMPLETED"])
 #### Filter by Completion Percentage
 
 ```python
-from radicale.vtodo.properties import filter_tasks_by_percent_range
+from moreradicale.vtodo.properties import filter_tasks_by_percent_range
 
 # Tasks 50-100% complete
 nearly_done = filter_tasks_by_percent_range(vtodo_list, min_percent=50, max_percent=100)
@@ -350,7 +359,7 @@ not_started = filter_tasks_by_percent_range(vtodo_list, min_percent=0, max_perce
 #### Sort by Priority
 
 ```python
-from radicale.vtodo.properties import sort_tasks_by_priority
+from moreradicale.vtodo.properties import sort_tasks_by_priority
 
 # High priority first (1 before 9)
 sorted_tasks = sort_tasks_by_priority(vtodo_list, ascending=True)
@@ -359,7 +368,7 @@ sorted_tasks = sort_tasks_by_priority(vtodo_list, ascending=True)
 #### Sort by Due Date
 
 ```python
-from radicale.vtodo.properties import sort_tasks_by_due
+from moreradicale.vtodo.properties import sort_tasks_by_due
 
 # Soonest due first
 sorted_tasks = sort_tasks_by_due(vtodo_list, ascending=True)
@@ -372,7 +381,7 @@ sorted_tasks = sort_tasks_by_due(vtodo_list, ascending=True)
 ```
 BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Radicale//RFC9253//EN
+PRODID:-//moreradicale//RFC9253//EN
 
 # Parent project
 BEGIN:VTODO
@@ -426,7 +435,7 @@ The CardDAV Directory Gateway provides read-only access to LDAP/Active Directory
 
 ### LDAP Configuration
 
-Add to your Radicale configuration:
+Add to your moreradicale configuration:
 
 ```ini
 [directory]
@@ -502,7 +511,7 @@ Configure the custom mapping:
 
 ```ini
 [directory]
-attribute_mapping_file = /etc/radicale/ldap-mapping.json
+attribute_mapping_file = /etc/moreradicale/ldap-mapping.json
 ```
 
 ### Active Directory Integration
@@ -515,7 +524,7 @@ enabled = True
 type = ldap
 ldap_uri = ldap://dc.example.com:389
 ldap_base_dn = OU=Users,DC=example,DC=com
-ldap_bind_dn = CN=Radicale Service,OU=Services,DC=example,DC=com
+ldap_bind_dn = CN=moreradicale Service,OU=Services,DC=example,DC=com
 ldap_bind_password = your-ad-password
 ldap_filter = (&(objectClass=user)(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))
 ldap_scope = subtree
@@ -953,6 +962,833 @@ This pattern reduces polling from every 5-15 minutes to instant notifications.
 
 ---
 
+## RFC 3253 Versioning (DeltaV)
+
+moreradicale implements RFC 3253 WebDAV Versioning (DeltaV), providing git-backed version history for calendar and contact items. This enables viewing historical versions, comparing changes, and using explicit checkout/checkin workflows.
+
+### Versioning Overview
+
+| Feature | Description |
+|---------|-------------|
+| Git Backend | Version history stored in git repository |
+| Read Operations | View version history, retrieve old versions |
+| Write Operations | CHECKOUT, CHECKIN, UNCHECKOUT, VERSION-CONTROL |
+| Auto-Versioning | Automatic commits on PUT operations |
+| VERSION-TREE Report | RFC 3253 compliant version history report |
+
+### Versioning Configuration
+
+Enable versioning in your configuration:
+
+```ini
+[storage]
+# Enable RFC 3253 versioning
+versioning = True
+
+# Maximum versions to return in history (default: 100)
+versioning_max_history = 100
+
+# Auto-versioning on PUT: disabled | checkout-checkin
+versioning_auto = checkout-checkin
+
+# Fork policy for concurrent checkouts: forbidden | discouraged | ok
+versioning_checkout_fork = forbidden
+
+# Checkout timeout in seconds (0 = never expire)
+versioning_checkout_timeout = 3600
+```
+
+#### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `versioning` | `False` | Enable RFC 3253 versioning support |
+| `versioning_max_history` | `100` | Maximum versions returned per item |
+| `versioning_auto` | `disabled` | Auto-commit on PUT operations |
+| `versioning_checkout_fork` | `forbidden` | Policy for concurrent checkouts |
+| `versioning_checkout_timeout` | `3600` | Checkout expiration in seconds |
+
+#### Prerequisites
+
+Versioning requires:
+1. Git installed and available in PATH
+2. Storage folder initialized as a git repository
+
+```bash
+# Initialize git in storage folder
+cd /var/lib/moreradicale/collections
+git init
+git config user.email "radicale@localhost"
+git config user.name "moreradicale"
+```
+
+### Read-Only Versioning
+
+#### Accessing Version History
+
+Version history is available at virtual `/.versions/` paths:
+
+```
+/.versions/{user}/{collection}/{item}/           # Version history (XML)
+/.versions/{user}/{collection}/{item}/{sha}      # Specific version content
+```
+
+#### Get Version History
+
+```bash
+# List all versions of an event
+curl -u alice:password \
+  https://server/.versions/alice/calendar.ics/event.ics/
+```
+
+Returns XML with version list:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<D:version-tree xmlns:D="DAV:">
+  <D:version>
+    <D:href>/.versions/alice/calendar.ics/event.ics/abc12345</D:href>
+    <D:version-name>abc12345</D:version-name>
+    <D:creator-displayname>alice</D:creator-displayname>
+    <D:getlastmodified>Mon, 13 Jan 2025 10:30:00 GMT</D:getlastmodified>
+    <D:comment>Update meeting time</D:comment>
+  </D:version>
+  <D:version>
+    <D:href>/.versions/alice/calendar.ics/event.ics/def67890</D:href>
+    <D:version-name>def67890</D:version-name>
+    <D:creator-displayname>alice</D:creator-displayname>
+    <D:getlastmodified>Sun, 12 Jan 2025 14:00:00 GMT</D:getlastmodified>
+    <D:comment>Initial creation</D:comment>
+  </D:version>
+</D:version-tree>
+```
+
+#### Get Specific Version Content
+
+```bash
+# Retrieve content from a specific version
+curl -u alice:password \
+  https://server/.versions/alice/calendar.ics/event.ics/def67890
+```
+
+Returns the iCalendar content as it existed at that version.
+
+#### VERSION-TREE Report
+
+Use the RFC 3253 VERSION-TREE report for version history:
+
+```bash
+curl -X REPORT \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0"?>
+      <D:version-tree xmlns:D="DAV:">
+        <D:prop>
+          <D:version-name/>
+          <D:creator-displayname/>
+          <D:getlastmodified/>
+        </D:prop>
+      </D:version-tree>' \
+  https://server/alice/calendar.ics/event.ics
+```
+
+### Write Operations (CHECKOUT/CHECKIN)
+
+RFC 3253 defines an explicit versioning workflow:
+
+1. **CHECKOUT**: Lock item for editing
+2. **Modify**: Update the item with PUT
+3. **CHECKIN**: Create new version and unlock
+
+#### CHECKOUT - Start Editing
+
+```bash
+# Check out an item for editing
+curl -X CHECKOUT \
+  -u alice:password \
+  https://server/alice/calendar.ics/event.ics
+```
+
+Response (200 OK):
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/alice/calendar.ics/event.ics</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:checked-out>
+          <D:href>/.versions/alice/calendar.ics/event.ics/abc12345</D:href>
+        </D:checked-out>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>
+```
+
+#### Modify the Item
+
+```bash
+# Update the checked-out item
+curl -X PUT \
+  -u alice:password \
+  -H "Content-Type: text/calendar" \
+  -d 'BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:meeting-123@example.com
+DTSTART:20250115T140000Z
+DTEND:20250115T150000Z
+SUMMARY:Updated Meeting
+END:VEVENT
+END:VCALENDAR' \
+  https://server/alice/calendar.ics/event.ics
+```
+
+#### CHECKIN - Create New Version
+
+```bash
+# Check in to create new version
+curl -X CHECKIN \
+  -u alice:password \
+  https://server/alice/calendar.ics/event.ics
+```
+
+Response (201 Created):
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/alice/calendar.ics/event.ics</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:checked-in>
+          <D:href>/.versions/alice/calendar.ics/event.ics/xyz98765</D:href>
+        </D:checked-in>
+        <D:version-name>xyz98765</D:version-name>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>
+```
+
+The `Location` header contains the URL of the newly created version.
+
+#### UNCHECKOUT - Cancel Editing
+
+Cancel a checkout and discard changes:
+
+```bash
+# Cancel checkout without creating version
+curl -X UNCHECKOUT \
+  -u alice:password \
+  https://server/alice/calendar.ics/event.ics
+```
+
+This restores the item to its state before checkout.
+
+#### VERSION-CONTROL - Initialize Tracking
+
+Place an untracked item under version control:
+
+```bash
+# Initialize version control for an item
+curl -X VERSION-CONTROL \
+  -u alice:password \
+  https://server/alice/calendar.ics/event.ics
+```
+
+Response (200 OK):
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/alice/calendar.ics/event.ics</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:resourcetype>
+          <D:version-controlled-resource/>
+        </D:resourcetype>
+        <D:checked-in>
+          <D:href>/.versions/alice/calendar.ics/event.ics/initial1</D:href>
+        </D:checked-in>
+        <D:version-name>initial1</D:version-name>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>
+```
+
+### Auto-Versioning
+
+When `versioning_auto = checkout-checkin`, PUT operations automatically create git commits without requiring explicit CHECKOUT/CHECKIN:
+
+```ini
+[storage]
+versioning = True
+versioning_auto = checkout-checkin
+```
+
+With auto-versioning enabled:
+- Creating a new item: Commits with message `AUTO-VERSION: Create {item}`
+- Updating an item: Commits with message `AUTO-VERSION: Update {item}`
+
+This provides transparent versioning without changing client behavior.
+
+### Version Properties
+
+PROPFIND returns versioning properties when enabled:
+
+```bash
+curl -X PROPFIND \
+  -u alice:password \
+  -H "Depth: 0" \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0"?>
+      <D:propfind xmlns:D="DAV:">
+        <D:prop>
+          <D:checked-in/>
+          <D:version-history/>
+          <D:version-name/>
+        </D:prop>
+      </D:propfind>' \
+  https://server/alice/calendar.ics/event.ics
+```
+
+Response includes:
+
+```xml
+<D:prop>
+  <D:checked-in>
+    <D:href>/.versions/alice/calendar.ics/event.ics/abc12345</D:href>
+  </D:checked-in>
+  <D:version-history>
+    <D:href>/.versions/alice/calendar.ics/event.ics/</D:href>
+  </D:version-history>
+  <D:version-name>abc12345</D:version-name>
+</D:prop>
+```
+
+#### Available Version Properties
+
+| Property | Description |
+|----------|-------------|
+| `DAV:checked-in` | URL of current version (when not checked out) |
+| `DAV:checked-out` | URL of version being edited (when checked out) |
+| `DAV:version-history` | URL of version history resource |
+| `DAV:version-name` | Short version identifier (git SHA prefix) |
+| `DAV:creator-displayname` | Author of the version |
+| `DAV:getlastmodified` | Version timestamp |
+
+### Fork Control
+
+The `versioning_checkout_fork` option controls concurrent checkout behavior:
+
+| Policy | Behavior |
+|--------|----------|
+| `forbidden` | Only one user can checkout at a time (default) |
+| `discouraged` | Warn but allow concurrent checkouts |
+| `ok` | Allow multiple concurrent checkouts |
+
+With `forbidden` policy, a second CHECKOUT returns 409 Conflict:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<D:error xmlns:D="DAV:">
+  <D:cannot-modify-version-controlled-content/>
+  <D:responsedescription>Resource already checked out by alice</D:responsedescription>
+</D:error>
+```
+
+### Checkout Expiration
+
+Stale checkouts are automatically cleared after `versioning_checkout_timeout` seconds:
+
+```ini
+[storage]
+versioning_checkout_timeout = 3600  # 1 hour
+```
+
+Set to `0` to disable expiration (checkouts never expire).
+
+### Use Cases
+
+#### Audit Trail
+Track all changes to calendar/contact data for compliance:
+```bash
+# View complete history
+curl -u admin:password https://server/.versions/user/calendar.ics/event.ics/
+```
+
+#### Undo Changes
+Restore an item to a previous version:
+```bash
+# Get old content
+OLD_CONTENT=$(curl -u alice:password \
+  https://server/.versions/alice/calendar.ics/event.ics/def67890)
+
+# Restore by PUTting old content
+echo "$OLD_CONTENT" | curl -X PUT \
+  -u alice:password \
+  -H "Content-Type: text/calendar" \
+  -d @- \
+  https://server/alice/calendar.ics/event.ics
+```
+
+#### Conflict Prevention
+Use CHECKOUT to prevent concurrent edits in shared calendars:
+```bash
+# Lock for editing
+curl -X CHECKOUT -u alice:password https://server/shared/calendar.ics/meeting.ics
+
+# Make changes...
+
+# Unlock and save
+curl -X CHECKIN -u alice:password https://server/shared/calendar.ics/meeting.ics
+```
+
+### Version Labels (RFC 3253 §8)
+
+Labels provide human-readable names for specific versions, like git tags. This allows you to mark important versions (releases, milestones, stable points) for easy reference.
+
+#### LABEL Operations
+
+RFC 3253 defines three label operations:
+
+| Operation | Purpose | Example Use Case |
+|-----------|---------|------------------|
+| **ADD** | Add new label to current version | Mark version as "production" |
+| **SET** | Move existing label to current version | Update "latest" to point to new version |
+| **REMOVE** | Delete a label from all versions | Remove obsolete "beta" label |
+
+#### Adding Labels
+
+Add one or more labels to the current version:
+
+```bash
+# Add single label
+curl -X LABEL \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0" encoding="utf-8"?>
+      <D:label xmlns:D="DAV:">
+        <D:add>
+          <D:label-name>production</D:label-name>
+        </D:add>
+      </D:label>' \
+  https://server/alice/calendar.ics/event.ics
+```
+
+Response (200 OK):
+```
+LABEL ADD successful for labels: production
+```
+
+#### Adding Multiple Labels
+
+```bash
+# Add multiple labels at once
+curl -X LABEL \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0" encoding="utf-8"?>
+      <D:label xmlns:D="DAV:">
+        <D:add>
+          <D:label-name>v1.0</D:label-name>
+          <D:label-name>stable</D:label-name>
+          <D:label-name>production</D:label-name>
+        </D:add>
+      </D:label>' \
+  https://server/alice/calendar.ics/event.ics
+```
+
+#### Moving Labels (SET)
+
+Move an existing label to the current version:
+
+```bash
+# Move "latest" label to current version
+curl -X LABEL \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0" encoding="utf-8"?>
+      <D:label xmlns:D="DAV:">
+        <D:set>
+          <D:label-name>latest</D:label-name>
+        </D:set>
+      </D:label>' \
+  https://server/alice/calendar.ics/event.ics
+```
+
+Use SET when you want a label to always point to the most recent version of something (like "production" or "latest").
+
+#### Removing Labels
+
+Delete a label completely:
+
+```bash
+# Remove label from all versions
+curl -X LABEL \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0" encoding="utf-8"?>
+      <D:label xmlns:D="DAV:">
+        <D:remove>
+          <D:label-name>temporary</D:label-name>
+        </D:remove>
+      </D:label>' \
+  https://server/alice/calendar.ics/event.ics
+```
+
+#### Querying Labels with PROPFIND
+
+Retrieve all labels for an item using the `DAV:label-name-set` property:
+
+```bash
+# Get labels for an item
+curl -X PROPFIND \
+  -u alice:password \
+  -H "Depth: 0" \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0" encoding="utf-8"?>
+      <propfind xmlns="DAV:">
+        <prop>
+          <label-name-set/>
+        </prop>
+      </propfind>' \
+  https://server/alice/calendar.ics/event.ics
+```
+
+Response:
+```xml
+<?xml version='1.0' encoding='utf-8'?>
+<multistatus xmlns="DAV:">
+  <response>
+    <href>/alice/calendar.ics/event.ics</href>
+    <propstat>
+      <prop>
+        <label-name-set>
+          <label-name>v1.0</label-name>
+          <label-name>stable</label-name>
+          <label-name>production</label-name>
+        </label-name-set>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>
+```
+
+#### Label Use Cases
+
+**Release Management**:
+```bash
+# Mark a stable version for distribution
+curl -X LABEL -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d '<D:label xmlns:D="DAV:"><D:add><D:label-name>v2.1-release</D:label-name></D:add></D:label>' \
+  https://server/alice/calendar.ics/team-schedule.ics
+```
+
+**Environment Tracking**:
+```bash
+# Track which version is in each environment
+curl -X LABEL ... -d '<D:add><D:label-name>dev</D:label-name></D:add>' ...
+curl -X LABEL ... -d '<D:add><D:label-name>staging</D:label-name></D:add>' ...
+curl -X LABEL ... -d '<D:add><D:label-name>production</D:label-name></D:add>' ...
+```
+
+**Milestone Markers**:
+```bash
+# Mark important milestones in calendar history
+curl -X LABEL ... -d '<D:add><D:label-name>before-reorganization</D:label-name></D:add>' ...
+curl -X LABEL ... -d '<D:add><D:label-name>2025-Q1-final</D:label-name></D:add>' ...
+```
+
+#### Label Storage
+
+Labels are stored as git lightweight tags with path-based namespacing:
+
+```bash
+# Git tags visible in storage/collection-root/.git
+cd /var/lib/moreradicale/collections
+git tag -l
+# Output:
+#   alice/calendar.ics/event.ics/production
+#   alice/calendar.ics/event.ics/stable
+#   alice/calendar.ics/event.ics/v1.0
+```
+
+This prevents label name collisions across different items while keeping the git repository clean and efficient.
+
+### Activities (Change Sets)
+
+RFC 3253 Activities provide a way to group related changes across multiple resources into logical change sets, similar to feature branches in git. Activities allow you to:
+
+- **Track related changes**: Group multiple CHECKOUT/CHECKIN operations into a single activity
+- **Associate versions**: Link git commits to high-level work items
+- **Query change sets**: Find all resources and versions associated with an activity
+- **Organize work**: Separate concurrent changes into isolated activities
+
+#### Creating Activities
+
+Use the MKACTIVITY method to create a new activity:
+
+```bash
+# Create activity with name and description
+curl -X MKACTIVITY \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0"?>
+      <D:mkactivity xmlns:D="DAV:">
+        <D:displayname>Q1 2025 Calendar Updates</D:displayname>
+        <D:comment>All calendar changes for Q1 2025 planning</D:comment>
+      </D:mkactivity>' \
+  https://server/.activities/new
+```
+
+Response (201 Created):
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/.activities/f47ac10b-58cc-4372-a567-0e02b2c3d479</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:displayname>Q1 2025 Calendar Updates</D:displayname>
+        <D:comment>All calendar changes for Q1 2025 planning</D:comment>
+        <D:creator-displayname>alice</D:creator-displayname>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>
+```
+
+The `Location` header contains the activity URL: `/.activities/{activity-id}`
+
+#### Using Activities with CHECKOUT
+
+Associate a checkout with an activity by including the activity URL in the CHECKOUT request:
+
+```bash
+# Checkout with activity context
+ACTIVITY_ID="f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+curl -X CHECKOUT \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d "<?xml version=\"1.0\"?>
+      <D:checkout xmlns:D=\"DAV:\">
+        <D:activity-set>
+          <D:href>/.activities/${ACTIVITY_ID}</D:href>
+        </D:activity-set>
+      </D:checkout>" \
+  https://server/alice/calendar.ics/event.ics
+```
+
+Response includes the activity association:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/alice/calendar.ics/event.ics</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:checked-out>
+          <D:href>/.versions/alice/calendar.ics/event.ics/abc12345</D:href>
+        </D:checked-out>
+        <D:activity-set>
+          <D:href>/.activities/f47ac10b-58cc-4372-a567-0e02b2c3d479</D:href>
+        </D:activity-set>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>
+```
+
+#### Automatic Version Tracking
+
+When you CHECKIN a resource that was checked out within an activity, the created version (git commit SHA) is automatically associated with the activity:
+
+```bash
+# 1. Modify the checked-out resource
+curl -X PUT \
+  -u alice:password \
+  -H "Content-Type: text/calendar" \
+  -d 'BEGIN:VCALENDAR...' \
+  https://server/alice/calendar.ics/event.ics
+
+# 2. Checkin - version automatically added to activity
+curl -X CHECKIN \
+  -u alice:password \
+  https://server/alice/calendar.ics/event.ics
+```
+
+The new version's git commit SHA is recorded in the activity.
+
+#### Querying Activity Associations
+
+Use PROPFIND to discover which activities a resource is associated with:
+
+```bash
+# Query activity-set property
+curl -X PROPFIND \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -H "Depth: 0" \
+  -d '<?xml version="1.0"?>
+      <D:propfind xmlns:D="DAV:">
+        <D:prop>
+          <D:activity-set/>
+        </D:prop>
+      </D:propfind>' \
+  https://server/alice/calendar.ics/event.ics
+```
+
+Response:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/alice/calendar.ics/event.ics</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:activity-set>
+          <D:href>/.activities/f47ac10b-58cc-4372-a567-0e02b2c3d479</D:href>
+        </D:activity-set>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>
+```
+
+#### Activity Workflow Example
+
+Complete workflow for organizing related changes:
+
+```bash
+# 1. Create activity for feature work
+curl -X MKACTIVITY \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0"?>
+      <D:mkactivity xmlns:D="DAV:">
+        <D:displayname>Team Meeting Reorganization</D:displayname>
+        <D:comment>Update all team meeting times for new schedule</D:comment>
+      </D:mkactivity>' \
+  https://server/.activities/new
+
+# Capture activity ID from Location header
+ACTIVITY="abc123..."
+
+# 2. Checkout multiple related events with same activity
+for event in meeting-1.ics meeting-2.ics meeting-3.ics; do
+  curl -X CHECKOUT \
+    -u alice:password \
+    -H "Content-Type: application/xml" \
+    -d "<?xml version=\"1.0\"?>
+        <D:checkout xmlns:D=\"DAV:\">
+          <D:activity-set>
+            <D:href>/.activities/${ACTIVITY}</D:href>
+          </D:activity-set>
+        </D:checkout>" \
+    https://server/alice/calendar.ics/${event}
+done
+
+# 3. Modify each event (update meeting times)
+# ... PUT requests for each event ...
+
+# 4. Checkin each event - versions automatically tracked in activity
+for event in meeting-1.ics meeting-2.ics meeting-3.ics; do
+  curl -X CHECKIN \
+    -u alice:password \
+    https://server/alice/calendar.ics/${event}
+done
+
+# 5. Query activity to see all associated versions
+# (Future: GET /.activities/${ACTIVITY} to view activity details)
+```
+
+#### Activity Storage
+
+Activities are stored in the `.activities/` directory within the storage folder as JSON files:
+
+```bash
+ls -la /var/lib/moreradicale/collections/.activities/
+# Output:
+# f47ac10b-58cc-4372-a567-0e02b2c3d479.json
+# a1b2c3d4-5678-90ab-cdef-123456789012.json
+```
+
+Each activity file contains:
+
+```json
+{
+  "activity_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "creator": "alice",
+  "created": "2025-01-16T10:30:00Z",
+  "display_name": "Q1 2025 Calendar Updates",
+  "description": "All calendar changes for Q1 2025 planning",
+  "checkouts": [
+    "collection-root/alice/calendar.ics/event-1.ics",
+    "collection-root/alice/calendar.ics/event-2.ics"
+  ],
+  "versions": [
+    "abc12345def67890",
+    "fed09876cba54321"
+  ]
+}
+```
+
+#### Activity Use Cases
+
+**Feature Development**:
+```bash
+# Group all changes for a feature into one activity
+MKACTIVITY "Conference Schedule Feature"
+CHECKOUT event-1.ics (with activity)
+CHECKOUT event-2.ics (with activity)
+# ... modify and checkin
+# All versions linked to feature activity
+```
+
+**Bulk Updates**:
+```bash
+# Track mass updates across many resources
+MKACTIVITY "Timezone Migration - EST to CST"
+# Checkout 50 events, update timezones, checkin
+# Activity tracks all 50 version changes
+```
+
+**Collaborative Changes**:
+```bash
+# Multiple users working on related calendars
+MKACTIVITY "Conference Planning" by alice
+# Alice and bob both checkout events with same activity
+# All commits tracked together regardless of author
+```
+
+**Audit Trail**:
+```bash
+# Activities provide high-level audit grouping
+# "What changed during Q1 planning?"
+# Query activity to see all associated git commits
+```
+
+---
+
 ## Troubleshooting
 
 ### Metrics Issues
@@ -993,7 +1829,7 @@ curl -u user:password http://localhost:5232/.metrics
 **Solution**: Review and fix RELATED-TO properties to remove cycles. Use `validate_no_cycles()` to detect issues:
 
 ```python
-from radicale.vtodo.relationships import validate_no_cycles, build_task_hierarchy
+from moreradicale.vtodo.relationships import validate_no_cycles, build_task_hierarchy
 
 hierarchy = build_task_hierarchy(vtodo_list)
 if not validate_no_cycles(hierarchy):
@@ -1075,6 +1911,70 @@ setInterval(() => {
 }, 25000);  // Every 25 seconds
 ```
 
+### Versioning Issues
+
+#### CHECKOUT/CHECKIN returns 405 Method Not Allowed
+
+**Cause**: Versioning is not enabled.
+
+**Solution**:
+```ini
+[storage]
+versioning = True
+```
+
+#### Git commit fails with "empty ident name"
+
+**Cause**: Git user identity not configured in storage folder.
+
+**Solution**: Configure git identity in storage folder:
+```bash
+cd /var/lib/moreradicale/collections
+git config user.email "radicale@localhost"
+git config user.name "moreradicale"
+```
+
+#### Version history returns empty
+
+**Cause**: Item has no git history or is not tracked.
+
+**Solution**:
+1. Verify storage folder is a git repository: `git status`
+2. Check if item is tracked: `git log --follow -- collection-root/user/calendar.ics/event.ics`
+3. Use VERSION-CONTROL to initialize tracking for untracked items
+
+#### CHECKOUT returns 409 Conflict
+
+**Cause**: Item already checked out by another user (fork policy = forbidden).
+
+**Solution**:
+1. Wait for other user to CHECKIN or UNCHECKOUT
+2. Or change fork policy to allow concurrent checkouts:
+   ```ini
+   [storage]
+   versioning_checkout_fork = ok
+   ```
+
+#### Auto-versioning not creating commits
+
+**Cause**: `versioning_auto` not set to `checkout-checkin`.
+
+**Solution**:
+```ini
+[storage]
+versioning = True
+versioning_auto = checkout-checkin
+```
+
+#### Version content returns 404
+
+**Cause**: Invalid version SHA or item path.
+
+**Solution**:
+1. Verify SHA exists: `git log --oneline -1 {sha}`
+2. Check path format: `/.versions/{user}/{collection}/{item}/{sha}`
+3. Use short SHA (8 characters) as returned by version-tree
+
 ### Debug Logging
 
 Enable debug logging for detailed troubleshooting:
@@ -1089,11 +1989,13 @@ Look for log messages:
 - `Directory:` - LDAP connection and query events
 - `Metrics:` - Metrics collection events
 - `VTODO:` - Task relationship processing
+- `VERSION-CONTROL`, `CHECKOUT`, `CHECKIN`, `UNCHECKOUT` - Versioning operations
+- `Auto-versioned` - Auto-versioning commits
 
 ---
 
 ## Support
 
-- GitHub Issues: https://github.com/Kozea/Radicale/issues
-- Discussions: https://github.com/Kozea/Radicale/discussions
+- GitHub Issues: https://github.com/Kozea/moreradicale/issues
+- Discussions: https://github.com/Kozea/moreradicale/discussions
 - Documentation: https://radicale.org

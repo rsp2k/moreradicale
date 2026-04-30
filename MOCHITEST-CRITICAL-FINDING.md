@@ -109,7 +109,7 @@ echo 'ac_add_options --enable-project=comm/mail' > mozconfig
 ```bash
 # Start Radicale server (Terminal 1)
 cd /home/rpm/claude/radicale/Radicale
-python3 -m radicale -C test-scheduling-config.ini
+python3 -m moreradicale -C test-scheduling-config.ini
 
 # Run Mochitest (Terminal 2)
 cd /home/rpm/thunderbird/mozilla-central

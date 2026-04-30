@@ -10,11 +10,11 @@
 
 ### Phase 1: Foundation Infrastructure (~300 lines)
 **Files Modified:**
-- `radicale/item/__init__.py` (lines 100, 239) - Added SCHEDULING-INBOX/OUTBOX tags
-- `radicale/xmlutils.py` (lines 35-38, 178-200) - MIME types and XML parsing
-- `radicale/app/propfind.py` - Added scheduling properties to principals
-- `radicale/storage/multifilesystem/discover.py` - Auto-create inbox/outbox on principal access
-- `radicale/config.py` - Added [scheduling] configuration section
+- `moreradicale/item/__init__.py` (lines 100, 239) - Added SCHEDULING-INBOX/OUTBOX tags
+- `moreradicale/xmlutils.py` (lines 35-38, 178-200) - MIME types and XML parsing
+- `moreradicale/app/propfind.py` - Added scheduling properties to principals
+- `moreradicale/storage/multifilesystem/discover.py` - Auto-create inbox/outbox on principal access
+- `moreradicale/config.py` - Added [scheduling] configuration section
 
 **Features:**
 ✅ Collection auto-creation (schedule-inbox, schedule-outbox)
@@ -24,9 +24,9 @@
 
 ### Phase 2: iTIP Message Parsing (~400 lines)
 **Files Created:**
-- `radicale/itip/__init__.py` - Package initialization
-- `radicale/itip/models.py` - Data models (ITIPMethod, AttendeePartStat, ITIPMessage, ITIPAttendee)
-- `radicale/itip/validator.py` - RFC 5546 validation (METHOD, UID, ORGANIZER, ATTENDEE requirements)
+- `moreradicale/itip/__init__.py` - Package initialization
+- `moreradicale/itip/models.py` - Data models (ITIPMethod, AttendeePartStat, ITIPMessage, ITIPAttendee)
+- `moreradicale/itip/validator.py` - RFC 5546 validation (METHOD, UID, ORGANIZER, ATTENDEE requirements)
 
 **Features:**
 ✅ iTIP message parsing and validation
@@ -36,12 +36,12 @@
 
 ### Phase 3: Internal Scheduling (~600 lines)
 **Files Created:**
-- `radicale/itip/router.py` - Attendee routing (internal vs external)
-- `radicale/itip/processor.py` - iTIP processing and delivery
-- `radicale/app/post.py` - POST handler for schedule-outbox
+- `moreradicale/itip/router.py` - Attendee routing (internal vs external)
+- `moreradicale/itip/processor.py` - iTIP processing and delivery
+- `moreradicale/app/post.py` - POST handler for schedule-outbox
 
 **Files Modified:**
-- `radicale/app/post.py` - Added scheduling POST handler
+- `moreradicale/app/post.py` - Added scheduling POST handler
 
 **Features:**
 ✅ POST to schedule-outbox with iTIP message
@@ -192,7 +192,7 @@ END:VCALENDAR
 ### Start Test Server
 ```bash
 cd /home/rpm/claude/radicale/Radicale
-python3 -m radicale -C test-scheduling-config.ini
+python3 -m moreradicale -C test-scheduling-config.ini
 ```
 
 Server runs at: `http://127.0.0.1:5232`
@@ -264,7 +264,7 @@ curl -X PROPFIND http://127.0.0.1:5232/bob/schedule-inbox/ -H "Depth: 1"
 ### Key Selling Points for Maintainers
 1. **Disabled by default** - Zero impact on existing deployments
 2. **Zero regression** - All existing tests pass
-3. **Modular design** - Clean `radicale/itip/` package, follows existing patterns
+3. **Modular design** - Clean `moreradicale/itip/` package, follows existing patterns
 4. **Client compatibility** - Apple Calendar, Thunderbird, Evolution expect RFC 6638
 5. **Phased approach** - Internal-only first, email (Phase 4) only if accepted
 6. **Well-tested** - 16 tests covering infrastructure, parsing, routing, workflows
@@ -285,8 +285,8 @@ curl -X PROPFIND http://127.0.0.1:5232/bob/schedule-inbox/ -H "Depth: 1"
 **NOT IMPLEMENTED YET** - Only if Phases 1-3 accepted upstream.
 
 Would reuse existing 1,084-line email hook infrastructure:
-- Extend `radicale/hook/email/__init__.py`
-- New `radicale/itip/email.py` for RFC 6047 (iTIP via email)
+- Extend `moreradicale/hook/email/__init__.py`
+- New `moreradicale/itip/email.py` for RFC 6047 (iTIP via email)
 - Multipart/alternative emails (text/plain + text/calendar)
 - SMTP configuration reuse
 

@@ -2,13 +2,13 @@
 
 ## Translations of this page
 
-* [Telugu](https://github.com/Kozea/Radicale/blob/master/docs/DOCUMENTATION.te.md)
+* [Telugu](https://github.com/Kozea/moreradicale/blob/master/docs/DOCUMENTATION.te.md)
 
 ## Getting started
 
-#### About Radicale
+#### About moreradicale
 
-Radicale is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
+`moreradicale` is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
 (contacts) server, that:
 
 * Shares calendars and contact lists through CalDAV, CardDAV and HTTP.
@@ -47,26 +47,26 @@ Check
 
 * [Tutorials](#tutorials)
 * [Documentation](#documentation-1)
-* [Wiki on GitHub](https://github.com/Kozea/Radicale/wiki)
-* [Discussions on GitHub](https://github.com/Kozea/Radicale/discussions)
-* [Open and already Closed Issues on GitHub](https://github.com/Kozea/Radicale/issues?q=is%3Aissue)
+* [Wiki on GitHub](https://github.com/Kozea/moreradicale/wiki)
+* [Discussions on GitHub](https://github.com/Kozea/moreradicale/discussions)
+* [Open and already Closed Issues on GitHub](https://github.com/Kozea/moreradicale/issues?q=is%3Aissue)
 
 #### What's New?
 
-Read the [Changelog on GitHub](https://github.com/Kozea/Radicale/blob/master/CHANGELOG.md).
+Read the [Changelog on GitHub](https://github.com/Kozea/moreradicale/blob/master/CHANGELOG.md).
 
 ## Tutorials
 
 ### Simple 5-minute setup
 
-You want to try Radicale but only have 5 minutes free in your calendar?
-Let's go right now and play a bit with Radicale!
+You want to try moreradicale but only have 5 minutes free in your calendar?
+Let's go right now and play a bit with moreradicale!
 
 The server, configured with settings from this section, only binds to localhost
 (i.e. it is not reachable over the network), and you can log in with any username and password.
 When everything works, you may get a local [client](#supported-clients)
 and start creating calendars and address books.
-If Radicale fits your needs, it may be time for some [basic configuration](#basic-configuration)
+If moreradicale fits your needs, it may be time for some [basic configuration](#basic-configuration)
 to support remote clients and desired authentication type.
 
 Follow one of the chapters below depending on your operating system.
@@ -74,7 +74,7 @@ Follow one of the chapters below depending on your operating system.
 #### Linux / \*BSD
 
 Hint: instead of downloading from PyPI, look for packages provided by your [distribution](#linux-distribution-packages).
-They contain also startup scripts integrated into your distributions, that allow Radicale to run daemonized.
+They contain also startup scripts integrated into your distributions, that allow moreradicale to run daemonized.
 
 First, make sure that **python** 3.9 or later and **pip** are installed. On most distributions it should be
 enough to install the package ``python3-pip``.
@@ -85,7 +85,7 @@ Recommended only for testing - open a console and type:
 
 ```bash
 # Run the following command to only install for the current user
-python3 -m pip install --user --upgrade https://github.com/Kozea/Radicale/archive/master.tar.gz
+python3 -m pip install --user --upgrade https://github.com/Kozea/moreradicale/archive/master.tar.gz
 ```
 
 If _install_ is not working and instead `error: externally-managed-environment` is displayed,
@@ -99,14 +99,14 @@ source ~/venv/bin/activate
 and try to install with
 
 ```bash
-python3 -m pip install --upgrade https://github.com/Kozea/Radicale/archive/master.tar.gz
+python3 -m pip install --upgrade https://github.com/Kozea/moreradicale/archive/master.tar.gz
 ```
 
 Start the service manually, data is stored only for the current user
 
 ```bash
 # Start, data is stored for the current user only
-python3 -m radicale --storage-filesystem-folder=~/.var/lib/radicale/collections --auth-type none
+python3 -m moreradicale --storage-filesystem-folder=~/.var/lib/moreradicale/collections --auth-type none
 ```
 
 ##### as system user (or as root)
@@ -116,14 +116,14 @@ Alternatively, you can install and run as system user or as root (not recommende
 ```bash
 # Run the following command as root (not recommended) or non-root system user
 # (the later may require --user in case dependencies are not available system-wide and/or virtual environment)
-python3 -m pip install --upgrade https://github.com/Kozea/Radicale/archive/master.tar.gz
+python3 -m pip install --upgrade https://github.com/Kozea/moreradicale/archive/master.tar.gz
 ```
 
-Start the service manually, with data stored in a system folder under `/var/lib/radicale/collections`:
+Start the service manually, with data stored in a system folder under `/var/lib/moreradicale/collections`:
 
 ```bash
-# Start, data is stored in a system folder (requires write permissions to /var/lib/radicale/collections)
-python3 -m radicale --storage-filesystem-folder=/var/lib/radicale/collections --auth-type none
+# Start, data is stored in a system folder (requires write permissions to /var/lib/moreradicale/collections)
+python3 -m moreradicale --storage-filesystem-folder=/var/lib/moreradicale/collections --auth-type none
 ```
 
 #### Windows
@@ -137,8 +137,8 @@ click on "Install now". Wait a couple of minutes, it's done!
 Launch a command prompt and type:
 
 ```powershell
-python -m pip install --upgrade https://github.com/Kozea/Radicale/archive/master.tar.gz
-python -m radicale --storage-filesystem-folder=~/radicale/collections --auth-type none
+python -m pip install --upgrade https://github.com/Kozea/moreradicale/archive/master.tar.gz
+python -m moreradicale --storage-filesystem-folder=~/moreradicale/collections --auth-type none
 ```
 
 ##### Common
@@ -155,10 +155,10 @@ See [Addresses](#addresses) and [Configuration/Server](#server) for more details
 Installation instructions can be found in the
 [simple 5-minute setup](#simple-5-minute-setup) tutorial.
 
-Radicale tries to load configuration files from `/etc/radicale/config` and
-`~/.config/radicale/config`.
+moreradicale tries to load configuration files from `/etc/moreradicale/config` and
+`~/.config/moreradicale/config`.
 Custom paths can be specified with the `--config /path/to/config` command
-line argument or the `RADICALE_CONFIG` environment variable.
+line argument or the `MORERADICALE_CONFIG` environment variable.
 Multiple configuration files can be separated by `:` (resp. `;` on Windows).
 Paths that start with `?` are optional.
 
@@ -171,7 +171,7 @@ All configuration options are described in detail in the
 
 #### Authentication
 
-In its default configuration since version 3.5.0, Radicale rejects all
+In its default configuration since version 3.5.0, moreradicale rejects all
 authentication attempts by using config option `type = denyall` (introduced
 with 3.2.2) as default until explicitly configured.
 
@@ -246,7 +246,7 @@ hosts = 0.0.0.0:5232, [::]:5232
 
 #### Storage
 
-Data is stored in the folder `/var/lib/radicale/collections`. The path can
+Data is stored in the folder `/var/lib/moreradicale/collections`. The path can
 be changed with the following configuration:
 
 ```ini
@@ -261,7 +261,7 @@ filesystem_folder = /path/to/storage
 
 #### Limits
 
-Radicale enforces limits on the maximum number of parallel connections,
+moreradicale enforces limits on the maximum number of parallel connections,
 the maximum file size (important for contacts with big photos) and the rate of
 incorrect authentication attempts. Connections are terminated after a timeout.
 The default values should be fine for most scenarios.
@@ -281,7 +281,7 @@ delay = 1
 
 ### Running as a service
 
-The method to run Radicale as a service depends on your host operating system.
+The method to run moreradicale as a service depends on your host operating system.
 Follow one of the chapters below depending on your operating system and
 requirements.
 
@@ -290,29 +290,29 @@ requirements.
 Recommendation: check support by [Linux Distribution Packages](#linux-distribution-packages)
 instead of manual setup / initial configuration.
 
-Create the **radicale** user and group for the Radicale service by running (as `root`):
+Create the **moreradicale** user and group for the moreradicale service by running (as `root`):
 ```bash
-useradd --system --user-group --home-dir / --shell /sbin/nologin radicale
+useradd --system --user-group --home-dir / --shell /sbin/nologin moreradicale
 ```
 
-The storage folder must be made writable by the **radicale** user by running (as `root`):
+The storage folder must be made writable by the **moreradicale** user by running (as `root`):
 ```bash
-mkdir -p /var/lib/radicale/collections && chown -R radicale:radicale /var/lib/radicale/collections
+mkdir -p /var/lib/moreradicale/collections && chown -R moremoreradicale:moreradicale /var/lib/moreradicale/collections
 ```
 
 If a dedicated cache folder is configured (see option [filesystem_cache_folder](#filesystem_cache_folder)),
-it also must be made writable by **radicale**. To achieve that, run (as `root`):
+it also must be made writable by **moreradicale**. To achieve that, run (as `root`):
 ```bash
-mkdir -p /var/cache/radicale && chown -R radicale:radicale /var/cache/radicale
+mkdir -p /var/cache/moreradicale && chown -R moremoreradicale:moreradicale /var/cache/moreradicale
 ````
 
 > **Security:** The storage shall not be readable by others.
 > To make sure this is the case, run (as `root`):
 > ```bash
-> chmod -R o= /var/lib/radicale/collections
+> chmod -R o= /var/lib/moreradicale/collections
 > ```
 
-Create the file `/etc/systemd/system/radicale.service`:
+Create the file `/etc/systemd/system/moreradicale.service`:
 
 ```ini
 [Unit]
@@ -321,9 +321,9 @@ After=network.target
 Requires=network.target
 
 [Service]
-ExecStart=/usr/bin/env python3 -m radicale
+ExecStart=/usr/bin/env python3 -m moreradicale
 Restart=on-failure
-User=radicale
+User=moreradicale
 # Deny other users access to the calendar data
 UMask=0027
 # Optional security settings
@@ -335,61 +335,61 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 NoNewPrivileges=true
-ReadWritePaths=/var/lib/radicale/
+ReadWritePaths=/var/lib/moreradicale/
 # Replace with following in case dedicated cache folder should be used
-#ReadWritePaths=/var/lib/radicale/ /var/cache/radicale/
+#ReadWritePaths=/var/lib/moreradicale/ /var/cache/moreradicale/
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-In this system-wide implementation, Radicale will load the configuration from the file `/etc/radicale/config`.
+In this system-wide implementation, moreradicale will load the configuration from the file `/etc/moreradicale/config`.
 
 To enable and manage the service run:
 
 ```bash
 # Enable the service
-$ systemctl enable radicale
+$ systemctl enable moreradicale
 # Start the service
-$ systemctl start radicale
+$ systemctl start moreradicale
 # Check the status of the service
-$ systemctl status radicale
+$ systemctl status moreradicale
 # View all log messages
-$ journalctl --unit radicale.service
+$ journalctl --unit moreradicale.service
 ```
 
 #### Linux with systemd as a user
 
-Create the file `~/.config/systemd/user/radicale.service`:
+Create the file `~/.config/systemd/user/moreradicale.service`:
 
 ```ini
 [Unit]
 Description=A simple CalDAV (calendar) and CardDAV (contact) server
 
 [Service]
-ExecStart=/usr/bin/env python3 -m radicale
+ExecStart=/usr/bin/env python3 -m moreradicale
 Restart=on-failure
 
 [Install]
 WantedBy=default.target
 ```
 
-In this user-specific configuration, Radicale will load the configuration from
-the file `~/.config/radicale/config`.
+In this user-specific configuration, moreradicale will load the configuration from
+the file `~/.config/moreradicale/config`.
 You should set the configuration option `filesystem_folder` in the `storage`
-section to something like `~/.var/lib/radicale/collections`.
+section to something like `~/.var/lib/moreradicale/collections`.
 
 To enable and manage the service run:
 
 ```bash
 # Enable the service
-$ systemctl --user enable radicale
+$ systemctl --user enable moreradicale
 # Start the service
-$ systemctl --user start radicale
+$ systemctl --user start moreradicale
 # Check the status of the service
-$ systemctl --user status radicale
+$ systemctl --user status moreradicale
 # View all log messages
-$ journalctl --user --unit radicale.service
+$ journalctl --user --unit moreradicale.service
 ```
 
 #### Windows with "NSSM - the Non-Sucking Service Manager"
@@ -397,12 +397,12 @@ $ journalctl --user --unit radicale.service
 First install [NSSM](https://nssm.cc/) and start `nssm install` in a command
 prompt. Apply the following configuration:
 
-* Service name: `Radicale`
+* Service name: `moreradicale`
 * Application
   * Path: `C:\Path\To\Python\python.exe`
   * Arguments: `--config C:\Path\To\Config`
 * I/O redirection
-  * Error: `C:\Path\To\Radicale.log`
+  * Error: `C:\Path\To\moreradicale.log`
 
 > **Security:** Be aware that the service runs in the local system account,
 > you might want to change this. Managing user accounts is beyond the scope of
@@ -414,26 +414,26 @@ in **NSSM** to prevent this.
 
 The service is configured to start automatically when the computer starts.
 To start the service manually open **Services** in **Computer Management** and
-start the **Radicale** service.
+start the **moreradicale** service.
 
 ### Reverse Proxy
 
-When a reverse proxy is used, and Radicale should be made available at a path
-below the root (such as `/radicale/`), then this path must be provided via
+When a reverse proxy is used, and moreradicale should be made available at a path
+below the root (such as `/moreradicale/`), then this path must be provided via
 the `X-Script-Name` header (without a trailing `/`). The proxy must remove
-the location from the URL path that is forwarded to Radicale. If Radicale
+the location from the URL path that is forwarded to moreradicale. If moreradicale
 should be made available at the root of the web server (in the nginx case
 using `location /`), then the setting of the `X-Script-Name` header should be
 removed from the example below.
 
 Example **nginx** configuration extension:
 
-See also for latest examples: https://github.com/Kozea/Radicale/tree/master/contrib/nginx/
+See also for latest examples: https://github.com/Kozea/moreradicale/tree/master/contrib/nginx/
 
 ```nginx
-location /radicale/ { # The trailing / is important!
+location /moreradicale/ { # The trailing / is important!
     proxy_pass        http://localhost:5232;
-    proxy_set_header  X-Script-Name /radicale;
+    proxy_set_header  X-Script-Name /moreradicale;
     proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header  X-Forwarded-Host $host;
     proxy_set_header  X-Forwarded-Port $server_port;
@@ -445,11 +445,11 @@ location /radicale/ { # The trailing / is important!
 
 Example **Caddy** configuration extension:
 
-See also for latest examples: https://github.com/Kozea/Radicale/tree/master/contrib/caddy/
+See also for latest examples: https://github.com/Kozea/moreradicale/tree/master/contrib/caddy/
 
 ```
-handle_path /radicale/* {
-    uri strip_prefix /radicale
+handle_path /moreradicale/* {
+    uri strip_prefix /moreradicale
     reverse_proxy localhost:5232 {
     }
 }
@@ -457,16 +457,16 @@ handle_path /radicale/* {
 
 Example **Apache** configuration extension:
 
-See also for latest examples: https://github.com/Kozea/Radicale/tree/master/contrib/apache/
+See also for latest examples: https://github.com/Kozea/moreradicale/tree/master/contrib/apache/
 
 ```apache
 RewriteEngine On
-RewriteRule ^/radicale$ /radicale/ [R,L]
+RewriteRule ^/moreradicale$ /moreradicale/ [R,L]
 
-<Location "/radicale/">
+<Location "/moreradicale/">
     ProxyPass        http://localhost:5232/ retry=0
     ProxyPassReverse http://localhost:5232/
-    RequestHeader    set X-Script-Name /radicale
+    RequestHeader    set X-Script-Name /moreradicale
     RequestHeader    set X-Forwarded-Port "%{SERVER_PORT}s"
     RequestHeader    set X-Forwarded-Proto expr=%{REQUEST_SCHEME}
     <IfVersion >= 2.4.40>
@@ -483,7 +483,7 @@ RewriteEngine On
 RewriteRule ^(.*)$ http://localhost:5232/$1 [P,L]
 
 # Set to directory of .htaccess file:
-RequestHeader set X-Script-Name /radicale
+RequestHeader set X-Script-Name /moreradicale
 RequestHeader set X-Forwarded-Port "%{SERVER_PORT}s"
 RequestHeader unset X-Forwarded-Proto
 <If "%{HTTPS} =~ /on/">
@@ -496,19 +496,19 @@ Example **lighttpd** configuration:
 ```lighttpd
 server.modules += ( "mod_proxy" , "mod_setenv", "mod_rewrite" )
 
-$HTTP["url"] =~ "^/radicale/" {
+$HTTP["url"] =~ "^/moreradicale/" {
   proxy.server = ( "" => (( "host" => "127.0.0.1", "port" => "5232" )) )
-  proxy.header = ( "map-urlpath" => ( "/radicale/" => "/" ))
+  proxy.header = ( "map-urlpath" => ( "/moreradicale/" => "/" ))
 
   setenv.add-request-header = (
-    "X-Script-Name" => "/radicale",
-    "Script-Name" => "/radicale",
+    "X-Script-Name" => "/moreradicale",
+    "Script-Name" => "/moreradicale",
   )
-  url.rewrite-once = ( "^/radicale/radicale/(.*)" => "/radicale/$1" )
+  url.rewrite-once = ( "^/moreradicale/moreradicale/(.*)" => "/moreradicale/$1" )
 }
 ```
 
-Be reminded that Radicale's default configuration enforces limits on the
+Be reminded that moreradicale's default configuration enforces limits on the
 maximum number of parallel connections, the maximum file size and the rate of
 incorrect authentication attempts. Connections are terminated after a timeout.
 
@@ -516,19 +516,19 @@ incorrect authentication attempts. Connections are terminated after a timeout.
 
 Set the configuration option `type` in the `auth` section to
 `http_x_remote_user`.
-Radicale uses the username provided in the `X-Remote-User` HTTP header and
+moreradicale uses the username provided in the `X-Remote-User` HTTP header and
 disables its internal HTTP authentication.
 
 Example **nginx** configuration:
 
 ```nginx
-location /radicale/ {
+location /moreradicale/ {
     proxy_pass           http://localhost:5232/;
-    proxy_set_header     X-Script-Name /radicale;
+    proxy_set_header     X-Script-Name /moreradicale;
     proxy_set_header     X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header     X-Remote-User $remote_user;
     proxy_set_header     Host $http_host;
-    auth_basic           "Radicale - Password Required";
+    auth_basic           "moreradicale - Password Required";
     auth_basic_user_file /etc/nginx/htpasswd;
 }
 ```
@@ -536,13 +536,13 @@ location /radicale/ {
 Example **Caddy** configuration:
 
 ```
-handle_path /radicale/* {
-    uri strip_prefix /radicale
+handle_path /moreradicale/* {
+    uri strip_prefix /moreradicale
     basicauth {
         USER HASH
     }
     reverse_proxy localhost:5232 {
-        header_up X-Script-Name /radicale
+        header_up X-Script-Name /moreradicale
         header_up X-remote-user {http.auth.user.id}
     }
 }
@@ -552,12 +552,12 @@ Example **Apache** configuration:
 
 ```apache
 RewriteEngine On
-RewriteRule ^/radicale$ /radicale/ [R,L]
+RewriteRule ^/moreradicale$ /moreradicale/ [R,L]
 
-<Location "/radicale/">
+<Location "/moreradicale/">
     AuthType     Basic
-    AuthName     "Radicale - Password Required"
-    AuthUserFile "/etc/radicale/htpasswd"
+    AuthName     "moreradicale - Password Required"
+    AuthUserFile "/etc/moreradicale/htpasswd"
     Require      valid-user
 
     ProxyPass        http://localhost:5232/ retry=0
@@ -565,7 +565,7 @@ RewriteRule ^/radicale$ /radicale/ [R,L]
     <IfVersion >= 2.4.40>
     Proxy100Continue Off
     </IfVersion>
-    RequestHeader    set X-Script-Name /radicale
+    RequestHeader    set X-Script-Name /moreradicale
     RequestHeader    set X-Remote-User expr=%{REMOTE_USER}
 </Location>
 ```
@@ -578,25 +578,25 @@ RewriteEngine On
 RewriteRule ^(.*)$ http://localhost:5232/$1 [P,L]
 
 AuthType     Basic
-AuthName     "Radicale - Password Required"
-AuthUserFile "/etc/radicale/htpasswd"
+AuthName     "moreradicale - Password Required"
+AuthUserFile "/etc/moreradicale/htpasswd"
 Require      valid-user
 
 # Set to directory of .htaccess file:
-RequestHeader set X-Script-Name /radicale
+RequestHeader set X-Script-Name /moreradicale
 RequestHeader set X-Remote-User expr=%{REMOTE_USER}
 ```
 
-> **Security:** Untrusted clients should not be able to access the Radicale
+> **Security:** Untrusted clients should not be able to access the moreradicale
 > server directly. Otherwise, they can authenticate as any user by simply
 > setting related HTTP header. This can be prevented by listening to the
 > loopback interface only or local firewall rules.
 
-#### Secure connection between Radicale and the reverse proxy
+#### Secure connection between moreradicale and the reverse proxy
 
 SSL certificates can be used to encrypt and authenticate the connection between
-Radicale and the reverse proxy. First you need to generate a certificate for
-Radicale and a certificate for the reverse proxy. The following commands
+moreradicale and the reverse proxy. First you need to generate a certificate for
+moreradicale and a certificate for the reverse proxy. The following commands
 generate self-signed certificates. You will be asked to enter additional
 information about the certificate, these values do not really matter, and you can
 keep the defaults.
@@ -608,7 +608,7 @@ openssl req -x509 -newkey rsa:4096 -keyout client_key.pem -out client_cert.pem \
         -nodes -days 9999
 ```
 
-Use the following configuration for Radicale:
+Use the following configuration for moreradicale:
 
 ```ini
 [server]
@@ -630,7 +630,7 @@ key = /etc/letsencrypt/live/{Your Domain}/privkey.pem
 Example **nginx** configuration:
 
 ```nginx
-location /radicale/ {
+location /moreradicale/ {
     proxy_pass https://localhost:5232/;
     ...
     # Place the files somewhere nginx is allowed to access (e.g. /etc/nginx/...).
@@ -641,9 +641,9 @@ location /radicale/ {
 
 ### WSGI Server
 
-Radicale is compatible with the WSGI specification.
+`moreradicale` is compatible with the WSGI specification.
 
-A configuration file can be set with the `RADICALE_CONFIG` environment
+A configuration file can be set with the `MORERADICALE_CONFIG` environment
 variable, otherwise no configuration file is loaded and the default
 configuration is used.
 
@@ -654,21 +654,21 @@ Example **uWSGI** configuration:
 http-socket = 127.0.0.1:5232
 processes = 8
 plugin = python3
-module = radicale
-env = RADICALE_CONFIG=/etc/radicale/config
+module = moreradicale
+env = MORERADICALE_CONFIG=/etc/moreradicale/config
 ```
 
 Example **Gunicorn** configuration:
 
 ```bash
-gunicorn --bind '127.0.0.1:5232' --env 'RADICALE_CONFIG=/etc/radicale/config' \
-         --workers 8 radicale
+gunicorn --bind '127.0.0.1:5232' --env 'MORERADICALE_CONFIG=/etc/moreradicale/config' \
+         --workers 8 moreradicale
 ```
 
 #### Manage user accounts with the WSGI server
 
 Set the configuration option `type` in the `auth` section to `remote_user`.
-This way Radicale uses the username provided by the WSGI server and disables
+This way moreradicale uses the username provided by the WSGI server and disables
 its internal authentication over HTTP.
 
 ### Versioning collections with Git
@@ -677,16 +677,16 @@ This tutorial describes how to keep track of all changes to calendars and
 address books with **git** (or any other version control system).
 
 The repository must be initialized in the collection base directory
-of the user running `radicale` daemon.
+of the user running `moreradicale` daemon.
 
 ```bash
-## assuming "radicale" user is starting "radicale" service
-# change to user "radicale"
-su -l -s /bin/bash radicale
+## assuming "moreradicale" user is starting "moreradicale" service
+# change to user "moreradicale"
+su -l -s /bin/bash moreradicale
 
 # change to collection base directory defined in [storage] -> filesystem_folder
-#  assumed here /var/lib/radicale/collections
-cd /var/lib/radicale/collections
+#  assumed here /var/lib/moreradicale/collections
+cd /var/lib/moreradicale/collections
 
 # initialize git repository
 git init
@@ -697,9 +697,9 @@ git config user.email "$USER@$HOSTNAME"
 
 # define ignore of cache/lock/tmp files
 cat <<'END' >.gitignore
-.Radicale.cache
-.Radicale.lock
-.Radicale.tmp-*
+.moreradicale.cache
+.moreradicale.lock
+.moreradicale.tmp-*
 END
 ```
 
@@ -716,12 +716,12 @@ the changes into the **git** repository.
 Log of `git` can be investigated using
 
 ```bash
-su -l -s /bin/bash radicale
-cd /var/lib/radicale/collections
+su -l -s /bin/bash moreradicale
+cd /var/lib/moreradicale/collections
 git log
 ```
 
-In case of problems, make sure you run radicale with ``--debug`` switch and
+In case of problems, make sure you run moreradicale with ``--debug`` switch and
 inspect the log output. For more information, please visit
 [section on logging](#logging-overview).
 
@@ -734,7 +734,7 @@ Reason for problems can be
 
 ### Configuration
 
-Radicale can be configured with a configuration file or with
+moreradicale can be configured with a configuration file or with
 command line arguments.
 
 Configuration files have INI-style syntax comprising key-value pairs
@@ -749,47 +749,47 @@ hosts = 0.0.0.0:5232, [::]:5232
 
 [auth]
 type = htpasswd
-htpasswd_filename = ~/.config/radicale/users
+htpasswd_filename = ~/.config/moreradicale/users
 htpasswd_encryption = autodetect
 
 [storage]
-filesystem_folder = ~/.var/lib/radicale/collections
+filesystem_folder = ~/.var/lib/moreradicale/collections
 ```
 
-Radicale tries to load configuration files from `/etc/radicale/config` and
-`~/.config/radicale/config`.
+moreradicale tries to load configuration files from `/etc/moreradicale/config` and
+`~/.config/moreradicale/config`.
 Custom paths can be specified with the `--config /path/to/config` command
-line argument or the `RADICALE_CONFIG` environment variable.
+line argument or the `MORERADICALE_CONFIG` environment variable.
 Multiple configuration files can be separated by `:` (resp. `;` on Windows).
 Paths that start with `?` are optional.
 
 The same example configuration via command line arguments looks like:
 
 ```bash
-python3 -m radicale --server-hosts 0.0.0.0:5232,[::]:5232 \
-        --auth-type htpasswd --auth-htpasswd-filename ~/.config/radicale/users \
+python3 -m moreradicale --server-hosts 0.0.0.0:5232,[::]:5232 \
+        --auth-type htpasswd --auth-htpasswd-filename ~/.config/moreradicale/users \
         --auth-htpasswd-encryption autodetect
 ```
 
-Add the argument `--config ""` to stop Radicale from loading the default
-configuration files. Run `python3 -m radicale --help` for more information.
+Add the argument `--config ""` to stop moreradicale from loading the default
+configuration files. Run `python3 -m moreradicale --help` for more information.
 
 You can also use command-line options in startup scripts as shown in the following examples:
 
 ```bash
 ## simple variable containing multiple options
-RADICALE_OPTIONS="--logging-level=debug --config=/etc/radicale/config --logging-request-header-on-debug --logging-rights-rule-doesnt-match-on-debug"
-/usr/bin/radicale $RADICALE_OPTIONS
+MORERADICALE_OPTIONS="--logging-level=debug --config=/etc/moreradicale/config --logging-request-header-on-debug --logging-rights-rule-doesnt-match-on-debug"
+/usr/bin/moreradicale $MORERADICALE_OPTIONS
 
 ## variable as array method #1
-RADICALE_OPTIONS=("--logging-level=debug" "--config=/etc/radicale/config" "--logging-request-header-on-debug" "--logging-rights-rule-doesnt-match-on-debug")
-/usr/bin/radicale ${RADICALE_OPTIONS[@]}
+MORERADICALE_OPTIONS=("--logging-level=debug" "--config=/etc/moreradicale/config" "--logging-request-header-on-debug" "--logging-rights-rule-doesnt-match-on-debug")
+/usr/bin/moreradicale ${MORERADICALE_OPTIONS[@]}
 
 ## variable as array method #2
-RADICALE_OPTIONS=()
-RADICALE_OPTIONS+=("--logging-level=debug")
-RADICALE_OPTIONS+=("--config=/etc/radicale/config")
-/usr/bin/radicale ${RADICALE_OPTIONS[@]}
+MORERADICALE_OPTIONS=()
+MORERADICALE_OPTIONS+=("--logging-level=debug")
+MORERADICALE_OPTIONS+=("--config=/etc/moreradicale/config")
+/usr/bin/moreradicale ${MORERADICALE_OPTIONS[@]}
 ```
 
 The following describes all configuration sections and options.
@@ -797,7 +797,7 @@ The following describes all configuration sections and options.
 #### [server]
 
 The configuration options in this section are only relevant in standalone
-mode; they are ignored, when Radicale runs on WSGI.
+mode; they are ignored, when moreradicale runs on WSGI.
 
 ##### hosts
 
@@ -847,18 +847,18 @@ Default: `False`
 
 Path of the SSL certificate.
 
-Default: `/etc/ssl/radicale.cert.pem`
+Default: `/etc/ssl/moreradicale.cert.pem`
 
 ##### key
 
 Path to the private key for SSL. Only effective if `ssl` is enabled.
 
-Default: `/etc/ssl/radicale.key.pem`
+Default: `/etc/ssl/moreradicale.key.pem`
 
 ##### certificate_authority
 
 Path to the CA certificate for validating client certificates. This can be used
-to secure TCP traffic between Radicale and a reverse proxy. If you want to
+to secure TCP traffic between moreradicale and a reverse proxy. If you want to
 authenticate users with client-side certificates, you also have to write an
 authentication plugin that extracts the username from the certificate.
 
@@ -927,21 +927,21 @@ Available types are:
 
 * `remote_user`  
   Takes the username from the `REMOTE_USER` environment variable and disables
-  Radicale's internal HTTP authentication. This can be used to provide the
+  moreradicale's internal HTTP authentication. This can be used to provide the
   username from a WSGI server which authenticated the client upfront.
   Requires validation, otherwise clients can supply the header themselves,
   which then is unconditionally trusted.
 
 * `http_remote_user` _(>= 3.5.9)_
   Takes the username from the Remote-User HTTP header `HTTP_REMOTE_USER` and disables
-  Radicale's internal HTTP authentication. This can be used to provide the
+  moreradicale's internal HTTP authentication. This can be used to provide the
   username from a reverse proxy which authenticated the client upfront.
   Requires validation, otherwise clients can supply the header themselves,
   which then is unconditionally trusted.
 
 * `http_x_remote_user`  
   Takes the username from the X-Remote-User HTTP header `HTTP_X_REMOTE_USER` and disables
-  Radicale's internal HTTP authentication. This can be used to provide the
+  moreradicale's internal HTTP authentication. This can be used to provide the
   username from a reverse proxy which authenticated the client upfront.
   Requires validation, otherwise clients can supply the header themselves,
   which then is unconditionally trusted.
@@ -994,7 +994,7 @@ Default: `90`
 
 Path to the htpasswd file.
 
-Default: `/etc/radicale/users`
+Default: `/etc/moreradicale/users`
 
 ##### htpasswd_encryption
 
@@ -1054,7 +1054,7 @@ Default: `1`
 
 Message displayed in the client when a password is needed.
 
-Default: `Radicale - Password Required`
+Default: `moreradicale - Password Required`
 
 ##### ldap_uri
 
@@ -1186,7 +1186,7 @@ They also give you access to the group calendars, if those exist.
 * Group calendars are placed directly under *collection_root_folder*`/GROUPS/`
   with the base64-encoded group name as the calendar folder name.
 * Group calendar folders are not created automatically.
-  This must be done manually. In the [LDAP-authentication section of Radicale's wiki](https://github.com/Kozea/Radicale/wiki/LDAP-authentication) you can find a script to create a group calendar.
+  This must be done manually. In the [LDAP-authentication section of moreradicale's wiki](https://github.com/Kozea/moreradicale/wiki/LDAP-authentication) you can find a script to create a group calendar.
 
 Default: (unset)
 
@@ -1256,7 +1256,7 @@ Default: `AF_UNIX`
 _(>= 3.3.1)_
 
 Path to the Dovecot client authentication socket (eg. /run/dovecot/auth-client on Fedora).
-Radicale must have read & write access to the socket.
+moreradicale must have read & write access to the socket.
 
 Default: `/var/run/dovecot/auth-client`
 
@@ -1291,7 +1291,7 @@ the source to use. Currently, valid values are
 `X-Remote-Addr`
 : Use the `X-Remote-Addr` HTTP header value.
 
-In the case of `X-Remote-Addr`, Radicale must be running be running
+In the case of `X-Remote-Addr`, moreradicale must be running be running
 behind a proxy that you control and that sets/overwrites the
 `X-Remote-Addr` header (doesn't pass it) so that the value passed
 to dovecot is reliable. For example, for nginx, add
@@ -1345,7 +1345,7 @@ _(>= 3.5.0)_
 
 PAM service name
 
-Default: `radicale`
+Default: `moreradicale`
 
 ##### pam_group_membership
 
@@ -1442,7 +1442,7 @@ Default: `owner_only`
 Name of the file containing the authorization rules for the `from_file` backend.
 See the [Rights](#authorization-and-rights) section for details.
 
-Default: `/etc/radicale/rights`
+Default: `/etc/moreradicale/rights`
 
 ##### permit_delete_collection
 
@@ -1485,7 +1485,7 @@ Default: `multifilesystem`
 
 Folder for storing local collections; will be auto-created if not present.
 
-Default: `/var/lib/radicale/collections`
+Default: `/var/lib/moreradicale/collections`
 
 ##### filesystem_cache_folder
 
@@ -1540,7 +1540,7 @@ Default: `False`
 Notes:
 * check used filesystem mtime precision before enabling
 * conversion is done on access
-* bulk conversion can be done offline using the storage verification option `radicale --verify-storage`
+* bulk conversion can be done offline using the storage verification option `moreradicale --verify-storage`
 
 ##### folder_umask
 
@@ -1619,12 +1619,12 @@ Default: (unset)
 
 ##### type
 
-The backend that provides the web interface of Radicale.
+The backend that provides the web interface of moreradicale.
 
 Available backends are:
 
 * `none`  
-  Simply shows the message "Radicale works!".
+  Simply shows the message "moreradicale works!".
 
 * `internal`  
   Allows creation and management of address books and calendars.
@@ -2223,7 +2223,7 @@ Default: `False`
 
 Directory for attachment storage.
 
-Default: `/var/lib/radicale/attachments`
+Default: `/var/lib/moreradicale/attachments`
 
 ##### max_size
 
@@ -2315,7 +2315,7 @@ Default: `False`
 Path to the VAPID (Voluntary Application Server Identification) private key file.
 
 If not specified, a new EC P-256 key pair is auto-generated and stored
-in the storage folder as `.Radicale.vapid`.
+in the storage folder as `.moreradicale.vapid`.
 
 Default: (auto-generated)
 
@@ -2335,10 +2335,10 @@ Default: (empty)
 
 Custom folder for storing push subscriptions.
 
-If not specified, subscriptions are stored in `.Radicale.push/` within
+If not specified, subscriptions are stored in `.moreradicale.push/` within
 the main storage folder.
 
-Default: (storage folder)/.Radicale.push
+Default: (storage folder)/.moreradicale.push
 
 ##### ttl
 
@@ -2408,14 +2408,14 @@ Default: `0` (unlimited)
 
 Include cache directories in quota calculations.
 
-When disabled, `.Radicale.cache` folders are excluded from storage
+When disabled, `.moreradicale.cache` folders are excluded from storage
 calculations, giving users more effective storage space.
 
 Default: `False`
 
 ## Supported Clients
 
-Radicale has been tested with:
+moreradicale has been tested with:
 
 * [Android](https://android.com/) with
   [DAVx⁵](https://www.davx5.com/) (formerly DAVdroid),
@@ -2425,38 +2425,38 @@ Radicale has been tested with:
   [Evolution](https://wiki.gnome.org/Apps/Evolution)
 * [KDE PIM Applications](https://kontact.kde.org/),
   [KDE Merkuro](https://apps.kde.org/de/merkuro/)
-* [Mozilla Thunderbird](https://www.mozilla.org/thunderbird/) ([Thunderbird/Radicale](https://github.com/Kozea/Radicale/wiki/Client-Thunderbird)) with
+* [Mozilla Thunderbird](https://www.mozilla.org/thunderbird/) ([Thunderbird/moreradicale](https://github.com/Kozea/moreradicale/wiki/Client-Thunderbird)) with
   [CardBook](https://addons.mozilla.org/thunderbird/addon/cardbook/) and
   [Lightning](https://www.mozilla.org/projects/calendar/)
-* [InfCloud](https://www.inf-it.com/open-source/clients/infcloud/) ([InfCloud/Radicale](https://github.com/Kozea/Radicale/wiki/Client-InfCloud)),
+* [InfCloud](https://www.inf-it.com/open-source/clients/infcloud/) ([InfCloud/moreradicale](https://github.com/Kozea/moreradicale/wiki/Client-InfCloud)),
   [CalDavZAP](https://www.inf-it.com/open-source/clients/caldavzap/),
   [CardDavMATE](https://www.inf-it.com/open-source/clients/carddavmate/) and
   [Open Calendar](https://github.com/algoo/open-calendar/)
-* [pimsync](https://pimsync.whynothugo.nl/) ([pimsync/Radicale](https://github.com/Kozea/Radicale/wiki/Client-pimsync))
+* [pimsync](https://pimsync.whynothugo.nl/) ([pimsync/moreradicale](https://github.com/Kozea/moreradicale/wiki/Client-pimsync))
 
 Many clients do not support the creation of new calendars and address books.
-You can use Radicale's web interface
+You can use moreradicale's web interface
 (e.g. <http://localhost:5232>) to create and manage address books and calendars.
 
-In some clients, it is sufficient to simply enter the URL of the Radicale server
+In some clients, it is sufficient to simply enter the URL of the moreradicale server
 (e.g. `http://localhost:5232`) and your username. In others, you have to
 enter the URL of the collection directly (e.g. `http://localhost:5232/user/calendar`).
 
 Some clients (notably macOS's Calendar.app) may silently refuse to include
 account credentials over unsecured HTTP, leading to unexpected authentication
-failures. In these cases, you want to make sure the Radicale server is
+failures. In these cases, you want to make sure the moreradicale server is
 [accessible over HTTPS](#ssl).
 
 #### DAVx⁵
 
-Enter the URL of the Radicale server (e.g. `http://localhost:5232`) and your
+Enter the URL of the moreradicale server (e.g. `http://localhost:5232`) and your
 username. DAVx⁵ will show all existing calendars and address books and you
 can create new ones.
 
 #### OneCalendar
 
 When adding account, select CalDAV account type, then enter username, password and the
-Radicale server (e.g. `https://yourdomain:5232`). OneCalendar will show all
+moreradicale server (e.g. `https://yourdomain:5232`). OneCalendar will show all
 existing calendars and (FIXME: address books), you need to select which ones
 you want to see. OneCalendar supports many other server types too.
 
@@ -2465,14 +2465,14 @@ you want to see. OneCalendar supports many other server types too.
 GNOME 46 added CalDAV and CardDAV support to _GNOME Online Accounts_.
 
 Open GNOME Settings, navigate to _Online Accounts_ > _Connect an Account_ > _Calendar, Contacts and Files_.
-Enter the URL (e.g. `https://example.com/radicale`) and your credentials then click _Sign In_.
-In the pop-up dialog, turn off _Files_. After adding Radicale in _GNOME Online Accounts_,
+Enter the URL (e.g. `https://example.com/moreradicale`) and your credentials then click _Sign In_.
+In the pop-up dialog, turn off _Files_. After adding moreradicale in _GNOME Online Accounts_,
 it should be available in GNOME Contacts and GNOME Calendar.
 
 #### Evolution
 
 In **Evolution** add a new calendar and address book respectively with WebDAV.
-Enter the URL of the Radicale server (e.g. `http://localhost:5232`) and your
+Enter the URL of the moreradicale server (e.g. `http://localhost:5232`) and your
 username. Clicking on the search button will list the existing calendars and
 address books.
 
@@ -2483,36 +2483,36 @@ available in GNOME Contacts and GNOME Calendar.
 
 In **Kontact** add a _DAV Groupware resource_ to Akonadi under
 _Settings > Configure Kontact > Calendar > General > Calendars_,
-select the protocol (CalDAV or CardDAV), add the URL to the Radicale collections
+select the protocol (CalDAV or CardDAV), add the URL to the moreradicale collections
 and enter the credentials. After synchronization of the calendar resp.
 addressbook items, you can manage them in Kontact.
 
 #### Thunderbird
 
 Add a new calendar on the network. Enter your username and the URL of the
-Radicale server (e.g. `http://localhost:5232`). After asking for your password,
+moreradicale server (e.g. `http://localhost:5232`). After asking for your password,
 it will list the existing calendars.
 
 ##### Adress books with CardBook add-on
 
 Add a new address book on the network with CardDAV. Enter the URL of the
-Radicale server (e.g. `http://localhost:5232`) and your username and password.
+moreradicale server (e.g. `http://localhost:5232`) and your username and password.
 It will list your existing address books.
 
 #### InfCloud, CalDavZAP and CardDavMATE
 
-You can integrate InfCloud into Radicale's web interface with by simply
+You can integrate InfCloud into moreradicale's web interface with by simply
 downloading the latest package from [InfCloud](https://www.inf-it.com/open-source/clients/infcloud/)
-and extract the content into a folder named `infcloud` in `radicale/web/internal_data/`.
+and extract the content into a folder named `infcloud` in `moreradicale/web/internal_data/`.
 
 No further adjustments are required as content is adjusted on the fly (tested with 0.13.1).
 
-See also [Wiki/Client InfCloud](https://github.com/Kozea/Radicale/wiki/Client-InfCloud).
+See also [Wiki/Client InfCloud](https://github.com/Kozea/moreradicale/wiki/Client-InfCloud).
 
 #### Command line
 
 This is not the recommended way of creating and managing your calendars and
-address books. Use Radicale's web interface or a client with support for it
+address books. Use moreradicale's web interface or a client with support for it
 (e.g. **DAVx⁵**).
 
 To create a new calendar run something like:
@@ -2560,7 +2560,7 @@ $ curl -u user -X MKCOL 'http://localhost:5232/user/addressbook' --data \
 ```
 
 The collection `/USERNAME` will be created automatically, when the user
-authenticates to Radicale for the first time. Clients with automatic discovery
+authenticates to moreradicale for the first time. Clients with automatic discovery
 of collections will only show calendars and address books that are direct
 children of the path `/USERNAME/`.
 
@@ -2652,24 +2652,24 @@ section (e.g. [Versioning collections with Git](#versioning-collections-with-git
 #### Layout
 
 The file system comprises the following files and folders:
-* `.Radicale.lock`: The lock file for locking the storage.
+* `.moreradicale.lock`: The lock file for locking the storage.
 * `collection-root`: This folder contains all collections and items.
 
 Each collection is represented by a folder. This folder may contain the file
-`.Radicale.props` with all WebDAV properties of the collection encoded
+`.moreradicale.props` with all WebDAV properties of the collection encoded
 as [JSON](https://en.wikipedia.org/wiki/JSON).
 
 Each item in a calendar or address book collection is represented by
 a file containing the item's iCalendar resp. vCard data.
 
-All files and folders, whose names start with a dot but not with `.Radicale.`
+All files and folders, whose names start with a dot but not with `.moreradicale.`
 (internal files) are ignored.
 
 Syntax errors in any of the files will cause all requests accessing
 the faulty data to fail. The logging output should contain the names of the
 culprits.
 
-Caches and sync-tokens are stored in the `.Radicale.cache` folder inside of
+Caches and sync-tokens are stored in the `.moreradicale.cache` folder inside of
 collections.
 This folder may be created or modified, while the storage is locked for shared
 access.
@@ -2677,17 +2677,17 @@ In theory, it should be safe to delete the folder. Caches will be recreated
 automatically and clients will be told that their sync-token is not valid
 anymore.
 
-You may encounter files or folders that start with `.Radicale.tmp-`.
-Radicale uses them for atomic creation and deletion of files and folders.
+You may encounter files or folders that start with `.moreradicale.tmp-`.
+moreradicale uses them for atomic creation and deletion of files and folders.
 They should be deleted after requests are finished but it is possible that
-they are left behind when Radicale or the computer crashes.
+they are left behind when moreradicale or the computer crashes.
 You can safely delete them.
 
 #### Locking
 
 When the data is accessed by hand or by an externally invoked script,
 the storage must be locked. The storage can be locked for exclusive or
-shared access. It prevents Radicale from reading or writing the file system.
+shared access. It prevents moreradicale from reading or writing the file system.
 The storage is locked with exclusive access while the `hook` runs.
 
 ##### Linux shell scripts
@@ -2695,13 +2695,13 @@ The storage is locked with exclusive access while the `hook` runs.
 Use the
 [flock](https://manpages.debian.org/unstable/util-linux/flock.1.en.html)
 utility to acquire exclusive or shared locks for the commands you want to run
-on Radicale's data.
+on moreradicale's data.
 
 ```bash
 # Exclusive lock for COMMAND
-$ flock --exclusive /path/to/storage/.Radicale.lock COMMAND
+$ flock --exclusive /path/to/storage/.moreradicale.lock COMMAND
 # Shared lock for COMMAND
-$ flock --shared /path/to/storage/.Radicale.lock COMMAND
+$ flock --shared /path/to/storage/.moreradicale.lock COMMAND
 ```
 
 ##### Linux and MacOS
@@ -2724,15 +2724,15 @@ and `nNumberOfBytesToLockHigh` to `0` works.
 
 To create a new collection, you need to create the corresponding folder in the
 file system storage (e.g. `collection-root/user/calendar`).
-To indicate to Radicale and clients that the collection is a calendar, you have to
-create the file ``.Radicale.props`` with the following content in the folder:
+To indicate to moreradicale and clients that the collection is a calendar, you have to
+create the file ``.moreradicale.props`` with the following content in the folder:
 
 ```json
 {"tag": "VCALENDAR"}
 ```
 
 The calendar is now available at the URL path (e.g. ``/user/calendar``).
-For address books ``.Radicale.props`` must contain:
+For address books ``.moreradicale.props`` must contain:
 
 ```json
 {"tag": "VADDRESSBOOK"}
@@ -2746,15 +2746,15 @@ Delete collections by deleting the corresponding folders.
 
 ### Logging overview
 
-Radicale logs to `stderr`. The verbosity of the log output can be controlled
+moreradicale logs to `stderr`. The verbosity of the log output can be controlled
 with `--debug` command line argument or the `level` configuration option in
 the [logging](#logging) section.
 
 ### Architecture
 
-Radicale is a small piece of software, but understanding it is not as
+`moreradicale` is a small piece of software, but understanding it is not as
 easy as it seems. But don't worry, reading this short section is enough to
-understand what a CalDAV/CardDAV server is, and how Radicale's code is
+understand what a CalDAV/CardDAV server is, and how moreradicale's code is
 organized.
 
 #### Protocol overview
@@ -2770,18 +2770,18 @@ an address book through network:
 | Client   | Calendar/Contact Client  | CalDAV/CardDAV Client              |
 | ''       | GUI                      | Terminal, GTK, Web interface, etc. |
 
-Radicale is **only the server part** of this architecture.
+`moreradicale` is **only the server part** of this architecture.
 
 Please note:
 
 * CalDAV and CardDAV are extension protocols of WebDAV,
 * WebDAV is an extension of the HTTP protocol.
 
-Radicale being a CalDAV/CardDAV server, can also be seen as a special WebDAV
+moreradicale being a CalDAV/CardDAV server, can also be seen as a special WebDAV
 and HTTP server.
 
-Radicale is **not the client part** of this architecture. It means that
-Radicale never draws calendars, address books, events and contacts on the
+`moreradicale` is **not the client part** of this architecture. It means that
+moreradicale never draws calendars, address books, events and contacts on the
 screen. It only stores them and give the possibility to share them online with
 other people.
 
@@ -2791,18 +2791,18 @@ icons and buttons, a terminal or another web application.
 
 #### Code Architecture
 
-The ``radicale`` package offers the following modules.
+The ``moreradicale`` package offers the following modules.
 
 * `__init__`
   : Contains the entry point for WSGI.
 
 * `__main__`
-  : Provides the entry point for the ``radicale`` executable and
+  : Provides the entry point for the ``moreradicale`` executable and
   includes the command line parser. It loads configuration files from
   the default (or specified) paths and starts the internal server.
 
 * `app`
-  : This is the core part of Radicale, with the code for the CalDAV/CardDAV
+  : This is the core part of moreradicale, with the code for the CalDAV/CardDAV
   server. The code managing the different HTTP requests according to the
   CalDAV/CardDAV specification can be found here.
 
@@ -2819,17 +2819,17 @@ The ``radicale`` package offers the following modules.
   [VObject](https://github.com/py-vobject/vobject/).
 
 * `log`
-  : The logger for Radicale based on the default Python logging module.
+  : The logger for moreradicale based on the default Python logging module.
 
 * `rights`
-  : This module is used by Radicale to manage access rights to collections,
+  : This module is used by moreradicale to manage access rights to collections,
   address books and calendars.
 
 * `server`
 : The integrated HTTP server for standalone use.
 
 * `storage`
-  : This module contains the classes representing collections in Radicale and
+  : This module contains the classes representing collections in moreradicale and
   the code for storing and loading them in the filesystem.
 
 * `web`
@@ -2850,7 +2850,7 @@ The ``radicale`` package offers the following modules.
 
 ### Plugins
 
-Radicale can be extended by plugins for authentication, rights management and
+moreradicale can be extended by plugins for authentication, rights management and
 storage. Plugins are **python** modules.
 
 #### Getting started with plugin development
@@ -2879,8 +2879,8 @@ Create the file `__init__.py` in the `radicale_static_password_auth` folder
 with the following content:
 
 ```python
-from radicale.auth import BaseAuth
-from radicale.log import logger
+from moreradicale.auth import BaseAuth
+from moreradicale.log import logger
 
 PLUGIN_CONFIG_SCHEMA = {"auth": {
     "password": {"value": "", "type": str}}}
@@ -2908,7 +2908,7 @@ as `setup.py`:
 python3 -m pip install .
 ```
 
-To make use this great creation in Radicale, set the configuration option
+To make use this great creation in moreradicale, set the configuration option
 `type` in the `auth` section to `radicale_static_password_auth`:
 
 ```ini
@@ -2927,83 +2927,83 @@ python3 -m pip uninstall radicale_static_password_auth
 
 This plugin type is used to check login credentials.
 The module must contain a class `Auth` that extends
-`radicale.auth.BaseAuth`. Take a look at the file `radicale/auth/__init__.py`
-in Radicale's source code for more information.
+`moreradicale.auth.BaseAuth`. Take a look at the file `moreradicale/auth/__init__.py`
+in moreradicale's source code for more information.
 
 #### Rights management plugins
 
 This plugin type is used to check if a user has access to a path.
 The module must contain a class `Rights` that extends
-`radicale.rights.BaseRights`. Take a look at the file
-`radicale/rights/__init__.py` in Radicale's source code for more information.
+`moreradicale.rights.BaseRights`. Take a look at the file
+`moreradicale/rights/__init__.py` in moreradicale's source code for more information.
 
 #### Web plugins
 
-This plugin type is used to provide the web interface for Radicale.
+This plugin type is used to provide the web interface for moreradicale.
 The module must contain a class `Web` that extends
-`radicale.web.BaseWeb`. Take a look at the file `radicale/web/__init__.py` in
-Radicale's source code for more information.
+`moreradicale.web.BaseWeb`. Take a look at the file `moreradicale/web/__init__.py` in
+moreradicale's source code for more information.
 
 #### Storage plugins
 
 This plugin is used to store collections and items.
 The module must contain a class `Storage` that extends
-`radicale.storage.BaseStorage`. Take a look at the file
-`radicale/storage/__init__.py` in Radicale's source code for more information.
+`moreradicale.storage.BaseStorage`. Take a look at the file
+`moreradicale/storage/__init__.py` in moreradicale's source code for more information.
 
 ## Contribute
 
 #### Report Bugs
 
 Found a bug? Want a new feature? Report a new issue on the
-[Radicale bug-tracker](https://github.com/Kozea/Radicale/issues).
+[moreradicale bug-tracker](https://github.com/Kozea/moreradicale/issues).
 
 #### Hack
 
 Interested in hacking? Feel free to clone the
-[git repository on GitHub](https://github.com/Kozea/Radicale) if you want to
+[git repository on GitHub](https://github.com/Kozea/moreradicale) if you want to
 add new features, fix bugs or update the documentation.
 
 #### Documentation
 
 To change or complement the documentation create a pull request to
-[DOCUMENTATION.md](https://github.com/Kozea/Radicale/blob/master/DOCUMENTATION.md).
+[DOCUMENTATION.md](https://github.com/Kozea/moreradicale/blob/master/DOCUMENTATION.md).
 
 ## Download
 
 #### PyPI
 
-Radicale is [available on PyPI](https://pypi.python.org/pypi/Radicale/). To
+`moreradicale` is [available on PyPI](https://pypi.python.org/pypi/moreradicale/). To
 install, just type as superuser:
 
 ```bash
-python3 -m pip install --upgrade radicale
+python3 -m pip install --upgrade moreradicale
 ```
 
 #### Git Repository
 
-If you want the development version of Radicale, take a look at the
-[git repository on GitHub](https://github.com/Kozea/Radicale/), or install it
+If you want the development version of moreradicale, take a look at the
+[git repository on GitHub](https://github.com/Kozea/moreradicale/), or install it
 directly with:
 
 ```bash
-python3 -m pip install --upgrade https://github.com/Kozea/Radicale/archive/master.tar.gz
+python3 -m pip install --upgrade https://github.com/Kozea/moreradicale/archive/master.tar.gz
 ```
 
 You can also download the content of the repository as an
-[archive](https://github.com/Kozea/Radicale/tarball/master).
+[archive](https://github.com/Kozea/moreradicale/tarball/master).
 
 #### Source Packages
 
 You can find the source packages of all releases on
-[GitHub](https://github.com/Kozea/Radicale/releases).
+[GitHub](https://github.com/Kozea/moreradicale/releases).
 
 #### Docker
 
-Radicale is available as a [Docker image](https://github.com/Kozea/Radicale/pkgs/container/radicale) for platforms `linux/amd64` and `linux/arm64`. To install the latest version, run:
+`moreradicale` is available as a [Docker image](https://github.com/Kozea/moreradicale/pkgs/container/moreradicale) for platforms `linux/amd64` and `linux/arm64`. To install the latest version, run:
 
 ```bash
-docker pull ghcr.io/kozea/radicale:latest
+docker pull ghcr.io/kozea/moreradicale:latest
 ```
 
 An example `docker-compose.yml` and detailed instructions will soon be updated.
@@ -3011,29 +3011,29 @@ An example `docker-compose.yml` and detailed instructions will soon be updated.
 
 #### Linux Distribution Packages
 
-Radicale has been packaged for:
+moreradicale has been packaged for:
 
-* [ArchLinux](https://www.archlinux.org/packages/community/any/radicale/) by
+* [ArchLinux](https://www.archlinux.org/packages/community/any/moreradicale/) by
   David Runge
-* [Debian](https://packages.debian.org/radicale) by Jonas Smedegaard
-* [Gentoo](https://packages.gentoo.org/packages/www-apps/radicale)
+* [Debian](https://packages.debian.org/moreradicale) by Jonas Smedegaard
+* [Gentoo](https://packages.gentoo.org/packages/www-apps/moreradicale)
   by René Neumann, Maxim Koltsov and Manuel Rüger
-* [Fedora/EnterpriseLinux](https://src.fedoraproject.org/rpms/radicale) by Jorti
+* [Fedora/EnterpriseLinux](https://src.fedoraproject.org/rpms/moreradicale) by Jorti
   and Peter Bieringer
-* [Mageia](http://madb.mageia.org/package/show/application/0/name/radicale)
+* [Mageia](http://madb.mageia.org/package/show/application/0/name/moreradicale)
   by Jani Välimaa
-* [OpenBSD](http://openports.se/productivity/radicale) by Sergey Bronnikov,
+* [OpenBSD](http://openports.se/productivity/moreradicale) by Sergey Bronnikov,
   Stuart Henderson and Ian Darwin
-* [openSUSE](http://software.opensuse.org/package/Radicale?search_term=radicale)
+* [openSUSE](http://software.opensuse.org/package/radicale?search_term=radicale)
   by Ákos Szőts and Rueckert
-* [PyPM](http://code.activestate.com/pypm/radicale/)
+* [PyPM](http://code.activestate.com/pypm/moreradicale/)
 * [Slackware](http://schoepfer.info/slackware.xhtml#packages-network) by
   Johannes Schöpfer
 * [Trisquel](http://packages.trisquel.info/search?searchon=names&keywords=radicale)
-* [Ubuntu](http://packages.ubuntu.com/radicale) by the MOTU and Jonas
+* [Ubuntu](http://packages.ubuntu.com/moreradicale) by the MOTU and Jonas
   Smedegaard
 
-Radicale is also
+`moreradicale` is also
 [available on Cloudron](https://cloudron.io/button.html?app=org.radicale.cloudronapp2).
 
 If you are interested in creating packages for other Linux distributions, read
@@ -3043,7 +3043,7 @@ the ["Contribute" section](#contribute).
 
 #### Main Goals
 
-Radicale is a complete calendar and contact storing and manipulating
+`moreradicale` is a complete calendar and contact storing and manipulating
 solution. It can store multiple calendars and multiple address books.
 
 Calendar and contact manipulation is available from both local and distant
@@ -3053,12 +3053,12 @@ It aims to be a lightweight solution, easy to use, easy to install, easy to
 configure. As a consequence, it requires few software dependencies and is
 preconfigured to work out-of-the-box.
 
-Radicale is written in Python. It runs on most of the UNIX-like platforms
+`moreradicale` is written in Python. It runs on most of the UNIX-like platforms
 (Linux, \*BSD, macOS) and Windows. It is free and open-source software.
 
-#### What Radicale Will Never Be
+#### What moreradicale Will Never Be
 
-Radicale is a server, not a client. No interfaces will be created to work with
+`moreradicale` is a server, not a client. No interfaces will be created to work with
 the server.
 
 CalDAV and CardDAV are not perfect protocols. We think that their main problem
@@ -3072,7 +3072,7 @@ use another one.
 #### Technical Choices
 
 Important global development choices have been decided before writing
-code. They are very useful to understand why the Radicale Project is different
+code. They are very useful to understand why the moreradicale Project is different
 from other CalDAV and CardDAV servers, and why features are included or not in
 the code.
 
@@ -3090,13 +3090,13 @@ much more respectful of CalDAV and CardDAV and can be used with many clients.
 They are very good choices if you want to develop and test new CalDAV clients,
 or if you have a possibly heterogeneous list of user agents.
 
-Even if it tries it best to follow the RFCs, Radicale does not and **will not**
+Even if it tries it best to follow the RFCs, moreradicale does not and **will not**
 blindly implement the CalDAV and CardDAV standards. It is mainly designed to
 support the CalDAV and CardDAV implementations of different clients.
 
 ##### Simple
 
-Radicale is designed to be simple to install, simple to configure, simple to
+`moreradicale` is designed to be simple to install, simple to configure, simple to
 use.
 
 The installation is very easy, particularly with Linux: one dependency, no
@@ -3105,7 +3105,7 @@ launching the main script out-of-the-box, as a normal user, are often the only
 steps to have a simple remote calendar and contact access.
 
 Contrary to other servers that are often complicated, require high privileges
-or need a strong configuration, the Radicale Server can (sometimes, if not
+or need a strong configuration, the moreradicale Server can (sometimes, if not
 often) be launched in a couple of minutes, if you follow the
 [tutorial](#simple-5-minute-setup).
 
@@ -3115,14 +3115,14 @@ The CalDAV RFC defines what must be done, what can be done and what cannot be
 done. Many violations of the protocol are totally defined and behaviors are
 given in such cases.
 
-Radicale often assumes that the clients are perfect and that protocol
+moreradicale often assumes that the clients are perfect and that protocol
 violations do not exist. That is why most of the errors in client requests have
 undetermined consequences for the lazy server that can reply good answers, bad
 answers, or even no answer.
 
 #### History
 
-Radicale has been started as a (free topic) stupid school project replacing
+moreradicale has been started as a (free topic) stupid school project replacing
 another (assigned topic) even more stupid school project.
 
 At the beginning, it was just a proof-of-concept. The main goal was to write a
@@ -3130,7 +3130,7 @@ small, dirty and simple CalDAV server working with Lightning, using no external
 libraries. That's how we created a piece of code that's (quite) easy to
 understand, to use and to hack.
 
-The [first lines](https://github.com/Kozea/Radicale/commit/b1591aea) have been
+The [first lines](https://github.com/Kozea/moreradicale/commit/b1591aea) have been
 added to the SVN (!) repository as I was drinking (many) beers at the very end
 of 2008 (Python 2.6 and 3.0 were just released). It's now packaged for a
 growing number of Linux distributions.

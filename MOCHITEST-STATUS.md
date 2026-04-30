@@ -71,7 +71,7 @@ While we work on Mochitest runner configuration, we have **multiple complete val
 
 ```bash
 cd /home/rpm/claude/radicale/Radicale
-python3 -m pytest radicale/tests/test_scheduling.py -v
+python3 -m pytest moreradicale/tests/test_scheduling.py -v
 ```
 
 **Result**: All 16 tests passing, covering:
@@ -86,7 +86,7 @@ python3 -m pytest radicale/tests/test_scheduling.py -v
 
 ```bash
 # Terminal 1
-python3 -m radicale -C test-scheduling-config.ini
+python3 -m moreradicale -C test-scheduling-config.ini
 
 # Terminal 2
 ./test-scheduling.sh

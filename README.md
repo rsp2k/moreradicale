@@ -1,9 +1,9 @@
-# Radicale
+# moreradicale
 
-[![Test](https://github.com/Kozea/Radicale/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/Kozea/Radicale/actions/workflows/test.yml)
-[![Coverage Status](https://coveralls.io/repos/github/Kozea/Radicale/badge.svg?branch=master)](https://coveralls.io/github/Kozea/Radicale?branch=master)
+[![Test](https://github.com/Kozea/moreradicale/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/Kozea/moreradicale/actions/workflows/test.yml)
+[![Coverage Status](https://coveralls.io/repos/github/Kozea/moreradicale/badge.svg?branch=master)](https://coveralls.io/github/Kozea/moreradicale?branch=master)
 
-Radicale is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
+`moreradicale` is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
 (contacts) server, that:
 
 * Shares calendars and contact lists through CalDAV, CardDAV and HTTP.
@@ -19,12 +19,12 @@ Radicale is a small but powerful CalDAV (calendars, to-do lists) and CardDAV
 * Is GPLv3-licensed free software.
 
 For the complete documentation, please visit
-[Radicale master Documentation](https://radicale.org/master.html).
+[moreradicale master Documentation](https://radicale.org/master.html).
 
 Additional hints can be found
-* [Radicale Wiki](https://github.com/Kozea/Radicale/wiki)
-* [Radicale Issues](https://github.com/Kozea/Radicale/issues)
-* [Radicale Discussions](https://github.com/Kozea/Radicale/discussions)
+* [moreradicale Wiki](https://github.com/Kozea/moreradicale/wiki)
+* [moreradicale Issues](https://github.com/Kozea/moreradicale/issues)
+* [moreradicale Discussions](https://github.com/Kozea/moreradicale/discussions)
 
 Before reporting an issue, please check
-* [Radicale Wiki / Reporting Issues](https://github.com/Kozea/Radicale/wiki/01-‐-Reporting-Issues)
+* [moreradicale Wiki / Reporting Issues](https://github.com/Kozea/moreradicale/wiki/01-‐-Reporting-Issues)

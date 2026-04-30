@@ -4,7 +4,7 @@
 
 ✅ **Fully functional RFC 6638 CalDAV Scheduling** (Internal-only, Phases 1-3)
 ✅ **All 16 tests passing** - Infrastructure, iTIP parsing, routing, workflows
-✅ **Zero regression** - 140/146 existing Radicale tests passing
+✅ **Zero regression** - 140/146 existing moreradicale tests passing
 ✅ **Production-ready** - Ready for client testing and upstream contribution
 
 ---
@@ -15,8 +15,8 @@
 
 ```bash
 # Terminal 1: Start test server
-cd /home/rpm/claude/radicale/Radicale
-python3 -m radicale -C test-scheduling-config.ini
+cd /home/rpm/claude/radicale/moreradicale
+python3 -m moreradicale -C test-scheduling-config.ini
 
 # Terminal 2: Run test script
 ./test-scheduling.sh
@@ -41,7 +41,7 @@ python3 -m radicale -C test-scheduling-config.ini
 ### Option 2: Run Unit Tests
 
 ```bash
-python3 -m pytest radicale/tests/test_scheduling.py -v
+python3 -m pytest moreradicale/tests/test_scheduling.py -v
 ```
 
 **Expected: 16 passed in 0.10s**
@@ -124,14 +124,14 @@ For production, you'd also want:
 
 ### New Files (Phase 1-3)
 ```
-radicale/itip/
+moreradicale/itip/
 ├── __init__.py          # Package init
 ├── models.py            # ITIPMessage, ITIPAttendee, enums
 ├── validator.py         # RFC 5546 validation
 ├── router.py            # Internal/external routing
 └── processor.py         # Message processing & delivery
 
-radicale/tests/
+moreradicale/tests/
 └── test_scheduling.py   # 16 comprehensive tests
 
 Documentation/
@@ -143,12 +143,12 @@ Documentation/
 
 ### Modified Files
 ```
-radicale/config.py                          # [scheduling] section
-radicale/item/__init__.py                   # Tag support
-radicale/xmlutils.py                        # XML/MIME mappings
-radicale/app/post.py                        # POST handler
-radicale/app/propfind.py                    # Scheduling properties
-radicale/storage/multifilesystem/discover.py # Auto-creation
+moreradicale/config.py                          # [scheduling] section
+moreradicale/item/__init__.py                   # Tag support
+moreradicale/xmlutils.py                        # XML/MIME mappings
+moreradicale/app/post.py                        # POST handler
+moreradicale/app/propfind.py                    # Scheduling properties
+moreradicale/storage/multifilesystem/discover.py # Auto-creation
 ```
 
 ---
@@ -165,8 +165,8 @@ radicale/storage/multifilesystem/discover.py # Auto-creation
                           │ METHOD:REQUEST
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Radicale Server - POST Handler                 │
-│  (radicale/app/post.py)                                     │
+│              moreradicale Server - POST Handler                 │
+│  (moreradicale/app/post.py)                                     │
 │  1. Check scheduling enabled                                │
 │  2. Verify collection is SCHEDULING-OUTBOX                  │
 │  3. Verify user owns the outbox                             │
@@ -176,7 +176,7 @@ radicale/storage/multifilesystem/discover.py # Auto-creation
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              iTIP Processor - Validation                    │
-│  (radicale/itip/processor.py)                               │
+│  (moreradicale/itip/processor.py)                               │
 │  1. Parse iCalendar (vobject)                               │
 │  2. Validate iTIP message (validator.py)                    │
 │     - METHOD exists                                         │
@@ -190,7 +190,7 @@ radicale/storage/multifilesystem/discover.py # Auto-creation
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Attendee Router - Internal/External            │
-│  (radicale/itip/router.py)                                  │
+│  (moreradicale/itip/router.py)                                  │
 │                                                             │
 │  For each attendee email:                                   │
 │  1. Extract domain from mailto:bob@localhost                │
@@ -204,7 +204,7 @@ radicale/storage/multifilesystem/discover.py # Auto-creation
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Inbox Delivery - Internal Attendees            │
-│  (radicale/itip/processor.py::_deliver_to_inbox)            │
+│  (moreradicale/itip/processor.py::_deliver_to_inbox)            │
 │                                                             │
 │  For each internal attendee:                                │
 │  1. Discover schedule-inbox: /bob/schedule-inbox/           │
@@ -218,7 +218,7 @@ radicale/storage/multifilesystem/discover.py # Auto-creation
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Schedule-Response XML Generation               │
-│  (radicale/itip/processor.py::_build_schedule_response)     │
+│  (moreradicale/itip/processor.py::_build_schedule_response)     │
 │                                                             │
 │  <C:schedule-response>                                      │
 │    <C:response>                                             │
@@ -254,7 +254,7 @@ radicale/storage/multifilesystem/discover.py # Auto-creation
 ### View Server Logs
 ```bash
 # Start server with debug logging
-python3 -m radicale -C test-scheduling-config.ini --debug
+python3 -m moreradicale -C test-scheduling-config.ini --debug
 ```
 
 Look for:
@@ -311,10 +311,10 @@ cat /tmp/radicale-scheduling-test/collection-root/bob/schedule-inbox/*.ics
 
 ## 📞 Support & Feedback
 
-- **Tests**: `python3 -m pytest radicale/tests/test_scheduling.py -v`
+- **Tests**: `python3 -m pytest moreradicale/tests/test_scheduling.py -v`
 - **Docs**: See `SCHEDULING-IMPLEMENTATION.md` for complete technical details
 - **Bugs**: All 16 tests passing, but report any issues found during client testing
-- **Upstream**: Radicale Issue #34 (11-year-old feature request)
+- **Upstream**: moreradicale Issue #34 (11-year-old feature request)
 
 ---
 
