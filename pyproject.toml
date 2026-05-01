@@ -52,7 +52,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.tox]
 min_version = "4.0"
-envlist = ["py", "flake8", "isort", "mypy"]
+envlist = ["py", "ruff", "flake8", "isort", "mypy"]
 
 [tool.tox.env.py]
 extras = ["test"]
@@ -61,6 +61,11 @@ deps = [
     "pytest-cov"
 ]
 commands = [["pytest", "-r", "s", "--cov", "--cov-report=term", "--cov-report=xml", "."]]
+
+[tool.tox.env.ruff]
+deps = ["ruff==0.15.12"]
+commands = [["ruff", "check", "moreradicale/"]]
+skip_install = true
 
 [tool.tox.env.flake8]
 deps = ["flake8==7.1.0"]
