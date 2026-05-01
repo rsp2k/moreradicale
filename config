@@ -3,8 +3,8 @@
 
 # Config file for Radicale - A simple calendar server
 #
-# Place it into /etc/radicale/config (global)
-# or ~/.config/radicale/config (user)
+# Place it into /etc/moreradicale/config (global)
+# or ~/.config/moreradicale/config (user)
 #
 # The current values are the default ones
 
@@ -37,10 +37,10 @@
 #ssl = False
 
 # SSL certificate path
-#certificate = /etc/ssl/radicale.cert.pem
+#certificate = /etc/ssl/moreradicale.cert.pem
 
 # SSL private key
-#key = /etc/ssl/radicale.key.pem
+#key = /etc/ssl/moreradicale.key.pem
 
 # CA certificate for validating clients. This can be used to secure
 # TCP traffic between Radicale and a reverse proxy
@@ -157,13 +157,13 @@
 #oauth2_token_endpoint = <URL>
 
 # PAM service
-#pam_serivce = radicale
+#pam_serivce = moreradicale
 
 # PAM group user should be member of
 #pam_group_membership =
 
 # Htpasswd filename
-#htpasswd_filename = /etc/radicale/users
+#htpasswd_filename = /etc/moreradicale/users
 
 # Htpasswd encryption method
 # Value: plain | bcrypt | md5 | sha256 | sha512 | argon2 | autodetect
@@ -197,7 +197,7 @@
 #type = owner_only
 
 # File for rights management from_file
-#file = /etc/radicale/rights
+#file = /etc/moreradicale/rights
 
 # Permit delete of a collection (global)
 #permit_delete_collection = True
@@ -213,7 +213,7 @@
 #type = multifilesystem
 
 # Folder for storing local collections, created if not present
-#filesystem_folder = /var/lib/radicale/collections
+#filesystem_folder = /var/lib/moreradicale/collections
 
 # Folder for storing cache of local collections, created if not present
 # Note: only used in case of use_cache_subfolder_* options are active
@@ -234,7 +234,7 @@
 
 # Use last modifiction time (nanoseconds) and size (bytes) for 'item' cache instead of SHA256 (improves speed)
 # Note: check used filesystem mtime precision before enabling
-# Note: conversion is done on access, bulk conversion can be done offline using storage verification option: radicale --verify-storage
+# Note: conversion is done on access, bulk conversion can be done offline using storage verification option: moreradicale --verify-storage
 #use_mtime_and_size_for_item_cache = False
 
 # Use configured umask for folder creation (not applicable for OS Windows)

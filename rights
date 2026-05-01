@@ -27,7 +27,7 @@
 
 # Rights management file for Radicale - A simple calendar server
 #
-# The default path for this file is /etc/radicale/rights
+# The default path for this file is /etc/moreradicale/rights
 # The path can be specified in the rights section of the configuration file
 #
 # Section names are used for naming rules and must be unique.

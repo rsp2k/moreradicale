@@ -1,5 +1,5 @@
-## example for a dedidcated FQDN and radicale is served on / there
-## if you are serving on /radicale/ this needs to be prepended at the obvious places
+## example for a dedidcated FQDN and moreradicale is served on / there
+## if you are serving on /moreradicale/ this needs to be prepended at the obvious places
 # taken from https://github.com/Kozea/Radicale/discussions/1753
 
 caldav.example.com {
