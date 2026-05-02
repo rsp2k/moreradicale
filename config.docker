@@ -23,6 +23,13 @@ notifications_enabled = True
 # want manual share acceptance via the notification flow.
 auto_accept_same_domain = True
 
+[websync]
+# Real-time push notifications via WebSocket at /.websync.
+# UI clients connect, authenticate via first-message, subscribe to
+# collection paths, and receive {"type":"change",...} events on changes.
+enabled = True
+require_auth = True
+
 [storage]
 filesystem_folder = /var/lib/moreradicale/collections
 folder_umask = 0027

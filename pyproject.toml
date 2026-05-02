@@ -35,6 +35,11 @@ dependencies = [
     "vobject>=0.9.6",
     "pika>=1.1.0",
     "requests",
+    # ASGI runtime: uvicorn for HTTP+WebSocket; asgiref to wrap the
+    # existing WSGI Application; websockets is uvicorn's WS implementation.
+    "uvicorn>=0.30",
+    "asgiref>=3.8",
+    "websockets>=13",
 ]
 
 

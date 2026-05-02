@@ -53,5 +53,14 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 VOLUME ["/var/lib/moreradicale/collections"]
 
-ENTRYPOINT ["/usr/bin/tini", "--", "moreradicale"]
-CMD ["--config", "/etc/moreradicale/config"]
+# Run via uvicorn so WebSocket upgrades on /.websync actually work.
+# moreradicale's stdlib wsgiref server can't handle the 101 protocol switch;
+# the WSGI app is wrapped via asgiref.WsgiToAsgi inside moreradicale.asgi.
+ENTRYPOINT ["/usr/bin/tini", "--", "uvicorn"]
+CMD [ \
+    "moreradicale.asgi:app", \
+    "--host", "0.0.0.0", \
+    "--port", "5232", \
+    "--proxy-headers", \
+    "--forwarded-allow-ips", "*" \
+]
