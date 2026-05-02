@@ -14,7 +14,9 @@ import {
   Inbox,
   Trash2,
   AlignLeft,
+  Plus,
 } from "lucide-react";
+import { ItemFormDialog } from "./ItemFormDialog";
 import {
   listItems,
   getItem,
@@ -232,6 +234,10 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedHref, setExpandedHref] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
+
+  const supportsItemAuthor =
+    collection.type !== "ADDRESSBOOK" && collection.type !== "WEBCAL";
 
   async function refresh() {
     setRefreshing(true);
@@ -308,6 +314,15 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
               {items ? `${items.length} item${items.length === 1 ? "" : "s"}` : "Loading..."}
             </div>
           </div>
+          {supportsItemAuthor && (
+            <Button
+              size="sm"
+              onClick={() => setComposing(true)}
+              title="Add a new event or task"
+            >
+              <Plus /> New
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -319,6 +334,17 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
           </Button>
         </div>
       </header>
+
+      <ItemFormDialog
+        open={composing}
+        onClose={() => setComposing(false)}
+        onDone={() => {
+          setComposing(false);
+          refresh();
+        }}
+        creds={creds}
+        collection={collection}
+      />
 
       <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 space-y-3">
         {error && (
@@ -338,9 +364,16 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
               <div>
                 <h2 className="font-semibold">No items yet</h2>
                 <p className="text-sm text-[var(--color-muted-foreground)] mt-1">
-                  Add events or contacts using your CalDAV/CardDAV client.
+                  {supportsItemAuthor
+                    ? "Create your first item, or add some via your CalDAV/CardDAV client."
+                    : "Add items using your CalDAV/CardDAV client."}
                 </p>
               </div>
+              {supportsItemAuthor && (
+                <Button onClick={() => setComposing(true)}>
+                  <Plus /> Add item
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
