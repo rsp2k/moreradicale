@@ -16,8 +16,11 @@ import {
   AlignLeft,
   Plus,
   Repeat,
+  List,
+  LayoutGrid,
 } from "lucide-react";
 import { ItemFormDialog } from "./ItemFormDialog";
+import { CalendarGridView } from "./CalendarGridView";
 import { usePoll } from "@/lib/usePoll";
 import { LiveIndicator } from "@/components/ui/live-indicator";
 import {
@@ -251,9 +254,19 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedHref, setExpandedHref] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "week">("list");
+  const [weekAnchor, setWeekAnchor] = useState<Date>(new Date());
 
   const supportsItemAuthor =
     collection.type !== "ADDRESSBOOK" && collection.type !== "WEBCAL";
+
+  // Week view only makes sense for collections with VEVENTs
+  const supportsWeekView =
+    collection.type === "CALENDAR" ||
+    collection.type === "CALENDAR_JOURNAL" ||
+    collection.type === "CALENDAR_TASKS" ||
+    collection.type === "CALENDAR_JOURNAL_TASKS" ||
+    collection.type === "WEBCAL";
 
   async function refresh() {
     setRefreshing(true);
@@ -333,6 +346,34 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
             </div>
           </div>
           <LiveIndicator active={live} className="hidden sm:inline-flex" />
+          {supportsWeekView && (
+            <div className="flex rounded-md border border-[var(--color-border)] overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`px-2 py-1 text-xs flex items-center gap-1 cursor-pointer ${
+                  viewMode === "list"
+                    ? "bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
+                    : "hover:bg-[var(--color-muted)]"
+                }`}
+                title="List view"
+              >
+                <List className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("week")}
+                className={`px-2 py-1 text-xs flex items-center gap-1 cursor-pointer border-l border-[var(--color-border)] ${
+                  viewMode === "week"
+                    ? "bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
+                    : "hover:bg-[var(--color-muted)]"
+                }`}
+                title="Week view"
+              >
+                <LayoutGrid className="size-3.5" />
+              </button>
+            </div>
+          )}
           {supportsItemAuthor && (
             <Button
               size="sm"
@@ -395,6 +436,19 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
               )}
             </CardContent>
           </Card>
+        ) : viewMode === "week" && supportsWeekView ? (
+          <CalendarGridView
+            components={items
+              .filter((it): it is LoadedItem & { parsed: IcalComponent } =>
+                Boolean(it.parsed))
+              .map((it) => ({ href: it.meta.href, comp: it.parsed }))}
+            anchor={weekAnchor}
+            onAnchorChange={setWeekAnchor}
+            onItemClick={(href) => {
+              setViewMode("list");
+              setExpandedHref(href);
+            }}
+          />
         ) : (
           items.map((it) => (
             <ItemRow
