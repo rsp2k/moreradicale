@@ -1,51 +1,43 @@
 services:
-  maildev:
-    image: maildev/maildev:latest
-    container_name: maildev-smtp-test
-    ports:
-      - "8025:1080"  # Web UI
-      - "1025:1025"  # SMTP
-    networks:
-      - default
-    restart: unless-stopped
-    environment:
-      - MAILDEV_WEB_PORT=1080
-      - MAILDEV_SMTP_PORT=1025
-
-  radicale:
+  moreradicale:
     build:
       context: .
       dockerfile: Dockerfile
-    image: radicale-rfc6638:latest
-    container_name: radicale-rfc6638-test
-    volumes:
-      - ./test-scheduling-config.ini:/config/config:ro
-      - ./test-users:/config/users:ro
-      - ./test-rights.conf:/config/rights:ro
-      - radicale-data:/data
-    ports:
-      - "5232:5232"
+    image: moreradicale:${IMAGE_TAG:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME}
+    restart: unless-stopped
     networks:
       - caddy
-      - default
-    labels:
-      caddy: radicale-testing.l.supported.systems
-      caddy.reverse_proxy: "{{upstreams 5232}}"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5232/"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    restart: unless-stopped
+    volumes:
+      - moreradicale-data:/var/lib/moreradicale/collections
+      - ./config.docker:/etc/moreradicale/config:ro
+      - ./users:/etc/moreradicale/users:ro
     environment:
-      - TZ=UTC
-    depends_on:
-      - maildev
+      TZ: ${TZ:-UTC}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:5232/.web/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    labels:
+      caddy: ${DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 5232}}"
+      caddy.encode: gzip zstd
+      # WebSocket sync (/.websync) needs long-lived streams - keep peer-service defaults
+      caddy.reverse_proxy.flush_interval: "-1"
+      caddy.reverse_proxy.transport: "http"
+      caddy.reverse_proxy.transport.read_timeout: "0"
+      caddy.reverse_proxy.transport.write_timeout: "0"
+      caddy.reverse_proxy.transport.keepalive: "5m"
+      caddy.reverse_proxy.transport.keepalive_idle_conns: "10"
+      caddy.reverse_proxy.stream_timeout: "24h"
+      caddy.reverse_proxy.stream_close_delay: "5s"
 
 networks:
   caddy:
     external: true
 
 volumes:
-  radicale-data:
+  moreradicale-data:
     driver: local

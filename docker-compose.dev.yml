@@ -1,0 +1,11 @@
+# Dev override: bind-mount source + debug logging
+# Apply with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Or via Makefile: make dev
+services:
+  moreradicale:
+    image: moreradicale:dev
+    volumes:
+      # Bind-mount source so code edits land in container without rebuild
+      # (still requires container restart - moreradicale doesn't have --reload)
+      - ./moreradicale:/app/.venv/lib/python3.14/site-packages/moreradicale:ro
+    command: ["--config", "/etc/moreradicale/config", "--debug"]

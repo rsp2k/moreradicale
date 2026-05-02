@@ -1,79 +1,90 @@
-# Makefile for Radicale RFC 6638 Scheduling Test Environment
-.PHONY: help build up down logs test-email test-webhook clean
+# Makefile for moreradicale Docker deployment
+
+.PHONY: help build up down restart logs shell ps clean dev prod create-user pull-image health
 
 help:
-	@echo "Radicale RFC 6638 Scheduling Test Environment"
+	@echo "moreradicale Docker management"
 	@echo ""
-	@echo "Commands:"
-	@echo "  make build      - Build Docker images"
-	@echo "  make up         - Start test environment"
-	@echo "  make down       - Stop test environment"
-	@echo "  make logs       - View container logs"
-	@echo "  make test-email - Test email delivery via schedule-outbox"
-	@echo "  make test-webhook - Test webhook with simulated REPLY"
-	@echo "  make clean      - Remove containers and volumes"
+	@echo "Build:"
+	@echo "  make build       - Build prod image"
+	@echo "  make build-dev   - Build dev image (debug logging, source bind-mount)"
 	@echo ""
-	@echo "URLs:"
-	@echo "  Radicale:   http://localhost:5232"
-	@echo "  MailDev UI: http://localhost:8025"
+	@echo "Lifecycle:"
+	@echo "  make up          - Start prod container in background"
+	@echo "  make dev         - Start dev container (source bind-mount + debug)"
+	@echo "  make down        - Stop and remove containers"
+	@echo "  make restart     - Restart container"
+	@echo ""
+	@echo "Inspection:"
+	@echo "  make logs        - Tail container logs"
+	@echo "  make ps          - Show running containers"
+	@echo "  make shell       - Open shell in running container"
+	@echo "  make health      - Show healthcheck status"
+	@echo ""
+	@echo "Users:"
+	@echo "  make create-user USER=alice PASS=secret"
+	@echo ""
+	@echo "Cleanup:"
+	@echo "  make clean       - Stop containers and remove the data volume"
+	@echo ""
+	@echo "URL: https://$$(grep ^DOMAIN .env | cut -d= -f2)"
 
 build:
 	docker compose build
 
-up:
+build-dev:
+	IMAGE_TAG=dev docker compose -f docker-compose.yml -f docker-compose.dev.yml build
+
+up: ensure-users
 	docker compose up -d
+	@sleep 2
+	@docker compose ps
 	@echo ""
-	@echo "Waiting for services to start..."
-	@sleep 3
-	docker compose logs --tail=20
-	@echo ""
-	@echo "Services started!"
-	@echo "  - Radicale:   http://localhost:5232"
-	@echo "  - MailDev UI: http://localhost:8025"
+	@echo "Available at: https://$$(grep ^DOMAIN .env | cut -d= -f2)"
+
+dev: ensure-users
+	IMAGE_TAG=dev docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+	@sleep 2
+	@docker compose ps
 
 down:
 	docker compose down
 
+restart:
+	docker compose restart
+
 logs:
-	docker compose logs -f
+	docker compose logs -f --tail=50
 
-# Test email delivery by sending a meeting invitation to external attendee
-test-email:
-	@echo "Creating test calendar for alice..."
-	curl -s -X MKCALENDAR "http://localhost:5232/alice/calendar/" || true
-	@echo ""
-	@echo "Sending meeting invitation with external attendee..."
-	@curl -s -X POST \
-		-H "Content-Type: text/calendar; method=REQUEST" \
-		"http://localhost:5232/alice/schedule-outbox/" \
-		-d 'BEGIN:VCALENDAR\r\n\
-VERSION:2.0\r\n\
-PRODID:-//Test//Test//EN\r\n\
-METHOD:REQUEST\r\n\
-BEGIN:VEVENT\r\n\
-UID:test-email-$(shell date +%s)@localhost\r\n\
-DTSTAMP:$(shell date -u +%Y%m%dT%H%M%SZ)\r\n\
-DTSTART:$(shell date -u -d "+1 hour" +%Y%m%dT%H%M%SZ)\r\n\
-DTEND:$(shell date -u -d "+2 hours" +%Y%m%dT%H%M%SZ)\r\n\
-SUMMARY:Test Meeting\r\n\
-ORGANIZER:mailto:alice@localhost\r\n\
-ATTENDEE;RSVP=TRUE:mailto:external@example.com\r\n\
-END:VEVENT\r\n\
-END:VCALENDAR'
-	@echo ""
-	@echo "Check MailDev UI at http://localhost:8025 for the email!"
+ps:
+	docker compose ps
 
-# Test webhook by simulating an external REPLY
-test-webhook:
-	@echo "Simulating external attendee REPLY via webhook..."
-	@curl -s -X POST \
-		-H "Content-Type: application/json" \
-		-H "X-Webhook-Signature: sha256=$$(echo -n '{"from":"external@example.com","to":"calendar@localhost","subject":"Re: Test Meeting","calendar":"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REPLY\r\nBEGIN:VEVENT\r\nUID:test-email-webhook@localhost\r\nORGANIZER:mailto:alice@localhost\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:external@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR"}' | openssl dgst -sha256 -hmac 'test-webhook-secret' | cut -d' ' -f2)" \
-		"http://localhost:5232/scheduling/webhook" \
-		-d '{"from":"external@example.com","to":"calendar@localhost","subject":"Re: Test Meeting","calendar":"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REPLY\r\nBEGIN:VEVENT\r\nUID:test-email-webhook@localhost\r\nORGANIZER:mailto:alice@localhost\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:external@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR"}'
-	@echo ""
-	@echo "Check Radicale logs for webhook processing..."
+shell:
+	docker compose exec moreradicale /bin/bash || \
+	docker compose exec moreradicale /bin/sh
+
+health:
+	@docker inspect --format='{{.State.Health.Status}}: {{(index .State.Health.Log (sub (len .State.Health.Log) 1)).Output}}' \
+		$$(docker compose ps -q moreradicale) 2>/dev/null || echo "Container not running"
+
+# Create htpasswd file with default admin user if it doesn't exist
+ensure-users:
+	@if [ ! -f users ]; then \
+		echo "Creating default users file with admin user (password: changeme)"; \
+		docker run --rm -v $$(pwd):/work httpd:2.4-alpine htpasswd -Bbc /work/users admin changeme; \
+		echo ">>> CHANGE THIS PASSWORD: edit users file or run 'make create-user USER=admin PASS=<new>'"; \
+	fi
+
+create-user:
+	@test -n "$(USER)" || (echo "Usage: make create-user USER=alice PASS=secret"; exit 1)
+	@test -n "$(PASS)" || (echo "Usage: make create-user USER=alice PASS=secret"; exit 1)
+	@if [ -f users ]; then \
+		docker run --rm -v $$(pwd):/work httpd:2.4-alpine htpasswd -Bb /work/users $(USER) $(PASS); \
+	else \
+		docker run --rm -v $$(pwd):/work httpd:2.4-alpine htpasswd -Bbc /work/users $(USER) $(PASS); \
+	fi
+	@echo "User $(USER) created/updated. Restart container: make restart"
 
 clean:
 	docker compose down -v
-	rm -rf test-storage/
+	@echo "Removed containers and moreradicale-data volume."

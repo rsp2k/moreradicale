@@ -33,3 +33,5 @@ test-imap-reply.sh
 
 # Claude Code conversation history backup
 HIST/
+users
+test-users

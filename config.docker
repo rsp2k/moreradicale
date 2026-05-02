@@ -1,0 +1,27 @@
+# moreradicale config for Docker deployment
+# Mounted at /etc/moreradicale/config
+
+[server]
+hosts = 0.0.0.0:5232
+max_connections = 32
+
+[auth]
+type = htpasswd
+htpasswd_filename = /etc/moreradicale/users
+htpasswd_encryption = bcrypt
+realm = moreradicale
+
+[rights]
+# Authenticated users see only their own collections
+type = owner_only
+
+[storage]
+filesystem_folder = /var/lib/moreradicale/collections
+folder_umask = 0027
+
+[web]
+type = internal
+
+[logging]
+level = info
+mask_passwords = True
