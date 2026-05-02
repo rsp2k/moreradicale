@@ -1,6 +1,6 @@
 # Makefile for moreradicale Docker deployment
 
-.PHONY: help build up down restart logs shell ps clean dev prod create-user pull-image health
+.PHONY: help build up down restart logs shell ps clean dev prod create-user pull-image health ui-build ui-dev
 
 help:
 	@echo "moreradicale Docker management"
@@ -29,8 +29,18 @@ help:
 	@echo ""
 	@echo "URL: https://$$(grep ^DOMAIN .env | cut -d= -f2)"
 
-build:
+build: ui-build
 	docker compose build
+
+# Build the Astro UI into moreradicale/web/internal_data/
+# Run before `make build` so the wheel ships pre-built static assets.
+ui-build:
+	cd web-ui && npm install --silent && npm run build
+
+# Astro dev server with hot-reload (no Docker rebuild needed).
+# Talks to the live moreradicale container at https://moreradicale.l.supported.systems
+ui-dev:
+	cd web-ui && npm run dev
 
 build-dev:
 	IMAGE_TAG=dev docker compose -f docker-compose.yml -f docker-compose.dev.yml build
