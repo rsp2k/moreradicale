@@ -84,13 +84,20 @@ export function findItemComponent(roots: IcalComponent[]): IcalComponent | null 
   return null;
 }
 
-/** Parse iCal date/datetime: 19970714 or 19970714T173000Z or 19970714T173000 */
+/** Parse iCal date/datetime: 19970714 or 19970714T173000Z or 19970714T173000.
+ *
+ * DATE-only values (no time) are parsed as LOCAL midnight to avoid the
+ * timezone-shift bug where a date entered as "May 2" displays as "May 1"
+ * for users west of UTC.
+ */
 export function parseIcalDate(value: string): Date | null {
   if (!value) return null;
   const m = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z?))?$/);
   if (!m) return null;
   const [, y, mo, d, h, mi, s, z] = m;
-  if (!h) return new Date(`${y}-${mo}-${d}T00:00:00Z`);
+  if (!h) {
+    return new Date(parseInt(y, 10), parseInt(mo, 10) - 1, parseInt(d, 10));
+  }
   return new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}${z || ""}`);
 }
 
@@ -180,6 +187,15 @@ export interface VTodoProps {
   description?: string;
 }
 
+export interface VJournalProps {
+  uid: string;
+  summary: string;
+  dtstart: Date;
+  allDay?: boolean;
+  status?: "DRAFT" | "FINAL" | "CANCELLED";
+  description?: string;
+}
+
 function dateProp(name: string, d: Date, allDay: boolean): string {
   return allDay
     ? `${name};VALUE=DATE:${formatIcalDateValue(d)}`
@@ -202,6 +218,24 @@ export function serializeVEvent(p: VEventProps): string {
   if (p.location) lines.push(`LOCATION:${encodeText(p.location)}`);
   if (p.description) lines.push(`DESCRIPTION:${encodeText(p.description)}`);
   lines.push("END:VEVENT", "END:VCALENDAR", "");
+  return lines.map(foldLine).join("\r\n");
+}
+
+export function serializeVJournal(p: VJournalProps): string {
+  const now = new Date();
+  const lines: string[] = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//moreradicale//web-ui//EN",
+    "BEGIN:VJOURNAL",
+    `UID:${p.uid}`,
+    `DTSTAMP:${formatIcalDateTimeUTC(now)}`,
+    `SUMMARY:${encodeText(p.summary)}`,
+    dateProp("DTSTART", p.dtstart, !!p.allDay),
+  ];
+  if (p.status) lines.push(`STATUS:${p.status}`);
+  if (p.description) lines.push(`DESCRIPTION:${encodeText(p.description)}`);
+  lines.push("END:VJOURNAL", "END:VCALENDAR", "");
   return lines.map(foldLine).join("\r\n");
 }
 

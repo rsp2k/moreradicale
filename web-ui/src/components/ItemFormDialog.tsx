@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Loader2, Plus, CalendarDays, ListTodo } from "lucide-react";
+import { Loader2, Plus, CalendarDays, ListTodo, BookOpen } from "lucide-react";
 import {
   uploadItem,
   uuid,
@@ -7,7 +7,7 @@ import {
   type Credentials,
   type CollectionType,
 } from "@/lib/webdav";
-import { serializeVEvent, serializeVTodo } from "@/lib/ical";
+import { serializeVEvent, serializeVTodo, serializeVJournal } from "@/lib/ical";
 import {
   Dialog,
   DialogHeader,
@@ -30,19 +30,24 @@ interface Props {
   collection: Collection;
 }
 
-type Kind = "VEVENT" | "VTODO";
+type Kind = "VEVENT" | "VTODO" | "VJOURNAL";
 
 /** Decide which item kinds make sense based on the collection's
  *  supported component set. */
 function allowedKinds(type: CollectionType): Kind[] {
   switch (type) {
     case "CALENDAR_JOURNAL_TASKS":
+      return ["VEVENT", "VTODO", "VJOURNAL"];
+    case "CALENDAR_JOURNAL":
+      return ["VEVENT", "VJOURNAL"];
     case "CALENDAR_TASKS":
       return ["VEVENT", "VTODO"];
     case "JOURNAL_TASKS":
+      return ["VTODO", "VJOURNAL"];
     case "TASKS":
       return ["VTODO"];
-    case "CALENDAR_JOURNAL":
+    case "JOURNAL":
+      return ["VJOURNAL"];
     case "CALENDAR":
     case "WEBCAL":
       return ["VEVENT"];
@@ -50,6 +55,18 @@ function allowedKinds(type: CollectionType): Kind[] {
       return ["VEVENT"]; // fallback (caller blocks address books)
   }
 }
+
+const KIND_LABEL: Record<Kind, string> = {
+  VEVENT: "Event",
+  VTODO: "Task",
+  VJOURNAL: "Journal",
+};
+
+const KIND_ICON: Record<Kind, React.ReactNode> = {
+  VEVENT: <CalendarDays className="size-4" />,
+  VTODO: <ListTodo className="size-4" />,
+  VJOURNAL: <BookOpen className="size-4" />,
+};
 
 /** Format Date for HTML5 datetime-local input (uses local timezone). */
 function toLocalInput(d: Date): string {
@@ -84,6 +101,9 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
   const [due, setDue] = useState("");
   const [status, setStatus] = useState<"NEEDS-ACTION" | "IN-PROCESS" | "COMPLETED" | "CANCELLED">("NEEDS-ACTION");
   const [priority, setPriority] = useState<"" | "1" | "5" | "9">("");
+  // Journal-specific
+  const [journalDate, setJournalDate] = useState("");
+  const [journalStatus, setJournalStatus] = useState<"DRAFT" | "FINAL" | "CANCELLED">("FINAL");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -102,6 +122,8 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
     setDue("");
     setStatus("NEEDS-ACTION");
     setPriority("");
+    setJournalDate(toDateInput(now));
+    setJournalStatus("FINAL");
     setError(null);
     setBusy(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -121,6 +143,17 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
         dtend: endD,
         allDay,
         location: location || undefined,
+        description: description || undefined,
+      });
+      return { ics, filename: `${id}.ics` };
+    }
+    if (kind === "VJOURNAL") {
+      const ics = serializeVJournal({
+        uid: id,
+        summary,
+        dtstart: new Date(journalDate + "T00:00:00"),
+        allDay: true,
+        status: journalStatus,
         description: description || undefined,
       });
       return { ics, filename: `${id}.ics` };
@@ -171,41 +204,40 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
           {kinds.length > 1 && (
             <div className="space-y-1.5">
               <Label>Type</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setKind("VEVENT")}
-                  className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
-                    kind === "VEVENT"
-                      ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
-                      : "border-[var(--color-border)] hover:bg-[var(--color-muted)]"
-                  }`}
-                >
-                  <CalendarDays className="size-4" /> Event
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setKind("VTODO")}
-                  className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
-                    kind === "VTODO"
-                      ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
-                      : "border-[var(--color-border)] hover:bg-[var(--color-muted)]"
-                  }`}
-                >
-                  <ListTodo className="size-4" /> Task
-                </button>
+              <div
+                className="grid gap-2"
+                style={{ gridTemplateColumns: `repeat(${kinds.length}, minmax(0, 1fr))` }}
+              >
+                {kinds.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setKind(k)}
+                    className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                      kind === k
+                        ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
+                        : "border-[var(--color-border)] hover:bg-[var(--color-muted)]"
+                    }`}
+                  >
+                    {KIND_ICON[k]} {KIND_LABEL[k]}
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="if-summary">Summary</Label>
+            <Label htmlFor="if-summary">{kind === "VJOURNAL" ? "Title" : "Summary"}</Label>
             <Input
               id="if-summary"
               type="text"
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
-              placeholder={kind === "VEVENT" ? "Coffee with Margaret" : "Polish the new UI"}
+              placeholder={
+                kind === "VEVENT" ? "Coffee with Margaret"
+                : kind === "VTODO" ? "Polish the new UI"
+                : "Sprint retro notes"
+              }
               required
               autoFocus
             />
@@ -261,6 +293,33 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
                 />
               </div>
             </>
+          ) : kind === "VJOURNAL" ? (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="if-jdate">Date</Label>
+                  <Input
+                    id="if-jdate"
+                    type="date"
+                    value={journalDate}
+                    onChange={(e) => setJournalDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="if-jstatus">Status</Label>
+                  <Select
+                    id="if-jstatus"
+                    value={journalStatus}
+                    onChange={(e) => setJournalStatus(e.target.value as typeof journalStatus)}
+                  >
+                    <option value="DRAFT">Draft</option>
+                    <option value="FINAL">Final</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </Select>
+                </div>
+              </div>
+            </>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-2">
@@ -305,13 +364,20 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="if-desc">Description</Label>
+            <Label htmlFor="if-desc">
+              {kind === "VJOURNAL" ? "Body" : "Description"}
+            </Label>
             <textarea
               id="if-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="optional notes"
-              rows={3}
+              placeholder={
+                kind === "VJOURNAL"
+                  ? "What happened? Long-form notes go here."
+                  : "optional notes"
+              }
+              rows={kind === "VJOURNAL" ? 8 : 3}
+              required={kind === "VJOURNAL"}
               className="flex w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm shadow-xs placeholder:text-[var(--color-muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-1"
             />
           </div>
