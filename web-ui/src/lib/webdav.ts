@@ -187,3 +187,74 @@ export function publicUrlFor(href: string): string {
   const base = `${window.location.origin}`;
   return base + href;
 }
+
+export interface CollectionItem {
+  href: string;
+  etag: string;
+  contentType: string;
+  size: number;
+}
+
+/** List items inside a collection via PROPFIND depth=1. */
+export async function listItems(creds: Credentials, collectionHref: string): Promise<CollectionItem[]> {
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<propfind xmlns="DAV:">
+  <prop>
+    <getetag/>
+    <getcontenttype/>
+    <getcontentlength/>
+    <resourcetype/>
+  </prop>
+</propfind>`;
+  const res = await fetch(collectionHref, {
+    method: "PROPFIND",
+    headers: {
+      Authorization: authHeader(creds),
+      Depth: "1",
+      "Content-Type": "application/xml; charset=utf-8",
+    },
+    body,
+  });
+  if (!res.ok) throw new Error(`PROPFIND failed: ${res.status} ${res.statusText}`);
+  const xml = parseXml(await res.text());
+  const items: CollectionItem[] = [];
+  const normalizedColl = collectionHref.replace(/\/+$/, "");
+  for (const response of nsAll(xml.documentElement, NS.D, "response")) {
+    const href = textOf(ns(response, NS.D, "href"));
+    if (!href) continue;
+    if (href.replace(/\/+$/, "") === normalizedColl) continue;
+    const propstat = ns(response, NS.D, "propstat");
+    if (!propstat) continue;
+    const prop = ns(propstat, NS.D, "prop");
+    if (!prop) continue;
+    // Skip if this is itself a collection (e.g. nested)
+    const rt = ns(prop, NS.D, "resourcetype");
+    if (rt && ns(rt, NS.D, "collection")) continue;
+    items.push({
+      href,
+      etag: textOf(ns(prop, NS.D, "getetag")).replace(/^"|"$/g, ""),
+      contentType: textOf(ns(prop, NS.D, "getcontenttype")),
+      size: parseInt(textOf(ns(prop, NS.D, "getcontentlength")), 10) || 0,
+    });
+  }
+  items.sort((a, b) => a.href.localeCompare(b.href));
+  return items;
+}
+
+/** Fetch the raw .ics or .vcf body of an item. */
+export async function getItem(creds: Credentials, href: string): Promise<string> {
+  const res = await fetch(href, {
+    method: "GET",
+    headers: { Authorization: authHeader(creds) },
+  });
+  if (!res.ok) throw new Error(`GET failed: ${res.status} ${res.statusText}`);
+  return await res.text();
+}
+
+/** Delete a single item. */
+export async function deleteItem(creds: Credentials, href: string, etag?: string): Promise<void> {
+  const headers: Record<string, string> = { Authorization: authHeader(creds) };
+  if (etag) headers["If-Match"] = `"${etag}"`;
+  const res = await fetch(href, { method: "DELETE", headers });
+  if (!res.ok) throw new Error(`DELETE failed: ${res.status} ${res.statusText}`);
+}

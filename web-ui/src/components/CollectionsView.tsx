@@ -32,6 +32,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface Props {
   creds: Credentials;
   onLogout: () => void;
+  onOpenCollection: (c: Collection) => void;
 }
 
 const TYPE_LABELS: Record<CollectionType, string> = {
@@ -59,21 +60,27 @@ function TypeIcon({ type }: { type: CollectionType }) {
 function CollectionCard({
   c,
   onDelete,
+  onOpen,
 }: {
   c: Collection;
   onDelete: () => void;
+  onOpen: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const url = publicUrlFor(c.href);
 
-  async function copyUrl() {
+  async function copyUrl(e: React.MouseEvent) {
+    e.stopPropagation();
     await navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
 
   return (
-    <Card className="overflow-hidden transition-shadow hover:shadow-md">
+    <Card
+      className="overflow-hidden transition-shadow hover:shadow-md cursor-pointer group"
+      onClick={onOpen}
+    >
       <div
         className="h-1.5"
         style={{ background: c.color || "var(--color-primary)" }}
@@ -81,7 +88,7 @@ function CollectionCard({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="font-semibold truncate" title={c.displayname}>
+            <h3 className="font-semibold truncate group-hover:text-[var(--color-primary)] transition-colors" title={c.displayname}>
               {c.displayname || c.href.split("/").filter(Boolean).pop()}
             </h3>
             <div className="mt-1 flex flex-wrap gap-2 items-center">
@@ -117,13 +124,24 @@ function CollectionCard({
           </Button>
         </div>
         <div className="flex gap-1">
-          <Button asChild={false} variant="outline" size="sm" className="flex-1" onClick={() => window.open(url)}>
-            <span><Download /> Download</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(url);
+            }}
+          >
+            <Download /> Download
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            onClick={onDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             title="Delete collection"
             className="text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
           >
@@ -135,7 +153,7 @@ function CollectionCard({
   );
 }
 
-export function CollectionsView({ creds, onLogout }: Props) {
+export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
   const [collections, setCollections] = useState<Collection[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -253,6 +271,7 @@ export function CollectionsView({ creds, onLogout }: Props) {
                 <CollectionCard
                   key={c.href}
                   c={c}
+                  onOpen={() => onOpenCollection(c)}
                   onDelete={() => {
                     setPendingDelete(c);
                     setConfirmText("");
