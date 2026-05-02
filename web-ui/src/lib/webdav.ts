@@ -25,7 +25,8 @@ export interface Collection {
 
 export interface Credentials {
   user: string;
-  password: string;
+  /** null when auth is delegated to the reverse proxy (Authentik, etc.). */
+  password: string | null;
 }
 
 const NS = {
@@ -57,8 +58,22 @@ export function clearCreds(): void {
   sessionStorage.removeItem(CRED_KEY);
 }
 
-function authHeader(creds: Credentials): string {
+/**
+ * Authorization header for a credentials object.
+ * Returns null when password is null (proxy/header auth) - the caller
+ * should omit the Authorization header entirely in that case so the
+ * upstream proxy can inject its own.
+ */
+function authHeader(creds: Credentials): string | null {
+  if (creds.password === null) return null;
   return "Basic " + btoa(`${creds.user}:${creds.password}`);
+}
+
+/** Build fetch headers with optional auth. */
+function withAuth(creds: Credentials, headers: Record<string, string> = {}): Record<string, string> {
+  const a = authHeader(creds);
+  if (a) headers["Authorization"] = a;
+  return headers;
 }
 
 function parseXml(text: string): Document {
@@ -83,11 +98,10 @@ export async function login(creds: Credentials): Promise<{ ok: true; principal: 
   try {
     const res = await fetch(url, {
       method: "PROPFIND",
-      headers: {
-        Authorization: authHeader(creds),
+      headers: withAuth(creds, {
         Depth: "0",
         "Content-Type": "application/xml; charset=utf-8",
-      },
+      }),
       body: `<?xml version="1.0" encoding="utf-8"?>
 <propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>`,
     });
@@ -98,6 +112,50 @@ export async function login(creds: Credentials): Promise<{ ok: true; principal: 
     return { ok: true, principal: href || url };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Detect proxy/header authentication.
+ *
+ * Sends an unauthenticated PROPFIND for the site root. If the upstream
+ * proxy (Authentik via Caddy, etc.) has already authenticated the
+ * request and moreradicale is configured with one of the header-auth
+ * backends (http_x_remote_user, http_remote_user, remote_user), the
+ * response will contain a current-user-principal we can use. Otherwise
+ * we get a 401 and the caller falls back to the Basic Auth login form.
+ */
+export async function detectProxiedSession(): Promise<Credentials | null> {
+  try {
+    const res = await fetch("/", {
+      method: "PROPFIND",
+      headers: {
+        Depth: "0",
+        "Content-Type": "application/xml; charset=utf-8",
+      },
+      body: `<?xml version="1.0" encoding="utf-8"?>
+<propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>`,
+    });
+    if (!res.ok) return null;
+    const xml = parseXml(await res.text());
+    const principalHref = textOf(ns(xml.documentElement, NS.D, "href"));
+    // Walk responses for current-user-principal
+    let principal = "";
+    for (const response of nsAll(xml.documentElement, NS.D, "response")) {
+      const cup = ns(response, NS.D, "current-user-principal");
+      if (cup) {
+        principal = textOf(ns(cup, NS.D, "href"));
+        if (principal) break;
+      }
+    }
+    if (!principal) principal = principalHref;
+    if (!principal) return null;
+    // principal looks like "/alice/" - extract the user segment
+    const user = principal.replace(/^\/+|\/+$/g, "").split("/")[0];
+    if (!user || user.startsWith(".")) return null;
+    return { user: decodeURIComponent(user), password: null };
+  } catch {
+    return null;
   }
 }
 
@@ -121,7 +179,7 @@ export async function listCollections(creds: Credentials): Promise<Collection[]>
   const res = await fetch(url, {
     method: "PROPFIND",
     headers: {
-      Authorization: authHeader(creds),
+      ...withAuth(creds),
       Depth: "1",
       "Content-Type": "application/xml; charset=utf-8",
     },
@@ -177,7 +235,7 @@ export async function listCollections(creds: Credentials): Promise<Collection[]>
 export async function deleteCollection(creds: Credentials, href: string): Promise<void> {
   const res = await fetch(href, {
     method: "DELETE",
-    headers: { Authorization: authHeader(creds) },
+    headers: withAuth(creds),
   });
   if (!res.ok) throw new Error(`DELETE failed: ${res.status} ${res.statusText}`);
 }
@@ -209,7 +267,7 @@ export async function listItems(creds: Credentials, collectionHref: string): Pro
   const res = await fetch(collectionHref, {
     method: "PROPFIND",
     headers: {
-      Authorization: authHeader(creds),
+      ...withAuth(creds),
       Depth: "1",
       "Content-Type": "application/xml; charset=utf-8",
     },
@@ -245,7 +303,7 @@ export async function listItems(creds: Credentials, collectionHref: string): Pro
 export async function getItem(creds: Credentials, href: string): Promise<string> {
   const res = await fetch(href, {
     method: "GET",
-    headers: { Authorization: authHeader(creds) },
+    headers: withAuth(creds),
   });
   if (!res.ok) throw new Error(`GET failed: ${res.status} ${res.statusText}`);
   return await res.text();
@@ -253,9 +311,9 @@ export async function getItem(creds: Credentials, href: string): Promise<string>
 
 /** Delete a single item. */
 export async function deleteItem(creds: Credentials, href: string, etag?: string): Promise<void> {
-  const headers: Record<string, string> = { Authorization: authHeader(creds) };
-  if (etag) headers["If-Match"] = `"${etag}"`;
-  const res = await fetch(href, { method: "DELETE", headers });
+  const extra: Record<string, string> = {};
+  if (etag) extra["If-Match"] = `"${etag}"`;
+  const res = await fetch(href, { method: "DELETE", headers: withAuth(creds, extra) });
   if (!res.ok) throw new Error(`DELETE failed: ${res.status} ${res.statusText}`);
 }
 
@@ -359,7 +417,7 @@ export async function createCollection(
   const res = await fetch(collectionUrl, {
     method,
     headers: {
-      Authorization: authHeader(creds),
+      ...withAuth(creds),
       "Content-Type": "application/xml; charset=utf-8",
     },
     body,
@@ -428,7 +486,7 @@ export async function updateCollectionProps(
   const res = await fetch(href, {
     method: "PROPPATCH",
     headers: {
-      Authorization: authHeader(creds),
+      ...withAuth(creds),
       "Content-Type": "application/xml; charset=utf-8",
     },
     body,
@@ -451,7 +509,7 @@ export async function uploadItem(
   const res = await fetch(itemHref, {
     method: "PUT",
     headers: {
-      Authorization: authHeader(creds),
+      ...withAuth(creds),
       "Content-Type": contentType,
     },
     body: content,
