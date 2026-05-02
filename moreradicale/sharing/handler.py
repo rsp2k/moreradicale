@@ -180,7 +180,8 @@ class SharingHandler:
                     collection_path=collection.path,
                     collection_name=collection_name,
                     sharer=user,
-                    sharer_cn=None  # Could be enhanced to get user's display name
+                    sharer_cn=None,  # Could be enhanced to get user's display name
+                    _locked=True,  # we're already inside app/post.py's write lock
                 )
 
         except PermissionError as e:
@@ -224,7 +225,8 @@ class SharingHandler:
                     collection_path=collection.path,
                     collection_name=collection_name,
                     owner=user,
-                    owner_cn=None
+                    owner_cn=None,
+                    _locked=True,
                 )
             else:
                 logger.debug("Share %s not found for removal on %s",
@@ -285,7 +287,8 @@ class SharingHandler:
                     owner=collection.owner,
                     sharee=user,
                     collection_path=collection.path,
-                    accepted=accept
+                    accepted=accept,
+                    _locked=True,
                 )
 
         except ValueError as e:

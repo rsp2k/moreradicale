@@ -17,11 +17,11 @@ type = owner_only_shared
 
 [sharing]
 enabled = True
-# Notifications disabled: the notification subsystem has nested-lock
-# deadlocks that need deeper server-side refactoring (see
-# moreradicale/sharing/notifications.py acquire_lock calls inside
-# the write-lock'd POST handler context).
-notifications_enabled = False
+notifications_enabled = True
+# Auto-accept shares from users on the same domain. Pragmatic for our
+# single-tenant deployment where everyone is internal; flip off if you
+# want manual share acceptance via the notification flow.
+auto_accept_same_domain = True
 
 [storage]
 filesystem_folder = /var/lib/moreradicale/collections

@@ -294,7 +294,7 @@ class NotificationManager:
         """Get path to user's notification collection."""
         return f"/{username}/{NOTIFICATIONS_COLLECTION}/"
 
-    def ensure_notification_collection(self, username: str) -> bool:
+    def ensure_notification_collection(self, username: str, _locked: bool = False) -> bool:
         """
         Ensure user has a notification collection.
 
@@ -308,36 +308,46 @@ class NotificationManager:
         """
         path = self.get_notification_collection_path(username)
 
-        # Check if exists
-        try:
-            with self.storage.acquire_lock("r", username):
+        # Helper that does the work without acquiring a lock
+        def _check_or_create() -> bool:
+            try:
                 items = list(self.storage.discover(path, depth="0"))
                 if items:
                     return True
-        except Exception as e:
-            logger.debug("Notification collection check failed: %s", e)
+            except Exception as e:
+                logger.debug("Notification collection check failed: %s", e)
 
-        # Create collection
-        try:
-            with self.storage.acquire_lock("w", username):
+            try:
+                # tag must be non-empty so app/base.py Access.check() treats
+                # this as a leaf collection (lowercase r/w permissions match
+                # owner_only's "rw" return for /user/X/ paths) rather than a
+                # principal (uppercase R/W only).
                 props = {
-                    "tag": "",  # Not a calendar or addressbook
+                    "tag": "NOTIFICATION",
                     "D:displayname": "Notifications",
                     "D:resourcetype": "<D:collection/><CS:notification/>",
                 }
                 self.storage.create_collection(path, props=props)
                 logger.info("Created notification collection for %s", username)
                 return True
-        except Exception as e:
-            logger.warning("Failed to create notification collection for %s: %s",
-                           username, e)
-            return False
+            except Exception as e:
+                logger.warning("Failed to create notification collection for %s: %s",
+                               username, e)
+                return False
+
+        if _locked:
+            # Caller already holds a write lock - don't re-acquire (the
+            # storage RwLock isn't re-entrant; fcntl.flock would deadlock).
+            return _check_or_create()
+        with self.storage.acquire_lock("w", username):
+            return _check_or_create()
 
     def create_invite_notification(self, sharee: str, share: "Share",
                                    collection_path: str,
                                    collection_name: str,
                                    sharer: str,
-                                   sharer_cn: Optional[str] = None) -> Optional[str]:
+                                   sharer_cn: Optional[str] = None,
+                                   _locked: bool = False) -> Optional[str]:
         """
         Create an invite notification for a share.
 
@@ -356,7 +366,7 @@ class NotificationManager:
             return None
 
         # Ensure notification collection exists
-        if not self.ensure_notification_collection(sharee):
+        if not self.ensure_notification_collection(sharee, _locked=_locked):
             return None
 
         # Create notification
@@ -373,7 +383,7 @@ class NotificationManager:
         )
 
         # Store notification
-        if self._store_notification(sharee, notification):
+        if self._store_notification(sharee, notification, _locked=_locked):
             logger.info("Created invite notification for %s from %s",
                         sharee, sharer)
             return notification.uid
@@ -382,7 +392,8 @@ class NotificationManager:
 
     def create_reply_notification(self, owner: str, sharee: str,
                                   collection_path: str,
-                                  accepted: bool) -> Optional[str]:
+                                  accepted: bool,
+                                  _locked: bool = False) -> Optional[str]:
         """
         Create a reply notification for the calendar owner.
 
@@ -401,7 +412,7 @@ class NotificationManager:
             return None
 
         # Ensure notification collection exists
-        if not self.ensure_notification_collection(owner):
+        if not self.ensure_notification_collection(owner, _locked=_locked):
             return None
 
         # Create notification
@@ -415,7 +426,7 @@ class NotificationManager:
         )
 
         # Store notification
-        if self._store_notification(owner, notification):
+        if self._store_notification(owner, notification, _locked=_locked):
             logger.info("Created reply notification for %s from %s (%s)",
                         owner, sharee, "accepted" if accepted else "declined")
             return notification.uid
@@ -426,7 +437,8 @@ class NotificationManager:
                                        collection_path: str,
                                        collection_name: str,
                                        owner: str,
-                                       owner_cn: Optional[str] = None) -> Optional[str]:
+                                       owner_cn: Optional[str] = None,
+                                       _locked: bool = False) -> Optional[str]:
         """
         Create a revocation notification when a share is removed.
 
@@ -446,7 +458,7 @@ class NotificationManager:
             return None
 
         # Ensure notification collection exists
-        if not self.ensure_notification_collection(sharee):
+        if not self.ensure_notification_collection(sharee, _locked=_locked):
             return None
 
         # Create notification
@@ -461,7 +473,7 @@ class NotificationManager:
         )
 
         # Store notification
-        if self._store_notification(sharee, notification):
+        if self._store_notification(sharee, notification, _locked=_locked):
             logger.info("Created revocation notification for %s from %s",
                         sharee, owner)
             return notification.uid
@@ -528,33 +540,37 @@ class NotificationManager:
         return False
 
     def _store_notification(self, username: str,
-                            notification: Notification) -> bool:
-        """Store a notification as a resource."""
+                            notification: Notification,
+                            _locked: bool = False) -> bool:
+        """Store a notification as a resource.
+
+        When _locked=True the caller already holds a write lock on storage;
+        skip re-acquiring (the storage RwLock isn't re-entrant - fcntl.flock
+        deadlocks on same-thread re-acquire).
+        """
         import json
 
         path = (self.get_notification_collection_path(username) +
                 notification.get_filename())
 
-        try:
-            with self.storage.acquire_lock("w", username):
-                # Create notification as collection item
+        def _do_store() -> bool:
+            try:
                 props = {
                     "tag": "notification",
                     NOTIFICATIONS_PROPERTY: json.dumps(notification.to_dict()),
                 }
-
-                # Generate XML content
-                ET.tostring(notification.to_xml(),
-                            encoding="unicode")
-
-                # Store as item with XML content
-                # Note: Using a simple approach - store metadata with props
+                # XML payload kept for future use; not currently persisted
+                ET.tostring(notification.to_xml(), encoding="unicode")
                 self.storage.create_collection(path, props=props)
                 return True
+            except Exception as e:
+                logger.warning("Failed to store notification: %s", e)
+                return False
 
-        except Exception as e:
-            logger.warning("Failed to store notification: %s", e)
-            return False
+        if _locked:
+            return _do_store()
+        with self.storage.acquire_lock("w", username):
+            return _do_store()
 
 
 def get_notification_manager(configuration: "config.Configuration",
