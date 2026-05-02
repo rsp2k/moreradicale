@@ -14,6 +14,8 @@ import {
   Plus,
   Loader2,
   Inbox,
+  Pencil,
+  Upload,
 } from "lucide-react";
 import {
   listCollections,
@@ -28,6 +30,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CollectionFormDialog } from "./CollectionFormDialog";
+import { UploadDialog } from "./UploadDialog";
 
 interface Props {
   creds: Credentials;
@@ -61,10 +65,14 @@ function CollectionCard({
   c,
   onDelete,
   onOpen,
+  onEdit,
+  onUpload,
 }: {
   c: Collection;
   onDelete: () => void;
   onOpen: () => void;
+  onEdit: () => void;
+  onUpload: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const url = publicUrlFor(c.href);
@@ -130,10 +138,33 @@ function CollectionCard({
             className="flex-1"
             onClick={(e) => {
               e.stopPropagation();
+              onUpload();
+            }}
+            title="Upload .ics or .vcf files"
+          >
+            <Upload /> Upload
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
               window.open(url);
             }}
+            title="Download as single file"
           >
-            <Download /> Download
+            <Download />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            title="Edit metadata"
+          >
+            <Pencil />
           </Button>
           <Button
             variant="ghost"
@@ -160,6 +191,8 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
   const [pendingDelete, setPendingDelete] = useState<Collection | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [formDialog, setFormDialog] = useState<{ open: boolean; editing?: Collection }>({ open: false });
+  const [uploadFor, setUploadFor] = useState<Collection | null>(null);
 
   async function refresh() {
     setRefreshing(true);
@@ -251,7 +284,7 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
                   Create a calendar or address book to get started.
                 </p>
               </div>
-              <Button>
+              <Button onClick={() => setFormDialog({ open: true })}>
                 <Plus /> New collection
               </Button>
             </CardContent>
@@ -262,7 +295,7 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
               <h2 className="text-lg font-semibold">
                 {collections.length} collection{collections.length === 1 ? "" : "s"}
               </h2>
-              <Button>
+              <Button onClick={() => setFormDialog({ open: true })}>
                 <Plus /> New
               </Button>
             </div>
@@ -272,6 +305,8 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
                   key={c.href}
                   c={c}
                   onOpen={() => onOpenCollection(c)}
+                  onEdit={() => setFormDialog({ open: true, editing: c })}
+                  onUpload={() => setUploadFor(c)}
                   onDelete={() => {
                     setPendingDelete(c);
                     setConfirmText("");
@@ -282,6 +317,30 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
           </>
         )}
       </main>
+
+      <CollectionFormDialog
+        open={formDialog.open}
+        editing={formDialog.editing}
+        creds={creds}
+        onClose={() => setFormDialog({ open: false })}
+        onDone={() => {
+          setFormDialog({ open: false });
+          refresh();
+        }}
+      />
+
+      {uploadFor && (
+        <UploadDialog
+          open={true}
+          collection={uploadFor}
+          creds={creds}
+          onClose={() => setUploadFor(null)}
+          onDone={() => {
+            setUploadFor(null);
+            refresh();
+          }}
+        />
+      )}
 
       {pendingDelete && (
         <div

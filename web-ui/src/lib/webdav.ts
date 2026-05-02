@@ -258,3 +258,207 @@ export async function deleteItem(creds: Credentials, href: string, etag?: string
   const res = await fetch(href, { method: "DELETE", headers });
   if (!res.ok) throw new Error(`DELETE failed: ${res.status} ${res.statusText}`);
 }
+
+export interface CollectionProps {
+  displayname: string;
+  description: string;
+  color: string;
+  /** Webcal source URL, only used for type=WEBCAL */
+  source?: string;
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function calendarComponents(type: CollectionType): string[] {
+  switch (type) {
+    case "CALENDAR_JOURNAL_TASKS": return ["VEVENT", "VJOURNAL", "VTODO"];
+    case "CALENDAR_JOURNAL": return ["VEVENT", "VJOURNAL"];
+    case "CALENDAR_TASKS": return ["VEVENT", "VTODO"];
+    case "JOURNAL_TASKS": return ["VJOURNAL", "VTODO"];
+    case "CALENDAR": return ["VEVENT"];
+    case "JOURNAL": return ["VJOURNAL"];
+    case "TASKS": return ["VTODO"];
+    case "WEBCAL": return ["VEVENT"];
+    default: return [];
+  }
+}
+
+/** Generate a UUID v4 for new collection hrefs. */
+export function uuid(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  // Fallback
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/** Create a new collection (calendar or address book) under the user's principal. */
+export async function createCollection(
+  creds: Credentials,
+  type: CollectionType,
+  href: string,
+  props: CollectionProps
+): Promise<void> {
+  if (type === "PRINCIPAL") throw new Error("Cannot create principal collections");
+
+  const collectionUrl = `/${encodeURIComponent(creds.user)}/${encodeURI(href.replace(/^\/|\/$/g, ""))}/`;
+  const isAddressbook = type === "ADDRESSBOOK";
+  const method = isAddressbook ? "MKCOL" : "MKCALENDAR";
+
+  const propParts: string[] = [];
+  if (props.displayname) {
+    propParts.push(`<displayname>${escapeXml(props.displayname)}</displayname>`);
+  }
+  if (props.color) {
+    propParts.push(`<I:calendar-color>${escapeXml(props.color)}</I:calendar-color>`);
+  }
+  if (props.description) {
+    if (isAddressbook) {
+      propParts.push(`<CR:addressbook-description>${escapeXml(props.description)}</CR:addressbook-description>`);
+    } else {
+      propParts.push(`<C:calendar-description>${escapeXml(props.description)}</C:calendar-description>`);
+    }
+  }
+  if (type === "WEBCAL" && props.source) {
+    propParts.push(`<CS:source><href>${escapeXml(props.source)}</href></CS:source>`);
+  }
+
+  let resourceTypeAndProps: string;
+  if (isAddressbook) {
+    resourceTypeAndProps = `
+        <resourcetype><collection/><CR:addressbook/></resourcetype>
+        ${propParts.join("\n        ")}`;
+  } else {
+    const comps = calendarComponents(type)
+      .map((c) => `<C:comp name="${c}"/>`)
+      .join("");
+    resourceTypeAndProps = `
+        ${propParts.join("\n        ")}
+        <C:supported-calendar-component-set>${comps}</C:supported-calendar-component-set>`;
+  }
+
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<${isAddressbook ? "create" : "C:mkcalendar"} xmlns="DAV:" xmlns:C="${NS.C}" xmlns:CR="${NS.CR}" xmlns:CS="${NS.CS}" xmlns:I="${NS.ICAL}">
+  <set>
+    <prop>${resourceTypeAndProps}
+    </prop>
+  </set>
+</${isAddressbook ? "create" : "C:mkcalendar"}>`;
+
+  const res = await fetch(collectionUrl, {
+    method,
+    headers: {
+      Authorization: authHeader(creds),
+      "Content-Type": "application/xml; charset=utf-8",
+    },
+    body,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${method} failed: ${res.status} ${res.statusText} ${text.slice(0, 200)}`);
+  }
+}
+
+/** Update displayname / description / color on an existing collection. */
+export async function updateCollectionProps(
+  creds: Credentials,
+  href: string,
+  type: CollectionType,
+  props: Partial<CollectionProps>
+): Promise<void> {
+  const isAddressbook = type === "ADDRESSBOOK";
+  const setParts: string[] = [];
+  const removeParts: string[] = [];
+
+  function setOrRemove(value: string | undefined, xml: string, removeXml: string) {
+    if (value === undefined) return;
+    if (value === "") removeParts.push(removeXml);
+    else setParts.push(xml);
+  }
+
+  setOrRemove(
+    props.displayname,
+    `<displayname>${escapeXml(props.displayname ?? "")}</displayname>`,
+    "<displayname/>"
+  );
+  setOrRemove(
+    props.color,
+    `<I:calendar-color>${escapeXml(props.color ?? "")}</I:calendar-color>`,
+    "<I:calendar-color/>"
+  );
+  if (isAddressbook) {
+    setOrRemove(
+      props.description,
+      `<CR:addressbook-description>${escapeXml(props.description ?? "")}</CR:addressbook-description>`,
+      "<CR:addressbook-description/>"
+    );
+  } else {
+    setOrRemove(
+      props.description,
+      `<C:calendar-description>${escapeXml(props.description ?? "")}</C:calendar-description>`,
+      "<C:calendar-description/>"
+    );
+  }
+  if (props.source !== undefined) {
+    if (props.source === "") removeParts.push("<CS:source/>");
+    else setParts.push(`<CS:source><href>${escapeXml(props.source)}</href></CS:source>`);
+  }
+
+  const sections: string[] = [];
+  if (setParts.length) sections.push(`<set><prop>${setParts.join("")}</prop></set>`);
+  if (removeParts.length) sections.push(`<remove><prop>${removeParts.join("")}</prop></remove>`);
+  if (!sections.length) return;
+
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<propertyupdate xmlns="DAV:" xmlns:C="${NS.C}" xmlns:CR="${NS.CR}" xmlns:CS="${NS.CS}" xmlns:I="${NS.ICAL}">
+  ${sections.join("")}
+</propertyupdate>`;
+
+  const res = await fetch(href, {
+    method: "PROPPATCH",
+    headers: {
+      Authorization: authHeader(creds),
+      "Content-Type": "application/xml; charset=utf-8",
+    },
+    body,
+  });
+  if (!res.ok) {
+    throw new Error(`PROPPATCH failed: ${res.status} ${res.statusText}`);
+  }
+}
+
+/** Upload a single .ics or .vcf body into a collection. */
+export async function uploadItem(
+  creds: Credentials,
+  collectionHref: string,
+  filename: string,
+  content: string,
+  contentType: string
+): Promise<{ href: string; status: number }> {
+  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_") || `${uuid()}.ics`;
+  const itemHref = `${collectionHref.replace(/\/$/, "")}/${encodeURIComponent(safeName)}`;
+  const res = await fetch(itemHref, {
+    method: "PUT",
+    headers: {
+      Authorization: authHeader(creds),
+      "Content-Type": contentType,
+    },
+    body: content,
+  });
+  if (!res.ok && res.status !== 201 && res.status !== 204) {
+    const text = await res.text();
+    throw new Error(`PUT ${safeName} failed: ${res.status} ${res.statusText} ${text.slice(0, 200)}`);
+  }
+  return { href: itemHref, status: res.status };
+}
