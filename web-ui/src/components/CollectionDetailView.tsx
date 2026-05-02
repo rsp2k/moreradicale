@@ -17,6 +17,8 @@ import {
   Plus,
 } from "lucide-react";
 import { ItemFormDialog } from "./ItemFormDialog";
+import { usePoll } from "@/lib/usePoll";
+import { LiveIndicator } from "@/components/ui/live-indicator";
 import {
   listItems,
   getItem,
@@ -280,6 +282,8 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collection.href]);
 
+  const live = usePoll(refresh, { intervalMs: 30_000 });
+
   function expandItem(href: string) {
     setExpandedHref(href);
   }
@@ -314,6 +318,7 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
               {items ? `${items.length} item${items.length === 1 ? "" : "s"}` : "Loading..."}
             </div>
           </div>
+          <LiveIndicator active={live} className="hidden sm:inline-flex" />
           {supportsItemAuthor && (
             <Button
               size="sm"

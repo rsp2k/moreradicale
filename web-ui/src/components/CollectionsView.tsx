@@ -32,6 +32,8 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CollectionFormDialog } from "./CollectionFormDialog";
 import { UploadDialog } from "./UploadDialog";
+import { usePoll } from "@/lib/usePoll";
+import { LiveIndicator } from "@/components/ui/live-indicator";
 
 interface Props {
   creds: Credentials;
@@ -211,6 +213,9 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-refresh every 30s while tab is visible (paused otherwise).
+  const live = usePoll(refresh, { intervalMs: 30_000 });
+
   function handleLogout() {
     clearCreds();
     onLogout();
@@ -246,7 +251,8 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <LiveIndicator active={live} className="hidden sm:inline-flex" />
             <Button
               variant="ghost"
               size="icon"
