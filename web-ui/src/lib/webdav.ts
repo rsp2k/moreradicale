@@ -496,6 +496,109 @@ export async function updateCollectionProps(
   }
 }
 
+// -------- Sharing (CalendarServer extension) --------
+
+export type ShareAccess = "read" | "read-write";
+export type InviteStatus = "accepted" | "declined" | "noresponse";
+
+export interface Share {
+  sharee: string; // username (extracted from /sharee/)
+  href: string; // full principal href, e.g. "/bob/"
+  commonName: string;
+  access: ShareAccess;
+  status: InviteStatus;
+}
+
+/** List current shares on a calendar collection via PROPFIND CS:invite. */
+export async function listShares(creds: Credentials, collectionHref: string): Promise<Share[]> {
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<propfind xmlns="DAV:" xmlns:CS="${NS.CS}">
+  <prop><CS:invite/></prop>
+</propfind>`;
+  const res = await fetch(collectionHref, {
+    method: "PROPFIND",
+    headers: withAuth(creds, {
+      Depth: "0",
+      "Content-Type": "application/xml; charset=utf-8",
+    }),
+    body,
+  });
+  if (!res.ok) throw new Error(`PROPFIND failed: ${res.status} ${res.statusText}`);
+  const xml = parseXml(await res.text());
+  const invite = ns(xml.documentElement, NS.CS, "invite");
+  if (!invite) return [];
+  const shares: Share[] = [];
+  for (const userEl of nsAll(invite, NS.CS, "user")) {
+    const href = textOf(ns(userEl, NS.D, "href"));
+    if (!href) continue;
+    const sharee = href.replace(/^\/+|\/+$/g, "").split("/").pop() ?? "";
+    const cn = textOf(ns(userEl, NS.CS, "common-name"));
+    let status: InviteStatus = "noresponse";
+    if (ns(userEl, NS.CS, "invite-accepted")) status = "accepted";
+    else if (ns(userEl, NS.CS, "invite-declined")) status = "declined";
+    let access: ShareAccess = "read";
+    const accessEl = ns(userEl, NS.CS, "access");
+    if (accessEl && ns(accessEl, NS.CS, "read-write")) access = "read-write";
+    shares.push({ sharee, href, commonName: cn, access, status });
+  }
+  return shares;
+}
+
+/** Add or update a share on a calendar collection (CS:share-resource POST). */
+export async function addShare(
+  creds: Credentials,
+  collectionHref: string,
+  sharee: string,
+  access: ShareAccess,
+  summary: string = ""
+): Promise<void> {
+  const accessTag = access === "read-write" ? "CS:read-write" : "CS:read";
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<CS:share-resource xmlns="DAV:" xmlns:CS="${NS.CS}">
+  <CS:set>
+    <href>/${encodeURIComponent(sharee)}/</href>
+    ${summary ? `<CS:summary>${escapeXml(summary)}</CS:summary>` : ""}
+    <${accessTag}/>
+  </CS:set>
+</CS:share-resource>`;
+  const res = await fetch(collectionHref, {
+    method: "POST",
+    headers: withAuth(creds, {
+      "Content-Type": "application/xml; charset=utf-8",
+    }),
+    body,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Share failed: ${res.status} ${res.statusText} ${text.slice(0, 200)}`);
+  }
+}
+
+/** Remove a share (CS:share-resource POST with CS:remove). */
+export async function removeShare(
+  creds: Credentials,
+  collectionHref: string,
+  sharee: string
+): Promise<void> {
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<CS:share-resource xmlns="DAV:" xmlns:CS="${NS.CS}">
+  <CS:remove>
+    <href>/${encodeURIComponent(sharee)}/</href>
+  </CS:remove>
+</CS:share-resource>`;
+  const res = await fetch(collectionHref, {
+    method: "POST",
+    headers: withAuth(creds, {
+      "Content-Type": "application/xml; charset=utf-8",
+    }),
+    body,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Remove share failed: ${res.status} ${res.statusText} ${text.slice(0, 200)}`);
+  }
+}
+
 /** Upload a single .ics or .vcf body into a collection. */
 export async function uploadItem(
   creds: Credentials,

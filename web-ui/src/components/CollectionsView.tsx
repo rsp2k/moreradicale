@@ -16,6 +16,7 @@ import {
   Inbox,
   Pencil,
   Upload,
+  Share2,
 } from "lucide-react";
 import {
   listCollections,
@@ -32,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CollectionFormDialog } from "./CollectionFormDialog";
 import { UploadDialog } from "./UploadDialog";
+import { ShareDialog } from "./ShareDialog";
 import { usePoll } from "@/lib/usePoll";
 import { LiveIndicator } from "@/components/ui/live-indicator";
 
@@ -69,12 +71,14 @@ function CollectionCard({
   onOpen,
   onEdit,
   onUpload,
+  onShare,
 }: {
   c: Collection;
   onDelete: () => void;
   onOpen: () => void;
   onEdit: () => void;
   onUpload: () => void;
+  onShare: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const url = publicUrlFor(c.href);
@@ -157,6 +161,19 @@ function CollectionCard({
           >
             <Download />
           </Button>
+          {c.type !== "ADDRESSBOOK" && c.type !== "WEBCAL" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShare();
+              }}
+              title="Share calendar"
+            >
+              <Share2 />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -195,6 +212,7 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [formDialog, setFormDialog] = useState<{ open: boolean; editing?: Collection }>({ open: false });
   const [uploadFor, setUploadFor] = useState<Collection | null>(null);
+  const [shareFor, setShareFor] = useState<Collection | null>(null);
 
   async function refresh() {
     setRefreshing(true);
@@ -313,6 +331,7 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
                   onOpen={() => onOpenCollection(c)}
                   onEdit={() => setFormDialog({ open: true, editing: c })}
                   onUpload={() => setUploadFor(c)}
+                  onShare={() => setShareFor(c)}
                   onDelete={() => {
                     setPendingDelete(c);
                     setConfirmText("");
@@ -345,6 +364,15 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
             setUploadFor(null);
             refresh();
           }}
+        />
+      )}
+
+      {shareFor && (
+        <ShareDialog
+          open={true}
+          collection={shareFor}
+          creds={creds}
+          onClose={() => setShareFor(null)}
         />
       )}
 

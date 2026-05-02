@@ -12,8 +12,16 @@ htpasswd_encryption = bcrypt
 realm = moreradicale
 
 [rights]
-# Authenticated users see only their own collections
-type = owner_only
+# Authenticated users see their own collections plus calendars shared with them
+type = owner_only_shared
+
+[sharing]
+enabled = True
+# Notifications disabled: the notification subsystem has nested-lock
+# deadlocks that need deeper server-side refactoring (see
+# moreradicale/sharing/notifications.py acquire_lock calls inside
+# the write-lock'd POST handler context).
+notifications_enabled = False
 
 [storage]
 filesystem_folder = /var/lib/moreradicale/collections

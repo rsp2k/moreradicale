@@ -115,7 +115,7 @@ class SharingHandler:
                     collection.path, user)
 
         # Return success
-        return client.OK, {"Content-Type": "text/plain"}, ""
+        return client.OK, {"Content-Type": "text/plain"}, "", None
 
     def _process_share_set(self, user: str, set_elem: ET.Element,
                            collection: "storage.BaseCollection"
@@ -137,11 +137,12 @@ class SharingHandler:
             logger.warning("Empty sharee in share set")
             return httputils.BAD_REQUEST
 
-        # Validate that the sharee's principal exists
+        # Validate that the sharee's principal exists. We're already inside
+        # the write lock from app/post.py, so don't re-acquire (the storage
+        # lock is not re-entrant and would deadlock).
         sharee_principal_path = f"/{sharee}/"
         try:
-            with self.storage.acquire_lock("r", user):
-                sharee_exists = any(self.storage.discover(sharee_principal_path, depth="0"))
+            sharee_exists = any(self.storage.discover(sharee_principal_path, depth="0"))
         except Exception:
             sharee_exists = False
 
@@ -189,7 +190,7 @@ class SharingHandler:
             logger.warning("Invalid share request: %s", e)
             return httputils.BAD_REQUEST
 
-        return client.OK, {}, ""
+        return client.OK, {}, "", None
 
     def _process_share_remove(self, user: str, remove_elem: ET.Element,
                               collection: "storage.BaseCollection"
@@ -232,7 +233,7 @@ class SharingHandler:
             logger.warning("Permission denied for share removal: %s", e)
             return httputils.FORBIDDEN
 
-        return client.OK, {}, ""
+        return client.OK, {}, "", None
 
     def _handle_share_reply(self, user: str, xml_content: ET.Element,
                             collection: "storage.BaseCollection",
@@ -291,7 +292,7 @@ class SharingHandler:
             logger.warning("Invalid share reply: %s", e)
             return httputils.BAD_REQUEST
 
-        return client.OK, {"Content-Type": "text/plain"}, ""
+        return client.OK, {"Content-Type": "text/plain"}, "", None
 
 
 def is_sharing_request(xml_content: Optional[ET.Element]) -> bool:
