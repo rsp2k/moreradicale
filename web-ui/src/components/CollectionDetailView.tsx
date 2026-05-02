@@ -15,6 +15,7 @@ import {
   Trash2,
   AlignLeft,
   Plus,
+  Repeat,
 } from "lucide-react";
 import { ItemFormDialog } from "./ItemFormDialog";
 import { usePoll } from "@/lib/usePoll";
@@ -34,6 +35,7 @@ import {
   getProp,
   formatIcalDate,
   decodeText,
+  describeRrule,
   type IcalComponent,
 } from "@/lib/ical";
 import { Button } from "@/components/ui/button";
@@ -60,6 +62,7 @@ function fieldIcon(name: string) {
   if (name === "LOCATION") return <MapPin className="size-3.5 shrink-0 text-[var(--color-muted-foreground)]" />;
   if (name === "ORGANIZER" || name === "ATTENDEE" || name === "FN") return <User className="size-3.5 shrink-0 text-[var(--color-muted-foreground)]" />;
   if (name === "DESCRIPTION") return <AlignLeft className="size-3.5 shrink-0 text-[var(--color-muted-foreground)]" />;
+  if (name === "RRULE") return <Repeat className="size-3.5 shrink-0 text-[var(--color-muted-foreground)]" />;
   return null;
 }
 
@@ -73,6 +76,7 @@ function fieldLabel(name: string): string {
     case "DESCRIPTION": return "Description";
     case "STATUS": return "Status";
     case "PRIORITY": return "Priority";
+    case "RRULE": return "Recurrence";
     case "FN": return "Name";
     case "EMAIL": return "Email";
     case "TEL": return "Phone";
@@ -87,6 +91,10 @@ function formatPropValue(name: string, value: string): string {
   }
   if (name === "ORGANIZER" || name.startsWith("ATTENDEE")) {
     return value.replace(/^MAILTO:/i, "");
+  }
+  if (name === "RRULE") {
+    const human = describeRrule(value);
+    return human || value;
   }
   return decodeText(value);
 }
@@ -109,6 +117,7 @@ const VISIBLE_FIELDS_PRIORITY = [
   "DTSTART",
   "DTEND",
   "DUE",
+  "RRULE",
   "LOCATION",
   "ORGANIZER",
   "DESCRIPTION",
@@ -143,9 +152,14 @@ function ItemRow({
     const dtstart = getValue(comp, "DTSTART");
     const due = getValue(comp, "DUE");
     const email = getValue(comp, "EMAIL");
+    const rrule = getValue(comp, "RRULE");
     if (dtstart) hint = formatIcalDate(dtstart);
     else if (due) hint = `Due ${formatIcalDate(due)}`;
     else if (email) hint = email;
+    if (rrule) {
+      const human = describeRrule(rrule);
+      if (human) hint = hint ? `${hint} · ${human.toLowerCase()}` : human;
+    }
   }
 
   return (

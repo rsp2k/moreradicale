@@ -7,7 +7,13 @@ import {
   type Credentials,
   type CollectionType,
 } from "@/lib/webdav";
-import { serializeVEvent, serializeVTodo, serializeVJournal } from "@/lib/ical";
+import {
+  serializeVEvent,
+  serializeVTodo,
+  serializeVJournal,
+  serializeRrule,
+  type RecurrencePreset,
+} from "@/lib/ical";
 import {
   Dialog,
   DialogHeader,
@@ -104,6 +110,8 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
   // Journal-specific
   const [journalDate, setJournalDate] = useState("");
   const [journalStatus, setJournalStatus] = useState<"DRAFT" | "FINAL" | "CANCELLED">("FINAL");
+  // Recurrence (events + tasks)
+  const [recurrence, setRecurrence] = useState<RecurrencePreset>("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -124,6 +132,7 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
     setPriority("");
     setJournalDate(toDateInput(now));
     setJournalStatus("FINAL");
+    setRecurrence("");
     setError(null);
     setBusy(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,6 +153,7 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
         allDay,
         location: location || undefined,
         description: description || undefined,
+        rrule: serializeRrule(recurrence) ?? undefined,
       });
       return { ics, filename: `${id}.ics` };
     }
@@ -166,6 +176,7 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
       status,
       priority: priority ? parseInt(priority, 10) : undefined,
       description: description || undefined,
+      rrule: serializeRrule(recurrence) ?? undefined,
     });
     return { ics, filename: `${id}.ics` };
   }
@@ -292,6 +303,22 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
                   placeholder="optional"
                 />
               </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="if-rrule">Repeats</Label>
+                <Select
+                  id="if-rrule"
+                  value={recurrence}
+                  onChange={(e) => setRecurrence(e.target.value as RecurrencePreset)}
+                >
+                  <option value="">Doesn't repeat</option>
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKDAYS">Every weekday (Mon-Fri)</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="YEARLY">Yearly</option>
+                </Select>
+              </div>
             </>
           ) : kind === "VJOURNAL" ? (
             <>
@@ -347,18 +374,35 @@ export function ItemFormDialog({ open, onClose, onDone, creds, collection }: Pro
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="if-prio">Priority</Label>
-                <Select
-                  id="if-prio"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as typeof priority)}
-                >
-                  <option value="">No priority</option>
-                  <option value="1">High</option>
-                  <option value="5">Medium</option>
-                  <option value="9">Low</option>
-                </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="if-prio">Priority</Label>
+                  <Select
+                    id="if-prio"
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value as typeof priority)}
+                  >
+                    <option value="">No priority</option>
+                    <option value="1">High</option>
+                    <option value="5">Medium</option>
+                    <option value="9">Low</option>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="if-rrule-todo">Repeats</Label>
+                  <Select
+                    id="if-rrule-todo"
+                    value={recurrence}
+                    onChange={(e) => setRecurrence(e.target.value as RecurrencePreset)}
+                  >
+                    <option value="">Doesn't repeat</option>
+                    <option value="DAILY">Daily</option>
+                    <option value="WEEKDAYS">Every weekday</option>
+                    <option value="WEEKLY">Weekly</option>
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="YEARLY">Yearly</option>
+                  </Select>
+                </div>
               </div>
             </>
           )}

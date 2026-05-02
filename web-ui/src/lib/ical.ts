@@ -168,6 +168,68 @@ function foldLine(line: string): string {
   return chunks.join("\r\n ");
 }
 
+/**
+ * Common RRULE shorthand. Maps to a serialized RRULE: line.
+ * - "" or "NONE": no recurrence (do not emit RRULE)
+ * - "DAILY": every day
+ * - "WEEKLY": every week on the day-of-week of DTSTART
+ * - "WEEKDAYS": Monday through Friday
+ * - "MONTHLY": every month on the day-of-month of DTSTART
+ * - "YEARLY": every year on the date of DTSTART
+ */
+export type RecurrencePreset =
+  | ""
+  | "DAILY"
+  | "WEEKLY"
+  | "WEEKDAYS"
+  | "MONTHLY"
+  | "YEARLY";
+
+export function serializeRrule(preset: RecurrencePreset): string | null {
+  switch (preset) {
+    case "DAILY": return "FREQ=DAILY";
+    case "WEEKLY": return "FREQ=WEEKLY";
+    case "WEEKDAYS": return "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR";
+    case "MONTHLY": return "FREQ=MONTHLY";
+    case "YEARLY": return "FREQ=YEARLY";
+    default: return null;
+  }
+}
+
+/** Parse an RRULE value into a known preset, or null if it doesn't match. */
+export function detectRrulePreset(rrule: string): RecurrencePreset | null {
+  if (!rrule) return "";
+  const parts = Object.fromEntries(
+    rrule
+      .split(";")
+      .map((p) => p.split("="))
+      .filter((kv) => kv.length === 2)
+      .map(([k, v]) => [k.toUpperCase(), v.toUpperCase()])
+  );
+  const freq = parts["FREQ"];
+  const byday = parts["BYDAY"];
+  if (freq === "DAILY" && !byday) return "DAILY";
+  if (freq === "WEEKLY" && !byday) return "WEEKLY";
+  if (freq === "WEEKLY" && byday === "MO,TU,WE,TH,FR") return "WEEKDAYS";
+  if (freq === "MONTHLY" && !byday) return "MONTHLY";
+  if (freq === "YEARLY" && !byday) return "YEARLY";
+  return null;
+}
+
+/** Human-readable label for an RRULE. Falls back to the raw rule for unknown patterns. */
+export function describeRrule(rrule: string): string {
+  const preset = detectRrulePreset(rrule);
+  switch (preset) {
+    case "": return "";
+    case "DAILY": return "Repeats daily";
+    case "WEEKLY": return "Repeats weekly";
+    case "WEEKDAYS": return "Repeats every weekday";
+    case "MONTHLY": return "Repeats monthly";
+    case "YEARLY": return "Repeats yearly";
+    case null: return `Repeats (${rrule})`;
+  }
+}
+
 export interface VEventProps {
   uid: string;
   summary: string;
@@ -176,6 +238,7 @@ export interface VEventProps {
   allDay?: boolean;
   location?: string;
   description?: string;
+  rrule?: string;
 }
 
 export interface VTodoProps {
@@ -185,6 +248,7 @@ export interface VTodoProps {
   status?: "NEEDS-ACTION" | "IN-PROCESS" | "COMPLETED" | "CANCELLED";
   priority?: number;
   description?: string;
+  rrule?: string;
 }
 
 export interface VJournalProps {
@@ -217,6 +281,7 @@ export function serializeVEvent(p: VEventProps): string {
   if (p.dtend) lines.push(dateProp("DTEND", p.dtend, !!p.allDay));
   if (p.location) lines.push(`LOCATION:${encodeText(p.location)}`);
   if (p.description) lines.push(`DESCRIPTION:${encodeText(p.description)}`);
+  if (p.rrule) lines.push(`RRULE:${p.rrule}`);
   lines.push("END:VEVENT", "END:VCALENDAR", "");
   return lines.map(foldLine).join("\r\n");
 }
@@ -254,6 +319,7 @@ export function serializeVTodo(p: VTodoProps): string {
   if (p.status) lines.push(`STATUS:${p.status}`);
   if (p.priority !== undefined) lines.push(`PRIORITY:${p.priority}`);
   if (p.description) lines.push(`DESCRIPTION:${encodeText(p.description)}`);
+  if (p.rrule) lines.push(`RRULE:${p.rrule}`);
   lines.push("END:VTODO", "END:VCALENDAR", "");
   return lines.map(foldLine).join("\r\n");
 }
