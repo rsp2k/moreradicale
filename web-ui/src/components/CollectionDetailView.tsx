@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { ItemFormDialog } from "./ItemFormDialog";
 import { CalendarGridView } from "./CalendarGridView";
-import { usePoll } from "@/lib/usePoll";
+import { useWebSync } from "@/lib/useWebSync";
 import { LiveIndicator } from "@/components/ui/live-indicator";
 import {
   listItems,
@@ -309,7 +309,13 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collection.href]);
 
-  const live = usePoll(refresh, { intervalMs: 30_000 });
+  const liveStatus = useWebSync({
+    path: collection.href,
+    creds,
+    onChange: refresh,
+  });
+  const liveMode: "ws" | "poll" | "paused" =
+    liveStatus === "open" ? "ws" : liveStatus === "fallback-poll" ? "poll" : "paused";
 
   function expandItem(href: string) {
     setExpandedHref(href);
@@ -345,7 +351,7 @@ export function CollectionDetailView({ creds, collection, onBack }: Props) {
               {items ? `${items.length} item${items.length === 1 ? "" : "s"}` : "Loading..."}
             </div>
           </div>
-          <LiveIndicator active={live} className="hidden sm:inline-flex" />
+          <LiveIndicator mode={liveMode} className="hidden sm:inline-flex" />
           {supportsWeekView && (
             <div className="flex rounded-md border border-[var(--color-border)] overflow-hidden">
               <button

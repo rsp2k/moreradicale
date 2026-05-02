@@ -129,5 +129,10 @@ class ApplicationPartDelete(ApplicationBase):
                     base_prefix, path, item.collection, item.href)
             for notification_item in hook_notification_item_list:
                 self._hook.notify(notification_item)
+            try:
+                from moreradicale.websync.handler import notify_change
+                notify_change(path, change_type="delete", user=user)
+            except Exception:
+                pass
             headers = {"Content-Type": "text/xml; charset=%s" % self._encoding}
             return client.OK, headers, self._xml_response(xml_answer), None

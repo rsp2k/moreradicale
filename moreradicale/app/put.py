@@ -435,7 +435,17 @@ class ApplicationPartPut(ApplicationBase):
                 if (item and item.uid == prepared_item.uid):
                     logger.debug("PUT request updated existing item %r", path)
                     headers = {"ETag": etag}
+                    try:
+                        from moreradicale.websync.handler import notify_change
+                        notify_change(path, change_type="update", etag=etag, user=user)
+                    except Exception:
+                        pass
                     return client.NO_CONTENT, headers, None, None
 
             headers = {"ETag": etag}
+            try:
+                from moreradicale.websync.handler import notify_change
+                notify_change(path, change_type="create", etag=etag, user=user)
+            except Exception:
+                pass
             return client.CREATED, headers, None, None

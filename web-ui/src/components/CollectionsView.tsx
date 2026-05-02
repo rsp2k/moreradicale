@@ -34,7 +34,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CollectionFormDialog } from "./CollectionFormDialog";
 import { UploadDialog } from "./UploadDialog";
 import { ShareDialog } from "./ShareDialog";
-import { usePoll } from "@/lib/usePoll";
+import { useWebSync } from "@/lib/useWebSync";
 import { LiveIndicator } from "@/components/ui/live-indicator";
 
 interface Props {
@@ -231,8 +231,15 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-refresh every 30s while tab is visible (paused otherwise).
-  const live = usePoll(refresh, { intervalMs: 30_000 });
+  // Real-time sync via WebSocket; falls back to polling if /.websync is
+  // unavailable (server still on old wsgiref, network can't upgrade, etc.).
+  const liveStatus = useWebSync({
+    path: `/${creds.user}/`,
+    creds,
+    onChange: refresh,
+  });
+  const liveMode: "ws" | "poll" | "paused" =
+    liveStatus === "open" ? "ws" : liveStatus === "fallback-poll" ? "poll" : "paused";
 
   function handleLogout() {
     clearCreds();
@@ -270,7 +277,7 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <LiveIndicator active={live} className="hidden sm:inline-flex" />
+            <LiveIndicator mode={liveMode} className="hidden sm:inline-flex" />
             <Button
               variant="ghost"
               size="icon"

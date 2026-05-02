@@ -293,11 +293,10 @@ class WebSyncManager:
 
             for conn in self._connections.values():
                 if conn.is_subscribed(collection_path):
-                    # Don't notify the user who made the change
-                    # (they already know about it)
-                    if user and conn.user == user:
-                        continue
-
+                    # Notify all subscribed connections, including those
+                    # belonging to the user who made the change - they
+                    # may have multiple tabs/clients open and other
+                    # tabs need the same update.
                     if conn.send(message):
                         notified += 1
 
