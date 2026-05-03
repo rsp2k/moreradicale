@@ -891,6 +891,63 @@ class TestSharingHTTPFlow(BaseTest):
         assert len(invites_after) == 1, \
             "the unrelated calendar_b invite must survive; got %r" % after
 
+    def test_cs_invite_propfind_owner_sees_full_share_list(self):
+        """Owner can PROPFIND CS:invite and see all sharees they granted."""
+        # Add charlie to htpasswd before materializing - otherwise
+        # the auth check in _materialize_principal fails with 401.
+        import os
+        with open(os.path.join(self.colpath, ".htpasswd"), "a") as f:
+            f.write("charlie:charliepass\n")
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._materialize_principal("charlie")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob")
+        self._share("alice", "calendar", "charlie")
+
+        body = ('<?xml version="1.0"?><propfind xmlns="DAV:" '
+                'xmlns:CS="http://calendarserver.org/ns/">'
+                '<prop><CS:invite/></prop></propfind>')
+        status, _, response_text = self.request(
+            "PROPFIND", "/alice/calendar/", data=body,
+            HTTP_DEPTH="0", login="alice:alicepass", check=207)
+        # Owner should see both sharees in the response.
+        assert "/bob/" in response_text and "/charlie/" in response_text, \
+            "owner's CS:invite should list all sharees; got %r" % response_text
+
+    def test_cs_invite_propfind_sharee_does_not_see_other_sharees(self):
+        """Privacy: a sharee cannot enumerate other sharees via CS:invite.
+
+        Without filtering, bob (a sharee) doing PROPFIND CS:invite on
+        the shared calendar would receive the full sharee list including
+        charlie's principal href and access level. Other CalDAV servers
+        (Apple Calendar Server, SabreDAV) restrict this property to the
+        calendar owner.
+        """
+        import os
+        with open(os.path.join(self.colpath, ".htpasswd"), "a") as f:
+            f.write("charlie:charliepass\n")
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._materialize_principal("charlie")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob")
+        self._share("alice", "calendar", "charlie")
+        # Bob accepts so he has read access to PROPFIND.
+        uid = self._read_invite_uid("bob")
+        self._reply("alice", "calendar", "bob", uid, accept=True)
+
+        body = ('<?xml version="1.0"?><propfind xmlns="DAV:" '
+                'xmlns:CS="http://calendarserver.org/ns/">'
+                '<prop><CS:invite/></prop></propfind>')
+        status, _, response_text = self.request(
+            "PROPFIND", "/alice/calendar/", data=body,
+            HTTP_DEPTH="0", login="bob:bobpass", check=207)
+        # Bob must NOT see charlie's principal in the response.
+        assert "/charlie/" not in response_text, \
+            "sharee enumeration leak: bob saw charlie's principal in CS:invite; " \
+            "got %r" % response_text
+
     def test_accepted_shared_calendar_appears_in_principal_listing(self):
         """Storage discover() auto-merges accepted shares into depth=1.
 

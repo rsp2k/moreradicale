@@ -699,10 +699,23 @@ def xml_propfind_response(
                     is404 = True
             # Calendar sharing properties (CalendarServer extension)
             elif tag == xmlutils.make_clark("CS:invite"):
-                # Returns share invitations for this calendar
+                # Returns share invitations for this calendar.
+                #
+                # PRIVACY: only the calendar owner sees the full sharee
+                # list. Other authenticated users (sharees themselves,
+                # delegates, etc.) get an empty CS:invite element -
+                # which is also the spec-valid "no shares" response, so
+                # it matches what a non-owner would see if there were
+                # genuinely no shares. This matches Apple Calendar
+                # Server / SabreDAV behavior and prevents sharees from
+                # enumerating each other through an inherited read
+                # permission. CalDAV clients that need to know their
+                # own access level should consult
+                # current-user-privilege-set instead.
+                is_owner = bool(user and collection.owner == user)
                 if is_leaf and collection.tag == "VCALENDAR":
                     sharing_enabled = configuration.get("sharing", "enabled")
-                    if sharing_enabled:
+                    if sharing_enabled and is_owner:
                         shares_json = collection.get_meta(SHARES_PROPERTY)
                         if shares_json:
                             try:
