@@ -47,11 +47,35 @@ class SharingHandler:
     """Handles CalendarServer sharing POST requests."""
 
     def __init__(self, storage: "storage.BaseStorage",
-                 configuration: "config.Configuration") -> None:
+                 configuration: "config.Configuration",
+                 rights: Optional[object] = None) -> None:
         self.storage = storage
         self.configuration = configuration
+        # Optional: when provided, we invalidate its share cache after
+        # every mutation so the next authorization() reads fresh state
+        # (avoids a TTL window where authz decisions lag behind storage).
+        # Typed as object to keep this module's import surface narrow;
+        # we only call invalidate_share_cache(), guarded by hasattr.
+        self._rights = rights
         self.sharing_manager = SharingManager(configuration)
         self.notification_manager = NotificationManager(configuration, storage)
+
+    def _invalidate_rights_cache(self, collection_path: str) -> None:
+        """Drop the rights backend's cached share state for a collection.
+
+        No-op if no rights handle was provided (most rights backends don't
+        need invalidation - this hook is specifically for owner_only_shared).
+        """
+        if self._rights is None:
+            return
+        invalidate = getattr(self._rights, "invalidate_share_cache", None)
+        if invalidate is None:
+            return
+        try:
+            invalidate(collection_path)
+        except Exception as e:
+            logger.debug("Rights cache invalidation failed for %s: %s",
+                         collection_path, e)
 
     def _update_sharee_shared_list(self, sharee: str, collection_path: str,
                                    add: bool) -> None:
@@ -217,6 +241,7 @@ class SharingHandler:
             self.sharing_manager.add_share(collection, user, sharee, access, cn, comment)
             logger.info("Added share: %s -> %s (%s) on %s",
                         user, sharee, access.value, collection.path)
+            self._invalidate_rights_cache(collection.path)
 
             # Create invite notification for sharee
             share = self.sharing_manager.get_shares(collection).get(sharee)
@@ -266,6 +291,10 @@ class SharingHandler:
             if removed:
                 logger.info("Removed share: %s revoked from %s on %s",
                             user, sharee, collection.path)
+                # Drop cached share state so the next authorize() denies
+                # the just-revoked sharee instead of grandfathering them
+                # in for the cache TTL window.
+                self._invalidate_rights_cache(collection.path)
                 # Drop the back-reference so the sharee's UI stops showing
                 # this calendar (no-op if they declined it earlier).
                 self._update_sharee_shared_list(sharee, collection.path, add=False)
@@ -340,6 +369,12 @@ class SharingHandler:
                 # so always remove on decline (no-op if it wasn't there).
                 self._update_sharee_shared_list(user, collection.path, add=False)
                 logger.info("User %s declined share of %s", user, collection.path)
+
+            # Drop any cached share state so the next request sees the
+            # fresh status (accepted/declined-and-removed) rather than
+            # whatever was in flight when authorize() first warmed the
+            # cache pre-mutation.
+            self._invalidate_rights_cache(collection.path)
 
             # Cascade-delete the originating invite notification so a UI
             # re-fetched after this point doesn't show a "pending" badge for

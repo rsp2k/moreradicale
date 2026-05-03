@@ -114,7 +114,8 @@ class ApplicationPartPost(ApplicationBase):
                 return httputils.METHOD_NOT_ALLOWED
 
             # Handle sharing request
-            handler = SharingHandler(self._storage, self.configuration)
+            handler = SharingHandler(self._storage, self.configuration,
+                                     rights=self._rights)
             with self._storage.acquire_lock("w", user):
                 # Re-discover collection with write lock
                 item = next(iter(self._storage.discover(path)), None)

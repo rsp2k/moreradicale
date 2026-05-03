@@ -621,3 +621,315 @@ class TestInviteStatus:
     def test_declined_value(self):
         """Test DECLINED status value."""
         assert InviteStatus.DECLINED.value == "declined"
+
+
+class TestSharingHTTPFlow(BaseTest):
+    """End-to-end HTTP integration tests for the share lifecycle.
+
+    Drives the actual app pipeline with real storage to cover:
+    - Rights backend's storage-driven _check_shared_access
+      (the "accepted shares grant rw access" path that was broken
+      before owner_only_shared.attach_storage was wired up).
+    - Cascade-deletion of invite notifications on accept/decline/revoke.
+    - The shared-with-me back-reference write path on the sharee's
+      principal.
+
+    Uses auth.type = "none" so any login string works; the focus is
+    rights+sharing behavior, not authentication.
+    """
+
+    SHARE_REQUEST_TMPL = """<?xml version="1.0" encoding="utf-8"?>
+<CS:share-resource xmlns="DAV:" xmlns:CS="http://calendarserver.org/ns/">
+  <CS:set>
+    <href>/{sharee}/</href>
+    <CS:summary>{summary}</CS:summary>
+    <CS:{access_tag}/>
+  </CS:set>
+</CS:share-resource>"""
+
+    REVOKE_REQUEST_TMPL = """<?xml version="1.0" encoding="utf-8"?>
+<CS:share-resource xmlns="DAV:" xmlns:CS="http://calendarserver.org/ns/">
+  <CS:remove><href>/{sharee}/</href></CS:remove>
+</CS:share-resource>"""
+
+    REPLY_REQUEST_TMPL = """<?xml version="1.0" encoding="utf-8"?>
+<CS:share-reply xmlns="DAV:" xmlns:CS="http://calendarserver.org/ns/">
+  <CS:href>/{owner}/{calendar}/</CS:href>
+  <CS:in-reply-to>{uid}</CS:in-reply-to>
+  <CS:{decision}/>
+</CS:share-reply>"""
+
+    def setup_method(self):
+        super().setup_method()
+        # owner_only_shared inherits the user-identity check from
+        # authenticated.Rights, which only enforces path-vs-user matching
+        # when auth.type != "none". With auth.type=none, even unauth'd
+        # paths get rw. So we need a real auth backend for these tests
+        # to be meaningful - use htpasswd with two pre-seeded users.
+        import os
+        htpasswd_path = os.path.join(self.colpath, ".htpasswd")
+        with open(htpasswd_path, "w") as f:
+            f.write("alice:alicepass\nbob:bobpass\n")
+        self.configure({
+            "auth": {
+                "type": "htpasswd",
+                "htpasswd_filename": htpasswd_path,
+                "htpasswd_encryption": "plain",
+                "delay": "0.001",
+            },
+            "rights": {"type": "owner_only_shared"},
+            "sharing": {
+                "enabled": "True",
+                "delegation_enabled": "True",
+                "notifications_enabled": "True",
+            },
+        })
+
+    # ---- helpers ---------------------------------------------------------
+
+    def _materialize_principal(self, user: str):
+        """Force a principal collection to exist on disk for `user`.
+
+        The sharing handler rejects shares to users who don't have a
+        principal in storage (handler.py:198). With auth.type=none any
+        login string succeeds, but the principal is only auto-created
+        when the user makes their own first authenticated request.
+        We trigger that with an own-principal PROPFIND.
+        """
+        self.request("PROPFIND", f"/{user}/",
+                     data='<?xml version="1.0"?>'
+                          '<propfind xmlns="DAV:"><prop><displayname/></prop></propfind>',
+                     HTTP_DEPTH="0", login=f"{user}:{user}pass")
+
+    def _create_calendar(self, owner: str, calendar: str = "calendar"):
+        """MKCALENDAR a fresh calendar under the owner's principal."""
+        self.mkcalendar(
+            f"/{owner}/{calendar}/",
+            data="""<?xml version="1.0" encoding="UTF-8"?>
+<C:mkcalendar xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <set><prop>
+        <displayname>{name}</displayname>
+        <C:supported-calendar-component-set><C:comp name="VEVENT"/></C:supported-calendar-component-set>
+    </prop></set>
+</C:mkcalendar>""".replace("{name}", calendar),
+            login=f"{owner}:{owner}pass",
+            check=201,
+        )
+
+    def _share(self, owner: str, calendar: str, sharee: str,
+               access: str = "read-write", summary: str = "Sharing"):
+        """POST CS:share-resource as the calendar owner."""
+        access_tag = "read-write" if access == "read-write" else "read"
+        body = self.SHARE_REQUEST_TMPL.format(
+            sharee=sharee, summary=summary, access_tag=access_tag)
+        # CONTENT_TYPE = xml routes the POST through the sharing handler
+        # at app/post.py:60; without it the dispatcher falls through to
+        # scheduling-outbox logic and returns 405.
+        self.post(f"/{owner}/{calendar}/", data=body,
+                  login=f"{owner}:{owner}pass",
+                  CONTENT_TYPE="application/xml; charset=utf-8",
+                  check=200)
+
+    def _revoke(self, owner: str, calendar: str, sharee: str):
+        """POST CS:share-resource with CS:remove as the calendar owner."""
+        body = self.REVOKE_REQUEST_TMPL.format(sharee=sharee)
+        self.post(f"/{owner}/{calendar}/", data=body,
+                  login=f"{owner}:{owner}pass",
+                  CONTENT_TYPE="application/xml; charset=utf-8",
+                  check=200)
+
+    def _reply(self, owner: str, calendar: str, sharee: str,
+               uid: str, accept: bool):
+        """POST CS:share-reply as the sharee."""
+        body = self.REPLY_REQUEST_TMPL.format(
+            owner=owner, calendar=calendar, uid=uid,
+            decision="invite-accepted" if accept else "invite-declined")
+        self.post(f"/{owner}/{calendar}/", data=body,
+                  login=f"{sharee}:{sharee}pass",
+                  CONTENT_TYPE="application/xml; charset=utf-8",
+                  check=200)
+
+    def _list_notification_files(self, user: str) -> list:
+        """Return invite/deleted/reply filenames in the user's notifications."""
+        import os
+        path = os.path.join(self.colpath, "collection-root", user, "notifications")
+        if not os.path.isdir(path):
+            return []
+        return sorted(
+            name for name in os.listdir(path)
+            if not name.startswith(".Radicale")
+        )
+
+    def _read_invite_uid(self, user: str) -> str:
+        """Find the first pending invite-* notification and return its UID."""
+        import os
+        path = os.path.join(self.colpath, "collection-root", user, "notifications")
+        for name in os.listdir(path):
+            if name.startswith("invite-"):
+                props_path = os.path.join(path, name, ".Radicale.props")
+                with open(props_path) as f:
+                    props = json.load(f)
+                blob = json.loads(props["RADICALE:notifications"])
+                return blob["uid"]
+        raise AssertionError("no pending invite notification found")
+
+    # ---- tests -----------------------------------------------------------
+
+    def test_accept_grants_read_write_access_to_sharee(self):
+        """After accept, sharee can PROPFIND the shared calendar.
+
+        This is the regression test for the rights-storage wiring fix:
+        owner_only_shared._check_shared_access used to read from an empty
+        in-memory cache, so accepted shares never granted access.
+        """
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob")
+
+        # Before accept: bob is denied (status=pending).
+        status, _, _ = self.request(
+            "PROPFIND", "/alice/calendar/",
+            data='<?xml version="1.0"?><propfind xmlns="DAV:"><prop><displayname/></prop></propfind>',
+            HTTP_DEPTH="0", login="bob:bobpass")
+        assert status in (401, 403, 404), \
+            "pending share should not grant access yet (got %d)" % status
+
+        # Bob accepts.
+        uid = self._read_invite_uid("bob")
+        self._reply("alice", "calendar", "bob", uid, accept=True)
+
+        # After accept: bob can read alice's calendar (rights backend
+        # reads SHARES_PROPERTY from storage on demand).
+        status, _, _ = self.request(
+            "PROPFIND", "/alice/calendar/",
+            data='<?xml version="1.0"?><propfind xmlns="DAV:"><prop><displayname/></prop></propfind>',
+            HTTP_DEPTH="0", login="bob:bobpass", check=207)
+
+    def test_accept_cascade_deletes_invite_notification(self):
+        """Server-side accept removes the originating invite notification."""
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob", summary="Cascade test")
+
+        # Sanity: the invite is on disk.
+        before = self._list_notification_files("bob")
+        assert any(n.startswith("invite-") for n in before), \
+            "expected invite notification before accept; got %r" % before
+
+        uid = self._read_invite_uid("bob")
+        self._reply("alice", "calendar", "bob", uid, accept=True)
+
+        # After accept: no invite-* in bob's notifications.
+        after = self._list_notification_files("bob")
+        assert not any(n.startswith("invite-") for n in after), \
+            "invite notification should be cascade-deleted; got %r" % after
+
+    def test_decline_cascade_deletes_invite_notification(self):
+        """Decline also clears the originating invite notification."""
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob")
+
+        uid = self._read_invite_uid("bob")
+        self._reply("alice", "calendar", "bob", uid, accept=False)
+
+        after = self._list_notification_files("bob")
+        assert not any(n.startswith("invite-") for n in after), \
+            "decline should cascade-delete the invite; got %r" % after
+
+    def test_revoke_while_pending_clears_invite(self):
+        """Owner revoking a pending share clears the unconsumed invite.
+
+        Regression test for the orphan-invite case: without the cascade,
+        bob's UI would keep showing a "pending" invite for a share that
+        no longer exists, and clicking Accept would fail with 404.
+        """
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob")
+
+        before = self._list_notification_files("bob")
+        invites_before = [n for n in before if n.startswith("invite-")]
+        assert invites_before, "expected pending invite before revoke"
+
+        self._revoke("alice", "calendar", "bob")
+
+        after = self._list_notification_files("bob")
+        invites_after = [n for n in after if n.startswith("invite-")]
+        assert not invites_after, \
+            "revoke should clear the orphaned invite; got %r" % after
+        # A revocation notification should have replaced it.
+        assert any(n.startswith("deleted-") for n in after), \
+            "revoke should leave a deleted-* notification; got %r" % after
+
+    def test_revoke_after_accept_does_not_touch_unrelated_notifications(self):
+        """Cascade is scoped to invites for the matching calendar only.
+
+        If alice has shared calendar A and calendar B with bob, revoking
+        the share on A must not delete any invite notification for B.
+        """
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._create_calendar("alice", "calendar_a")
+        self._create_calendar("alice", "calendar_b")
+        self._share("alice", "calendar_a", "bob", summary="A")
+        self._share("alice", "calendar_b", "bob", summary="B")
+
+        before = self._list_notification_files("bob")
+        invites = [n for n in before if n.startswith("invite-")]
+        assert len(invites) == 2, "expected 2 invites (one per calendar); got %r" % before
+
+        # Revoke only the A share.
+        self._revoke("alice", "calendar_a", "bob")
+
+        after = self._list_notification_files("bob")
+        invites_after = [n for n in after if n.startswith("invite-")]
+        assert len(invites_after) == 1, \
+            "the unrelated calendar_b invite must survive; got %r" % after
+
+    def test_accept_writes_shared_with_me_back_reference(self):
+        """Accept appends the calendar path to the sharee's principal prop."""
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob")
+
+        uid = self._read_invite_uid("bob")
+        self._reply("alice", "calendar", "bob", uid, accept=True)
+
+        import os
+        bob_props_path = os.path.join(
+            self.colpath, "collection-root", "bob", ".Radicale.props")
+        with open(bob_props_path) as f:
+            bob_props = json.load(f)
+        shared = json.loads(bob_props.get("RADICALE:shared-with-me", "[]"))
+        assert "alice/calendar" in shared, \
+            "expected alice/calendar in shared-with-me; got %r" % shared
+
+    def test_revoke_removes_shared_with_me_back_reference(self):
+        """Revoke removes the entry from the sharee's shared-with-me list."""
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob")
+        uid = self._read_invite_uid("bob")
+        self._reply("alice", "calendar", "bob", uid, accept=True)
+
+        # Confirm presence before revoke.
+        import os
+        bob_props_path = os.path.join(
+            self.colpath, "collection-root", "bob", ".Radicale.props")
+        with open(bob_props_path) as f:
+            shared = json.loads(json.load(f).get("RADICALE:shared-with-me", "[]"))
+        assert "alice/calendar" in shared
+
+        self._revoke("alice", "calendar", "bob")
+
+        with open(bob_props_path) as f:
+            shared = json.loads(json.load(f).get("RADICALE:shared-with-me", "[]"))
+        assert "alice/calendar" not in shared, \
+            "revoke should drop the back-reference; got %r" % shared

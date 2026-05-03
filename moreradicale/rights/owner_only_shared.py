@@ -88,6 +88,26 @@ class Rights(owner_only.Rights):
         """
         self._storage = storage_obj
 
+    def invalidate_share_cache(self, collection_path: str) -> None:
+        """Drop cached shares/proxy metadata for a collection or principal.
+
+        Called by the sharing handler after every state mutation (add,
+        remove, accept, decline) so the next authorization() reads fresh
+        data from storage. Without this hook, a 5s TTL cache window
+        could let the rights backend grant or deny access based on
+        pre-mutation state (e.g. just-accepted share still shown as
+        pending; just-revoked share still shown as accepted).
+        """
+        normalized = collection_path.strip("/")
+        # Drop the collection-scoped shares cache.
+        self._meta_cache.pop("shares:" + normalized, None)
+        # Also drop the proxy cache for the owner principal (in case the
+        # caller is mutating proxy lists at the same time, e.g. delegation
+        # changes flow through the same handler).
+        owner = normalized.split("/", 1)[0] if normalized else ""
+        if owner:
+            self._meta_cache.pop("proxy:" + owner, None)
+
     def authorization(self, user: str, path: str) -> str:
         """
         Get granted rights for user on path.
