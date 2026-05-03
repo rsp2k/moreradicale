@@ -669,6 +669,26 @@ def xml_propfind_response(
                     element.text = str(sum(1 for x in item.get_all()))
                 else:
                     is404 = True
+            elif tag == xmlutils.make_clark("RADICALE:notifications"):
+                # Expose stored sharing-notification metadata so the web UI
+                # can render an inbox without parsing notification XML.
+                # Each notification subcollection under /{user}/notifications/
+                # carries a JSON blob describing the invite/reply/revocation.
+                notif_json = collection.get_meta("RADICALE:notifications")
+                if notif_json:
+                    element.text = notif_json
+                else:
+                    is404 = True
+            elif tag == xmlutils.make_clark("RADICALE:shared-with-me"):
+                # JSON list of calendar paths shared with this principal user
+                # and accepted. The web UI fetches this on the user's principal
+                # to enumerate accepted shares without scanning every owner's
+                # calendars. Stored on the principal collection.
+                shared_json = collection.get_meta("RADICALE:shared-with-me")
+                if shared_json:
+                    element.text = shared_json
+                else:
+                    is404 = True
             elif tag == xmlutils.make_clark("D:displayname"):
                 displayname = collection.get_meta("D:displayname")
                 if not displayname and is_leaf:

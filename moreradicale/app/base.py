@@ -50,6 +50,11 @@ class ApplicationBase:
         self._auth = auth.load(configuration)
         self._storage = storage.load(configuration)
         self._rights = rights.load(configuration)
+        # Some rights backends (owner_only_shared) need to read collection
+        # metadata from storage to make access decisions. Hand them the
+        # storage handle now that both are loaded.
+        if hasattr(self._rights, "attach_storage"):
+            self._rights.attach_storage(self._storage)
         self._web = web.load(configuration)
         self._encoding = configuration.get("encoding", "request")
         self._log_bad_put_request_content = configuration.get("logging", "bad_put_request_content")

@@ -21,6 +21,10 @@ export interface Collection {
   type: CollectionType;
   source: string;
   contentcount: string;
+  /** Set when the collection is shared with the current user, not owned. */
+  sharedBy?: string;
+  /** "read" or "read-write" - only set when sharedBy is set. */
+  sharedAccess?: ShareAccess;
 }
 
 export interface Credentials {
@@ -126,15 +130,34 @@ export async function login(creds: Credentials): Promise<{ ok: true; principal: 
  * we get a 401 and the caller falls back to the Basic Auth login form.
  */
 export async function detectProxiedSession(): Promise<Credentials | null> {
+  // 3-second cap so a slow / hanging probe (rate-limited htpasswd, dead
+  // upstream, etc.) doesn't keep the UI stuck in the "detecting" phase.
+  // On timeout we abort, the catch returns null, and LoginView renders.
+  const ctrl = new AbortController();
+  const timeoutId = setTimeout(() => ctrl.abort(), 3000);
   try {
     const res = await fetch("/", {
       method: "PROPFIND",
       headers: {
         Depth: "0",
         "Content-Type": "application/xml; charset=utf-8",
+        // Empty-Basic stub ("Og==" decodes to ":"). Two effects:
+        //   1. Suppresses the browser's native Basic-auth popup. Browsers
+        //      only auto-prompt on 401+WWW-Authenticate when the request
+        //      had no Authorization header; setting one (even bogus)
+        //      tells the browser "creds were already attempted, don't ask".
+        //   2. moreradicale's app/__init__.py:559 short-circuits when the
+        //      decoded login is empty - the htpasswd backend never runs,
+        //      so this probe doesn't accumulate failed-login rate-limit
+        //      delay for legitimate htpasswd users on the same server.
+        // With http_x_remote_user (proxy auth), the Authorization header
+        // is ignored entirely in favor of X-Remote-User, so the probe
+        // succeeds and we get a real principal back.
+        Authorization: "Basic Og==",
       },
       body: `<?xml version="1.0" encoding="utf-8"?>
 <propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>`,
+      signal: ctrl.signal,
     });
     if (!res.ok) return null;
     const xml = parseXml(await res.text());
@@ -156,13 +179,12 @@ export async function detectProxiedSession(): Promise<Credentials | null> {
     return { user: decodeURIComponent(user), password: null };
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
-/** List the user's collections (calendars, address books, journals, tasks). */
-export async function listCollections(creds: Credentials): Promise<Collection[]> {
-  const url = `/${encodeURIComponent(creds.user)}/`;
-  const body = `<?xml version="1.0" encoding="utf-8"?>
+const COLLECTION_PROPS_BODY = `<?xml version="1.0" encoding="utf-8"?>
 <propfind xmlns="DAV:" xmlns:C="${NS.C}" xmlns:CR="${NS.CR}" xmlns:CS="${NS.CS}" xmlns:I="${NS.ICAL}" xmlns:R="${NS.RADICALE}">
   <prop>
     <resourcetype/>
@@ -176,6 +198,62 @@ export async function listCollections(creds: Credentials): Promise<Collection[]>
     <CS:source/>
   </prop>
 </propfind>`;
+
+/** Parse one <D:response> from a PROPFIND multistatus into a Collection. */
+function parseCollectionResponse(response: Element): Collection | null {
+  const href = textOf(ns(response, NS.D, "href"));
+  if (!href) return null;
+  const propstat = ns(response, NS.D, "propstat");
+  if (!propstat) return null;
+  const prop = ns(propstat, NS.D, "prop");
+  if (!prop) return null;
+  const resourceType = ns(prop, NS.D, "resourcetype");
+  const isAddressbook = resourceType && ns(resourceType, NS.CR, "addressbook");
+  const isCalendar = resourceType && ns(resourceType, NS.C, "calendar");
+  if (!isAddressbook && !isCalendar) return null;
+
+  let type: CollectionType = "ADDRESSBOOK";
+  if (isCalendar) {
+    const supported = ns(prop, NS.C, "supported-calendar-component-set");
+    const comps = supported ? nsAll(supported, NS.C, "comp").map((c) => c.getAttribute("name")) : [];
+    const has = (n: string) => comps.includes(n);
+    if (has("VEVENT") && has("VJOURNAL") && has("VTODO")) type = "CALENDAR_JOURNAL_TASKS";
+    else if (has("VEVENT") && has("VJOURNAL")) type = "CALENDAR_JOURNAL";
+    else if (has("VEVENT") && has("VTODO")) type = "CALENDAR_TASKS";
+    else if (has("VJOURNAL") && has("VTODO")) type = "JOURNAL_TASKS";
+    else if (has("VEVENT")) type = "CALENDAR";
+    else if (has("VJOURNAL")) type = "JOURNAL";
+    else if (has("VTODO")) type = "TASKS";
+    const source = textOf(ns(prop, NS.CS, "source"));
+    if (source) type = "WEBCAL";
+  }
+
+  return {
+    href,
+    displayname: textOf(ns(prop, NS.D, "displayname")),
+    description: isCalendar
+      ? textOf(ns(prop, NS.C, "calendar-description"))
+      : textOf(ns(prop, NS.CR, "addressbook-description")),
+    color: textOf(ns(prop, NS.ICAL, "calendar-color")) || "",
+    type,
+    source: textOf(ns(prop, NS.CS, "source")),
+    contentcount: textOf(ns(prop, NS.RADICALE, "getcontentcount")) || "0",
+  };
+}
+
+/**
+ * List the user's collections (calendars, address books, journals, tasks).
+ *
+ * moreradicale's storage layer auto-includes shared calendars (status =
+ * accepted) in a principal's depth=1 listing - see
+ * `storage/multifilesystem/discover.py:128`. So this PROPFIND returns both
+ * owned and shared collections in one round trip. We classify each entry by
+ * comparing the leading path segment of its href against the current user;
+ * mismatches are tagged with `sharedBy` so the UI can render the borrowed
+ * calendar with a "Shared by" badge and hide owner-only actions.
+ */
+export async function listCollections(creds: Credentials): Promise<Collection[]> {
+  const url = `/${encodeURIComponent(creds.user)}/`;
   const res = await fetch(url, {
     method: "PROPFIND",
     headers: {
@@ -183,50 +261,24 @@ export async function listCollections(creds: Credentials): Promise<Collection[]>
       Depth: "1",
       "Content-Type": "application/xml; charset=utf-8",
     },
-    body,
+    body: COLLECTION_PROPS_BODY,
   });
   if (!res.ok) throw new Error(`PROPFIND failed: ${res.status} ${res.statusText}`);
   const xml = parseXml(await res.text());
   const collections: Collection[] = [];
+  const userSegment = creds.user;
   for (const response of nsAll(xml.documentElement, NS.D, "response")) {
     const href = textOf(ns(response, NS.D, "href"));
     if (href === url || href === url.replace(/\/$/, "")) continue;
-    const propstat = ns(response, NS.D, "propstat");
-    if (!propstat) continue;
-    const prop = ns(propstat, NS.D, "prop");
-    if (!prop) continue;
-    const resourceType = ns(prop, NS.D, "resourcetype");
-    const isAddressbook = resourceType && ns(resourceType, NS.CR, "addressbook");
-    const isCalendar = resourceType && ns(resourceType, NS.C, "calendar");
-    if (!isAddressbook && !isCalendar) continue;
-
-    let type: CollectionType = "ADDRESSBOOK";
-    if (isCalendar) {
-      const supported = ns(prop, NS.C, "supported-calendar-component-set");
-      const comps = supported ? nsAll(supported, NS.C, "comp").map((c) => c.getAttribute("name")) : [];
-      const has = (n: string) => comps.includes(n);
-      if (has("VEVENT") && has("VJOURNAL") && has("VTODO")) type = "CALENDAR_JOURNAL_TASKS";
-      else if (has("VEVENT") && has("VJOURNAL")) type = "CALENDAR_JOURNAL";
-      else if (has("VEVENT") && has("VTODO")) type = "CALENDAR_TASKS";
-      else if (has("VJOURNAL") && has("VTODO")) type = "JOURNAL_TASKS";
-      else if (has("VEVENT")) type = "CALENDAR";
-      else if (has("VJOURNAL")) type = "JOURNAL";
-      else if (has("VTODO")) type = "TASKS";
-      const source = textOf(ns(prop, NS.CS, "source"));
-      if (source) type = "WEBCAL";
+    const c = parseCollectionResponse(response);
+    if (!c) continue;
+    // First non-empty segment of the href is the owning principal.
+    // If it doesn't match the current user, this is a borrowed share.
+    const firstSeg = c.href.split("/").filter(Boolean)[0] ?? "";
+    if (decodeURIComponent(firstSeg) !== userSegment) {
+      c.sharedBy = decodeURIComponent(firstSeg);
     }
-
-    collections.push({
-      href,
-      displayname: textOf(ns(prop, NS.D, "displayname")),
-      description: isCalendar
-        ? textOf(ns(prop, NS.C, "calendar-description"))
-        : textOf(ns(prop, NS.CR, "addressbook-description")),
-      color: textOf(ns(prop, NS.ICAL, "calendar-color")) || "",
-      type,
-      source: textOf(ns(prop, NS.CS, "source")),
-      contentcount: textOf(ns(prop, NS.RADICALE, "getcontentcount")) || "0",
-    });
+    collections.push(c);
   }
   collections.sort((a, b) => a.displayname.localeCompare(b.displayname));
   return collections;
@@ -597,6 +649,199 @@ export async function removeShare(
     const text = await res.text();
     throw new Error(`Remove share failed: ${res.status} ${res.statusText} ${text.slice(0, 200)}`);
   }
+}
+
+// -------- Sharing notifications (CalendarServer extension) --------
+
+export type NotificationKind = "invite-notification" | "invite-reply" | "invite-deleted";
+
+export interface ShareNotification {
+  /** Path to the notification subcollection, e.g. "/bob/notifications/invite-{uid}.xml/". */
+  href: string;
+  /** Notification UID from the metadata blob (NOT the same as the href filename). */
+  uid: string;
+  kind: NotificationKind;
+  createdAt: string;
+  /** Path to the calendar being shared, e.g. "alice/work-calendar". */
+  sharedCollectionPath: string | null;
+  sharedCollectionName: string | null;
+  sharerUsername: string | null;
+  sharerCommonName: string | null;
+  /** "read" or "read-write" - only set on invite-notification. */
+  accessLevel: ShareAccess | null;
+  /** Who replied - only set on invite-reply. */
+  replyFrom: string | null;
+  /** "accepted" or "declined" - only set on invite-reply. */
+  replyStatus: "accepted" | "declined" | null;
+  comment: string | null;
+}
+
+interface NotificationDict {
+  uid?: string;
+  type?: string;
+  created_at?: string;
+  shared_collection_path?: string | null;
+  shared_collection_name?: string | null;
+  sharer_username?: string | null;
+  sharer_cn?: string | null;
+  access_level?: string | null;
+  reply_from?: string | null;
+  reply_status?: string | null;
+  comment?: string | null;
+}
+
+/**
+ * List sharing notifications for the user.
+ *
+ * The server stores each notification as a child collection under
+ * /{user}/notifications/, with a JSON metadata blob in the
+ * RADICALE:notifications property. We PROPFIND depth=1 and pull out
+ * the JSON blobs, sorted newest-first.
+ */
+export async function listNotifications(creds: Credentials): Promise<ShareNotification[]> {
+  const url = `/${encodeURIComponent(creds.user)}/notifications/`;
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<propfind xmlns="DAV:" xmlns:R="${NS.RADICALE}">
+  <prop>
+    <R:notifications/>
+    <resourcetype/>
+  </prop>
+</propfind>`;
+  const res = await fetch(url, {
+    method: "PROPFIND",
+    headers: withAuth(creds, {
+      Depth: "1",
+      "Content-Type": "application/xml; charset=utf-8",
+    }),
+    body,
+  });
+  // Notification collection might not exist yet (no shares ever received).
+  // 404 is normal in that case - return empty list rather than throwing.
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`PROPFIND failed: ${res.status} ${res.statusText}`);
+  const xml = parseXml(await res.text());
+  const notifications: ShareNotification[] = [];
+  const collectionUrl = url.replace(/\/+$/, "");
+  for (const response of nsAll(xml.documentElement, NS.D, "response")) {
+    const href = textOf(ns(response, NS.D, "href"));
+    if (!href) continue;
+    if (href.replace(/\/+$/, "") === collectionUrl) continue;
+    const propstat = ns(response, NS.D, "propstat");
+    if (!propstat) continue;
+    const prop = ns(propstat, NS.D, "prop");
+    if (!prop) continue;
+    const blob = textOf(ns(prop, NS.RADICALE, "notifications"));
+    if (!blob) continue;
+    let data: NotificationDict;
+    try {
+      data = JSON.parse(blob);
+    } catch {
+      continue;
+    }
+    const kind = data.type as NotificationKind | undefined;
+    if (kind !== "invite-notification" && kind !== "invite-reply" && kind !== "invite-deleted") {
+      continue;
+    }
+    const access = data.access_level === "read-write" ? "read-write" : data.access_level === "read" ? "read" : null;
+    const replyStatus = data.reply_status === "accepted" || data.reply_status === "declined" ? data.reply_status : null;
+    notifications.push({
+      href,
+      uid: data.uid ?? "",
+      kind,
+      createdAt: data.created_at ?? "",
+      sharedCollectionPath: data.shared_collection_path ?? null,
+      sharedCollectionName: data.shared_collection_name ?? null,
+      sharerUsername: data.sharer_username ?? null,
+      sharerCommonName: data.sharer_cn ?? null,
+      accessLevel: access,
+      replyFrom: data.reply_from ?? null,
+      replyStatus,
+      comment: data.comment ?? null,
+    });
+  }
+  // Newest first
+  notifications.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return notifications;
+}
+
+/** Build href for the shared calendar from a stored path like "alice/work". */
+function sharedCalendarHref(sharedCollectionPath: string): string {
+  const trimmed = sharedCollectionPath.replace(/^\/+|\/+$/g, "");
+  // Path segments are already URL-safe identifiers, but encode each component
+  // to be safe with display-name slugs that contain non-ASCII.
+  const encoded = trimmed.split("/").map(encodeURIComponent).join("/");
+  return `/${encoded}/`;
+}
+
+async function postShareReply(
+  creds: Credentials,
+  collectionHref: string,
+  inReplyToUid: string,
+  accept: boolean
+): Promise<void> {
+  const decision = accept ? "<CS:invite-accepted/>" : "<CS:invite-declined/>";
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<CS:share-reply xmlns="DAV:" xmlns:CS="${NS.CS}">
+  <CS:href>${escapeXml(collectionHref)}</CS:href>
+  <CS:in-reply-to>${escapeXml(inReplyToUid)}</CS:in-reply-to>
+  ${decision}
+  <CS:hosturl><href>${escapeXml(collectionHref)}</href></CS:hosturl>
+</CS:share-reply>`;
+  const res = await fetch(collectionHref, {
+    method: "POST",
+    headers: withAuth(creds, {
+      "Content-Type": "application/xml; charset=utf-8",
+    }),
+    body,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Share reply failed: ${res.status} ${res.statusText} ${text.slice(0, 200)}`);
+  }
+}
+
+async function deleteNotification(creds: Credentials, notificationHref: string): Promise<void> {
+  const res = await fetch(notificationHref, {
+    method: "DELETE",
+    headers: withAuth(creds),
+  });
+  // 404 is fine - notification was already cleared by another tab/client.
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`DELETE notification failed: ${res.status} ${res.statusText}`);
+  }
+}
+
+/**
+ * Accept a sharing invitation.
+ *
+ * Sends CS:share-reply to the shared calendar's owner, then deletes the
+ * local notification subcollection so it stops appearing in the inbox.
+ * The server-side handler updates the share's status to "accepted" and
+ * notifies the calendar owner via their own notification collection.
+ */
+export async function acceptShare(creds: Credentials, n: ShareNotification): Promise<void> {
+  if (n.kind !== "invite-notification" || !n.sharedCollectionPath) {
+    throw new Error("Notification is not an actionable invitation");
+  }
+  await postShareReply(creds, sharedCalendarHref(n.sharedCollectionPath), n.uid, true);
+  await deleteNotification(creds, n.href);
+}
+
+/** Decline a sharing invitation - mirror of acceptShare. */
+export async function declineShare(creds: Credentials, n: ShareNotification): Promise<void> {
+  if (n.kind !== "invite-notification" || !n.sharedCollectionPath) {
+    throw new Error("Notification is not an actionable invitation");
+  }
+  await postShareReply(creds, sharedCalendarHref(n.sharedCollectionPath), n.uid, false);
+  await deleteNotification(creds, n.href);
+}
+
+/**
+ * Dismiss a non-actionable notification (replies, revocations).
+ * Just deletes the subcollection - no server-side state to update.
+ */
+export async function dismissNotification(creds: Credentials, n: ShareNotification): Promise<void> {
+  await deleteNotification(creds, n.href);
 }
 
 /** Upload a single .ics or .vcf body into a collection. */

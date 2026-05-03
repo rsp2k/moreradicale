@@ -34,7 +34,8 @@ Delegation is controlled by RADICALE:schedule-delegates on principal collections
 """
 
 import json
-from typing import TYPE_CHECKING
+import time
+from typing import TYPE_CHECKING, Optional
 
 from moreradicale import pathutils
 from moreradicale.log import logger
@@ -42,7 +43,7 @@ from moreradicale.rights import owner_only
 from moreradicale.sharing import SHARES_PROPERTY, PROXY_READ_PROPERTY, PROXY_WRITE_PROPERTY
 
 if TYPE_CHECKING:
-    from moreradicale import config
+    from moreradicale import config, storage
 
 
 class Rights(owner_only.Rights):
@@ -55,12 +56,37 @@ class Rights(owner_only.Rights):
     3. Proxy access to another principal's calendars
     """
 
+    # Short TTL on the per-path metadata cache. PROPFIND can call
+    # authorization() many times for one request (parent + every child),
+    # so a memoize is essential. But share state changes after MKCOL,
+    # POST CS:share-resource, and POST CS:share-reply, so we need the
+    # cache to expire quickly enough to pick up reactions to those.
+    _CACHE_TTL_SECONDS = 5.0
+
     def __init__(self, configuration: "config.Configuration") -> None:
         super().__init__(configuration)
         self._sharing_enabled = configuration.get("sharing", "enabled")
         self._delegation_enabled = configuration.get("sharing", "delegation_enabled")
-        # Cache for collection metadata to avoid repeated lookups
+        # Storage handle, attached after construction by the application
+        # layer. None during early-init paths (e.g. unit tests that don't
+        # exercise sharing).
+        self._storage: "Optional[storage.BaseStorage]" = None
+        # path -> (expiry_unix, shares_dict | proxy_meta_dict)
+        # Two distinct caches keyed by path:
+        #   - "shares:{collection_path}" -> shares dict from RADICALE:shares
+        #   - "proxy:{owner}"            -> {RADICALE:proxy-read, RADICALE:proxy-write}
+        # We use a single dict to keep cleanup simple.
         self._meta_cache: dict = {}
+
+    def attach_storage(self, storage_obj: "storage.BaseStorage") -> None:
+        """Attach the storage backend so we can read shares/proxy metadata.
+
+        Called once by ApplicationBase after both rights and storage are
+        loaded. Without this, _check_shared_access falls through to its
+        empty-cache path (returns "") and shared-calendar access never
+        works - which is the gap this method exists to close.
+        """
+        self._storage = storage_obj
 
     def authorization(self, user: str, path: str) -> str:
         """
@@ -87,6 +113,16 @@ class Rights(owner_only.Rights):
         sane_path = pathutils.strip_path(path)
         if not sane_path:
             return ""  # Root path - no shared access
+
+        # Special case: a user owns their entire notifications subtree at
+        # any depth. owner_only's authorization() only grants up to depth-1
+        # ("user/collection"), but the CalendarServer notifications design
+        # stores each invite/reply/deleted as a NESTED collection at
+        # /{user}/notifications/{uid}/, so PROPFIND depth=1 needs depth-2
+        # rights to enumerate them.
+        parts = sane_path.split("/")
+        if len(parts) >= 3 and parts[0] == user and parts[1] == "notifications":
+            return "rw"
 
         # Check for shared access to this path
         shared_access = self._check_shared_access(user, sane_path)
@@ -196,25 +232,90 @@ class Rights(owner_only.Rights):
 
         return ""
 
+    def _cache_get(self, key: str):
+        entry = self._meta_cache.get(key)
+        if entry is None:
+            return None
+        expiry, value = entry
+        if expiry < time.monotonic():
+            del self._meta_cache[key]
+            return None
+        return value
+
+    def _cache_put(self, key: str, value) -> None:
+        self._meta_cache[key] = (time.monotonic() + self._CACHE_TTL_SECONDS, value)
+
+    def _load_collection_meta(self, collection_path: str) -> dict:
+        """Read .Radicale.props for a collection path; return empty dict on miss.
+
+        Acquires a SHARED lock on the owner segment so we don't race a writer
+        mid-update. The path is "user/calendar"; we strip to the user for
+        locking purposes (storage.acquire_lock takes the user, not the path).
+        """
+        if self._storage is None:
+            return {}
+        owner = collection_path.split("/", 1)[0]
+        try:
+            with self._storage.acquire_lock("r", owner):
+                items = list(self._storage.discover(
+                    "/" + collection_path + "/", depth="0"))
+                if not items:
+                    return {}
+                coll = items[0]
+                if not hasattr(coll, "get_meta"):
+                    return {}
+                # get_meta() with no arg returns full property mapping.
+                return dict(coll.get_meta())
+        except Exception as e:
+            logger.debug("rights: failed to read meta for %s: %s",
+                         collection_path, e)
+            return {}
+
     def _get_shares_for_path(self, collection_path: str) -> dict:
+        """Get shares dict (sharee -> share-info) for a collection.
+
+        Returns empty dict if no shares property, malformed JSON, or no
+        storage attached. Cached for self._CACHE_TTL_SECONDS so a single
+        PROPFIND that authorizes many children doesn't re-read the same
+        .Radicale.props on every call.
         """
-        Get shares data for a collection path.
+        cache_key = "shares:" + collection_path
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
 
-        This method needs to be called after collection metadata is available.
-        In practice, this is populated by the application layer.
+        meta = self._load_collection_meta(collection_path)
+        shares: dict = {}
+        shares_json = meta.get(SHARES_PROPERTY)
+        if shares_json:
+            try:
+                parsed = json.loads(shares_json)
+                if isinstance(parsed, dict):
+                    shares = parsed
+            except json.JSONDecodeError:
+                logger.warning("rights: malformed %s on %s",
+                               SHARES_PROPERTY, collection_path)
 
-        Args:
-            collection_path: Path like "alice/calendar"
+        self._cache_put(cache_key, shares)
+        return shares
 
-        Returns:
-            Dictionary of shares or empty dict
-        """
-        # Check cache first
-        if collection_path in self._meta_cache:
-            return self._meta_cache[collection_path]
-
-        # The shares data will be populated by set_collection_meta()
-        return {}
+    def _load_principal_meta(self, owner: str) -> dict:
+        """Read .Radicale.props for a principal (user-level) collection."""
+        if self._storage is None:
+            return {}
+        try:
+            with self._storage.acquire_lock("r", owner):
+                items = list(self._storage.discover("/" + owner + "/", depth="0"))
+                if not items:
+                    return {}
+                coll = items[0]
+                if not hasattr(coll, "get_meta"):
+                    return {}
+                return dict(coll.get_meta())
+        except Exception as e:
+            logger.debug("rights: failed to read principal meta for %s: %s",
+                         owner, e)
+            return {}
 
     def _get_proxy_level_for(self, user: str, owner: str) -> str:
         """
@@ -227,8 +328,12 @@ class Rights(owner_only.Rights):
         Returns:
             "write", "read", or "" (none)
         """
-        # Check cache for owner's principal metadata
-        owner_meta = self._meta_cache.get(owner, {})
+        cache_key = "proxy:" + owner
+        cached = self._cache_get(cache_key)
+        if cached is None:
+            cached = self._load_principal_meta(owner)
+            self._cache_put(cache_key, cached)
+        owner_meta = cached
 
         # Check write proxy first (higher privilege)
         write_proxies = owner_meta.get(PROXY_WRITE_PROPERTY, "[]")
@@ -250,30 +355,34 @@ class Rights(owner_only.Rights):
 
     def set_collection_meta(self, path: str, meta: dict) -> None:
         """
-        Cache collection metadata for rights checking.
+        Pre-populate the metadata cache for rights checking.
 
-        This method is called by the application layer to provide
-        collection metadata for sharing checks.
+        Kept for the unit-test path that exercises the rights backend in
+        isolation without a real storage. In production, _load_collection_meta
+        and _load_principal_meta read directly from storage on demand, so this
+        method is rarely used.
 
         Args:
             path: Collection path (can be with or without leading/trailing slashes)
             meta: Collection metadata dictionary
         """
-        # Normalize path - remove leading/trailing slashes
         sane_path = path.strip("/")
 
-        # Extract and cache shares data
-        shares_json = meta.get(SHARES_PROPERTY)
-        if shares_json:
-            try:
-                self._meta_cache[sane_path] = json.loads(shares_json)
-            except json.JSONDecodeError:
-                pass
-
-        # Cache principal metadata for proxy checks
-        if "/" not in sane_path and sane_path:
-            # This is a principal path
-            self._meta_cache[sane_path] = meta
+        # Collection-level path: parse and cache the SHARES_PROPERTY content.
+        if "/" in sane_path:
+            shares: dict = {}
+            shares_json = meta.get(SHARES_PROPERTY)
+            if shares_json:
+                try:
+                    parsed = json.loads(shares_json)
+                    if isinstance(parsed, dict):
+                        shares = parsed
+                except json.JSONDecodeError:
+                    pass
+            self._cache_put("shares:" + sane_path, shares)
+        elif sane_path:
+            # Principal-level path: cache the full meta dict for proxy lookups.
+            self._cache_put("proxy:" + sane_path, meta)
 
     def clear_meta_cache(self) -> None:
         """Clear the metadata cache."""

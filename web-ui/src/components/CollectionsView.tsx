@@ -17,6 +17,7 @@ import {
   Pencil,
   Upload,
   Share2,
+  Users,
 } from "lucide-react";
 import {
   listCollections,
@@ -34,6 +35,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CollectionFormDialog } from "./CollectionFormDialog";
 import { UploadDialog } from "./UploadDialog";
 import { ShareDialog } from "./ShareDialog";
+import { NotificationsBanner } from "./NotificationsBanner";
 import { useWebSync } from "@/lib/useWebSync";
 import { LiveIndicator } from "@/components/ui/live-indicator";
 
@@ -110,6 +112,12 @@ function CollectionCard({
                 <TypeIcon type={c.type} />
                 {TYPE_LABELS[c.type]}
               </Badge>
+              {c.sharedBy && (
+                <Badge variant="outline" className="gap-1" title={`Owned by ${c.sharedBy}`}>
+                  <Users className="size-3" />
+                  Shared by {c.sharedBy}
+                </Badge>
+              )}
               <span className="text-xs text-[var(--color-muted-foreground)]">
                 {c.contentcount} item{c.contentcount === "1" ? "" : "s"}
               </span>
@@ -138,18 +146,20 @@ function CollectionCard({
           </Button>
         </div>
         <div className="flex gap-1">
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              onUpload();
-            }}
-            title="Upload .ics or .vcf files"
-          >
-            <Upload /> Upload
-          </Button>
+          {!c.sharedBy && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpload();
+              }}
+              title="Upload .ics or .vcf files"
+            >
+              <Upload /> Upload
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -161,7 +171,7 @@ function CollectionCard({
           >
             <Download />
           </Button>
-          {c.type !== "ADDRESSBOOK" && c.type !== "WEBCAL" && (
+          {!c.sharedBy && c.type !== "ADDRESSBOOK" && c.type !== "WEBCAL" && (
             <Button
               variant="ghost"
               size="icon"
@@ -174,29 +184,33 @@ function CollectionCard({
               <Share2 />
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-            title="Edit metadata"
-          >
-            <Pencil />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            title="Delete collection"
-            className="text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
-          >
-            <Trash2 />
-          </Button>
+          {!c.sharedBy && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              title="Edit metadata"
+            >
+              <Pencil />
+            </Button>
+          )}
+          {!c.sharedBy && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              title="Delete collection"
+              className="text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
+            >
+              <Trash2 />
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -213,17 +227,26 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
   const [formDialog, setFormDialog] = useState<{ open: boolean; editing?: Collection }>({ open: false });
   const [uploadFor, setUploadFor] = useState<Collection | null>(null);
   const [shareFor, setShareFor] = useState<Collection | null>(null);
+  // Bumped on every WebSocket-driven refresh so child components watching
+  // their own resources (e.g. NotificationsBanner) can re-fetch in lockstep
+  // with the parent without each opening a separate WebSocket connection.
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   async function refresh() {
     setRefreshing(true);
     setError(null);
     try {
+      // Storage discover() auto-merges accepted shared calendars into the
+      // principal's depth=1 listing, so a single PROPFIND covers both
+      // owned and borrowed collections - listCollections handles the
+      // sharedBy tagging client-side.
       setCollections(await listCollections(creds));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRefreshing(false);
     }
+    setRefreshNonce((n) => n + 1);
   }
 
   useEffect(() => {
@@ -300,6 +323,12 @@ export function CollectionsView({ creds, onLogout, onOpenCollection }: Props) {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+
+        <NotificationsBanner
+          creds={creds}
+          refreshNonce={refreshNonce}
+          onChanged={refresh}
+        />
 
         {collections === null ? (
           <div className="flex items-center justify-center py-20 text-[var(--color-muted-foreground)]">
