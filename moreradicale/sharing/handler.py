@@ -73,6 +73,22 @@ class SharingHandler:
             logger.debug("Rights cache invalidation failed for %s: %s",
                          collection_path, e)
 
+    def _notify(self, path: str, change_type: str, user: str = "") -> None:
+        """Push a websync change event for a path a share op touched.
+
+        Without these notifications, share state changes don't propagate
+        to connected web clients in real time - the sharee won't see a
+        new invite until they manually refresh, and the owner won't see
+        accept/decline replies. Best-effort: any failure here is a sync
+        degradation, not a correctness issue, so we swallow exceptions
+        rather than failing the share operation.
+        """
+        try:
+            from moreradicale.websync.handler import notify_change
+            normalized = "/" + path.strip("/") + "/"
+            notify_change(normalized, change_type=change_type, user=user)
+        except Exception as e:
+            logger.debug("websync notify failed for %s: %s", path, e)
 
     def handle_sharing_post(self, user: str, xml_content: ET.Element,
                             collection: "storage.BaseCollection",
@@ -195,6 +211,9 @@ class SharingHandler:
             logger.info("Added share: %s -> %s (%s) on %s",
                         user, sharee, access.value, collection.path)
             self._invalidate_rights_cache(collection.path)
+            # Owner's own clients should refresh their CS:invite view
+            # (e.g. the share dialog showing pending/accepted state).
+            self._notify(collection.path, "update", user=user)
 
             # Create invite notification for sharee
             share = self.sharing_manager.get_shares(collection).get(sharee)
@@ -209,6 +228,9 @@ class SharingHandler:
                     sharer_cn=None,  # Could be enhanced to get user's display name
                     _locked=True,  # we're already inside app/post.py's write lock
                 )
+                # Sharee's open tabs see the new invite immediately
+                # rather than after their poll cycle.
+                self._notify(f"/{sharee}/notifications/", "create", user=sharee)
 
         except PermissionError as e:
             logger.warning("Permission denied for share: %s", e)
@@ -248,6 +270,10 @@ class SharingHandler:
                 # the just-revoked sharee instead of grandfathering them
                 # in for the cache TTL window.
                 self._invalidate_rights_cache(collection.path)
+                # Owner's own tabs (the share dialog) and the sharee's
+                # tabs (the calendar disappears from their list) both
+                # care about this change.
+                self._notify(collection.path, "update", user=user)
                 # If a pending invite is still outstanding (sharee never
                 # accepted before owner revoked), kill it - it's now an
                 # invitation to access that no longer exists.
@@ -263,6 +289,11 @@ class SharingHandler:
                     owner_cn=None,
                     _locked=True,
                 )
+                # Sharee's tabs: revocation notification appeared, and
+                # the (now-inaccessible) calendar should drop from their
+                # principal listing on next refresh.
+                self._notify(f"/{sharee}/notifications/", "create", user=sharee)
+                self._notify(f"/{sharee}/", "update", user=sharee)
             else:
                 logger.debug("Share %s not found for removal on %s",
                              sharee, collection.path)
@@ -321,6 +352,9 @@ class SharingHandler:
             # whatever was in flight when authorize() first warmed the
             # cache pre-mutation.
             self._invalidate_rights_cache(collection.path)
+            # Owner's tabs see CS:invite change; the sharee's other tabs
+            # see the calendar appear (accept) or stay gone (decline).
+            self._notify(collection.path, "update", user=user)
 
             # Cascade-delete the originating invite notification so a UI
             # re-fetched after this point doesn't show a "pending" badge for
@@ -328,6 +362,8 @@ class SharingHandler:
             # was processed under, so pass _locked=True.
             self.notification_manager.delete_invite_notifications_for(
                 user, collection.path, _locked=True)
+            # Sharee's other tabs see the cascade-cleaned banner.
+            self._notify(f"/{user}/notifications/", "delete", user=user)
 
             # Notify the calendar owner of the response
             if collection.owner:
@@ -338,6 +374,10 @@ class SharingHandler:
                     accepted=accept,
                     _locked=True,
                 )
+                # Owner's tabs see the reply notification land in their
+                # banner without needing to manually refresh.
+                self._notify(f"/{collection.owner}/notifications/",
+                             "create", user=collection.owner)
 
         except ValueError as e:
             logger.warning("Invalid share reply: %s", e)

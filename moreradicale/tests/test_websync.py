@@ -105,23 +105,31 @@ class TestWebSyncManager:
         assert msg["path"] == "/user1/calendar/event.ics"
         assert msg["sync_token"] == "token-1"
 
-    def test_notify_excludes_self(self):
-        """Test that user who made change doesn't get notified."""
+    def test_notify_includes_originating_user_other_tabs(self):
+        """Notify reaches the change-originator's other connections.
+
+        Earlier design excluded the originating user to avoid
+        echoing their own writes back to themselves. That broke
+        cross-tab sync: a user with the calendar open in two tabs
+        wouldn't see their own edit propagate from tab A to tab B.
+        Current behavior: notify all subscribers including the
+        originator. Clients are responsible for deduping if they
+        care (most don't - re-fetching is cheap and idempotent).
+        """
         from moreradicale.websync.manager import websync_manager, NotificationType
 
         messages = []
         websync_manager.register_connection("conn-1", "user1", messages.append)
         websync_manager.subscribe("conn-1", "/user1/calendar/")
 
-        # Notify with same user
         websync_manager.notify(
             NotificationType.UPDATE,
             "/user1/calendar/event.ics",
             user="user1"  # Same as connection user
         )
 
-        # Should not receive notification
-        assert len(messages) == 0
+        assert len(messages) == 1, \
+            "originator's other tabs must receive their own change"
 
     def test_connection_is_subscribed(self):
         """Test subscription matching."""
