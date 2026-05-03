@@ -269,6 +269,11 @@ class SharingHandler:
                 # Drop the back-reference so the sharee's UI stops showing
                 # this calendar (no-op if they declined it earlier).
                 self._update_sharee_shared_list(sharee, collection.path, add=False)
+                # If a pending invite is still outstanding (sharee never
+                # accepted before owner revoked), kill it - it's now an
+                # invitation to access that no longer exists.
+                self.notification_manager.delete_invite_notifications_for(
+                    sharee, collection.path, _locked=True)
                 # Notify the sharee that their access was revoked
                 collection_name = collection.get_meta("D:displayname") or collection.path
                 self.notification_manager.create_revocation_notification(
@@ -335,6 +340,13 @@ class SharingHandler:
                 # so always remove on decline (no-op if it wasn't there).
                 self._update_sharee_shared_list(user, collection.path, add=False)
                 logger.info("User %s declined share of %s", user, collection.path)
+
+            # Cascade-delete the originating invite notification so a UI
+            # re-fetched after this point doesn't show a "pending" badge for
+            # an invite that's now resolved. Same write lock that the share
+            # was processed under, so pass _locked=True.
+            self.notification_manager.delete_invite_notifications_for(
+                user, collection.path, _locked=True)
 
             # Notify the calendar owner of the response
             if collection.owner:

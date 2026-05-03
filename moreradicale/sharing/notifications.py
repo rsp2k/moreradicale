@@ -539,6 +539,84 @@ class NotificationManager:
 
         return False
 
+    def delete_invite_notifications_for(self, username: str,
+                                        collection_path: str,
+                                        _locked: bool = False) -> int:
+        """Delete every pending invite notification for a sharee+calendar pair.
+
+        Used to cascade-clean the sharee's notification inbox when their share
+        state changes server-side - whether they accepted/declined the share
+        themselves (notification is now actionless) or the owner revoked the
+        share entirely. Without this, the invite notification stays on disk
+        and re-renders as a "pending" invite in any subsequently-loaded UI,
+        diverging from the actual share state.
+
+        Args:
+            username: Sharee whose notifications we're cleaning
+            collection_path: Owner-side calendar path that's the share target
+                (matched against shared_collection_path in the notification's
+                stored metadata; a leading slash is tolerated either way).
+            _locked: True when the caller already holds a write lock on
+                storage; we then skip re-acquiring (RwLock is not re-entrant).
+
+        Returns:
+            Count of notifications deleted.
+        """
+        import json
+
+        path = self.get_notification_collection_path(username)
+        normalized = collection_path.strip("/")
+
+        def _do_purge() -> int:
+            count = 0
+            try:
+                # Snapshot the list so we don't mutate while iterating
+                # (delete_collection invalidates the iterator).
+                candidates = list(self.storage.discover(path, depth="1"))
+            except Exception as e:
+                logger.debug("Notification discover failed for %s: %s",
+                             username, e)
+                return 0
+            for item in candidates:
+                if not hasattr(item, "get_meta"):
+                    continue
+                notif_json = item.get_meta(NOTIFICATIONS_PROPERTY)
+                if not notif_json:
+                    continue
+                try:
+                    data = json.loads(notif_json)
+                except json.JSONDecodeError:
+                    continue
+                if data.get("type") != NotificationType.INVITE.value:
+                    continue
+                stored_path = (data.get("shared_collection_path") or "").strip("/")
+                if stored_path != normalized:
+                    continue
+                # Storage exposes delete on the collection itself, not on
+                # the BaseStorage facade (matches the multifilesystem
+                # CollectionPartDelete.delete signature). Same call site as
+                # standard collection deletion in app/delete.py.
+                try:
+                    item.delete()
+                    count += 1
+                    logger.info("Cascade-deleted invite notification %s for %s "
+                                "(matched calendar %s)",
+                                data.get("uid"), username, normalized)
+                except Exception as e:
+                    logger.warning("Failed to cascade-delete %s: %s",
+                                   item.path, e)
+            return count
+
+        if _locked:
+            return _do_purge()
+        try:
+            with self.storage.acquire_lock("w", username):
+                return _do_purge()
+        except Exception as e:
+            logger.warning("Failed to cascade-clean notifications for %s: %s",
+                           username, e)
+            return 0
+
     def _store_notification(self, username: str,
                             notification: Notification,
                             _locked: bool = False) -> bool:
