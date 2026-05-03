@@ -29,7 +29,7 @@ import base64
 import json
 import logging
 import os
-from typing import Any, Awaitable, Callable, Dict, Optional, cast
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from asgiref.wsgi import WsgiToAsgi
 
