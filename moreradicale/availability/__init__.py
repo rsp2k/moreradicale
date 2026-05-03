@@ -5,13 +5,10 @@ Provides VAVAILABILITY component support for expressing
 when a calendar user is typically available or busy.
 """
 
-from moreradicale.availability.component import (
-    VAvailability,
-    Available,
-    BusyType,
-    parse_availability,
-    serialize_availability,
-)
+from moreradicale.availability.component import (Available, BusyType,
+                                                 VAvailability,
+                                                 parse_availability,
+                                                 serialize_availability)
 from moreradicale.availability.processor import AvailabilityProcessor
 
 __all__ = [

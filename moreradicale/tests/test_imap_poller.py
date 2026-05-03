@@ -27,12 +27,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from moreradicale.itip.imap_poller import (
-    IMAPPoller,
-    IMAPAuthenticationError,
-    get_imap_poller,
-)
-
+from moreradicale.itip.imap_poller import (IMAPAuthenticationError, IMAPPoller,
+                                           get_imap_poller)
 
 # Sample iTIP REPLY message
 SAMPLE_REPLY = """\

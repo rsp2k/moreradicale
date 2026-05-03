@@ -51,9 +51,8 @@ class VersioningHandler:
         """Lazy-load the GitMetadataReader."""
         if self._git_reader is None and self._enabled:
             try:
-                from moreradicale.storage.multifilesystem.git_metadata import (
+                from moreradicale.storage.multifilesystem.git_metadata import \
                     GitMetadataReader
-                )
                 storage_folder = self.configuration.get(
                     "storage", "filesystem_folder")
                 max_history = self.configuration.get(

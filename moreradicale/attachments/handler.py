@@ -30,18 +30,13 @@ from typing import TYPE_CHECKING, Dict, Optional
 from urllib.parse import parse_qs, unquote
 
 from moreradicale import httputils, storage, types
-from moreradicale.attachments import (
-    ATTACHMENT_ADD,
-    ATTACHMENT_REMOVE,
-    ATTACHMENT_UPDATE,
-    CAL_MANAGED_ID_HEADER,
-    AttachmentManager,
-    AttachmentSizeError,
-    add_managed_attach,
-    count_managed_attachments,
-    remove_managed_attach,
-    update_managed_attach,
-)
+from moreradicale.attachments import (ATTACHMENT_ADD, ATTACHMENT_REMOVE,
+                                      ATTACHMENT_UPDATE, CAL_MANAGED_ID_HEADER,
+                                      AttachmentManager, AttachmentSizeError,
+                                      add_managed_attach,
+                                      count_managed_attachments,
+                                      remove_managed_attach,
+                                      update_managed_attach)
 from moreradicale.attachments.storage import AttachmentStorage
 from moreradicale.log import logger
 

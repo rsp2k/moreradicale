@@ -7,9 +7,9 @@ user availability preferences.
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Optional, List
+from typing import List, Optional
 
 
 class BusyType(Enum):

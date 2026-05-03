@@ -25,7 +25,8 @@ from typing import Optional
 
 import vobject
 
-from moreradicale.itip.models import ITIPMethod, ITIPMessage, ITIPAttendee, AttendeePartStat
+from moreradicale.itip.models import (AttendeePartStat, ITIPAttendee,
+                                      ITIPMessage, ITIPMethod)
 
 
 class ITIPValidationError(ValueError):

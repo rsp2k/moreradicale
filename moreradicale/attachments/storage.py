@@ -27,12 +27,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
-from moreradicale.attachments import (
-    AttachmentManager,
-    AttachmentMetadata,
-    AttachmentNotFoundError,
-    AttachmentSizeError,
-)
+from moreradicale.attachments import (AttachmentManager, AttachmentMetadata,
+                                      AttachmentNotFoundError,
+                                      AttachmentSizeError)
 from moreradicale.log import logger
 
 if TYPE_CHECKING:

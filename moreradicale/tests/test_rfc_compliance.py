@@ -25,7 +25,6 @@ import vobject
 
 from moreradicale.tests import BaseTest
 
-
 # Sample VFREEBUSY component for testing
 VFREEBUSY_ITEM = """BEGIN:VCALENDAR
 VERSION:2.0

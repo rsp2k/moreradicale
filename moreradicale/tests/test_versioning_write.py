@@ -22,7 +22,6 @@ Tests CHECKOUT, CHECKIN, UNCHECKOUT, and VERSION-CONTROL methods.
 
 import subprocess
 
-
 from moreradicale.tests import BaseTest
 
 # Sample calendar event for testing
@@ -173,7 +172,8 @@ class TestGitMetadataWriter:
 
     def test_is_available_without_git_repo(self, tmp_path):
         """Test is_available returns False when not a git repo."""
-        from moreradicale.storage.multifilesystem.git_writer import GitMetadataWriter
+        from moreradicale.storage.multifilesystem.git_writer import \
+            GitMetadataWriter
 
         writer = GitMetadataWriter(str(tmp_path))
         # Should be False since tmp_path isn't a git repo
@@ -181,7 +181,8 @@ class TestGitMetadataWriter:
 
     def test_create_version_in_git_repo(self, tmp_path):
         """Test creating a version in a git repository."""
-        from moreradicale.storage.multifilesystem.git_writer import GitMetadataWriter
+        from moreradicale.storage.multifilesystem.git_writer import \
+            GitMetadataWriter
 
         # Initialize git repo
         subprocess.run(["git", "init"], cwd=tmp_path, check=True,
@@ -424,9 +425,10 @@ class TestCheckoutExpiration:
 
     def test_expired_checkout_cleared(self, tmp_path):
         """Test that expired checkouts are automatically cleared."""
-        from datetime import datetime, timezone, timedelta
-        from moreradicale.versioning.checkout_manager import CheckoutManager
         import json
+        from datetime import datetime, timedelta, timezone
+
+        from moreradicale.versioning.checkout_manager import CheckoutManager
 
         storage_folder = str(tmp_path)
         # 1 second timeout for testing

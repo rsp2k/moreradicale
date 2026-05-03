@@ -2,9 +2,9 @@
 Data models for iTIP (RFC 5546) messages.
 """
 
-from enum import Enum
 from dataclasses import dataclass
-from typing import Optional, List
+from enum import Enum
+from typing import List, Optional
 
 
 class ITIPMethod(Enum):

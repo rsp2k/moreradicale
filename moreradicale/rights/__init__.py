@@ -32,7 +32,7 @@ Take a look at the class ``BaseRights`` if you want to implement your own.
 
 """
 
-from typing import Optional, Sequence, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Sequence, Set
 
 from moreradicale import config, utils
 

@@ -5,8 +5,7 @@ All tenant extractors inherit from BaseTenantExtractor and implement
 the extract() method to identify tenants from requests.
 """
 
-from typing import Optional, TYPE_CHECKING
-
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from moreradicale import config, types

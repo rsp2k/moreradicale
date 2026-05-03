@@ -12,7 +12,8 @@ class TestTaskRelationships:
 
     def test_parse_reltype_parent(self):
         """Test parsing RELTYPE=PARENT."""
-        from moreradicale.vtodo.relationships import parse_reltype, RelationType
+        from moreradicale.vtodo.relationships import (RelationType,
+                                                      parse_reltype)
 
         assert parse_reltype("PARENT") == RelationType.PARENT
         assert parse_reltype("parent") == RelationType.PARENT
@@ -20,20 +21,23 @@ class TestTaskRelationships:
 
     def test_parse_reltype_child(self):
         """Test parsing RELTYPE=CHILD."""
-        from moreradicale.vtodo.relationships import parse_reltype, RelationType
+        from moreradicale.vtodo.relationships import (RelationType,
+                                                      parse_reltype)
 
         assert parse_reltype("CHILD") == RelationType.CHILD
 
     def test_parse_reltype_depends_on(self):
         """Test parsing RELTYPE=DEPENDS-ON (RFC 9253)."""
-        from moreradicale.vtodo.relationships import parse_reltype, RelationType
+        from moreradicale.vtodo.relationships import (RelationType,
+                                                      parse_reltype)
 
         assert parse_reltype("DEPENDS-ON") == RelationType.DEPENDS_ON
         assert parse_reltype("depends-on") == RelationType.DEPENDS_ON
 
     def test_parse_reltype_default(self):
         """Test default RELTYPE when not specified."""
-        from moreradicale.vtodo.relationships import parse_reltype, RelationType
+        from moreradicale.vtodo.relationships import (RelationType,
+                                                      parse_reltype)
 
         # RFC 5545: Default is PARENT
         assert parse_reltype(None) == RelationType.PARENT
@@ -41,13 +45,15 @@ class TestTaskRelationships:
 
     def test_parse_reltype_unknown(self):
         """Test parsing unknown RELTYPE."""
-        from moreradicale.vtodo.relationships import parse_reltype, RelationType
+        from moreradicale.vtodo.relationships import (RelationType,
+                                                      parse_reltype)
 
         assert parse_reltype("CUSTOM-TYPE") == RelationType.X_UNKNOWN
 
     def test_extract_relationships_basic(self):
         """Test extracting RELATED-TO from VTODO."""
-        from moreradicale.vtodo.relationships import extract_relationships, RelationType
+        from moreradicale.vtodo.relationships import (RelationType,
+                                                      extract_relationships)
 
         ics = """BEGIN:VCALENDAR
 VERSION:2.0
@@ -68,7 +74,8 @@ END:VCALENDAR"""
 
     def test_extract_relationships_multiple(self):
         """Test extracting multiple RELATED-TO properties."""
-        from moreradicale.vtodo.relationships import extract_relationships, RelationType
+        from moreradicale.vtodo.relationships import (RelationType,
+                                                      extract_relationships)
 
         ics = """BEGIN:VCALENDAR
 VERSION:2.0
@@ -95,7 +102,8 @@ END:VCALENDAR"""
 
     def test_task_relationship_is_blocking(self):
         """Test that DEPENDS-ON relationships are blocking."""
-        from moreradicale.vtodo.relationships import TaskRelationship, RelationType
+        from moreradicale.vtodo.relationships import (RelationType,
+                                                      TaskRelationship)
 
         dep_rel = TaskRelationship("task-1", "prereq-1", RelationType.DEPENDS_ON)
         parent_rel = TaskRelationship("task-1", "parent-1", RelationType.PARENT)
@@ -136,7 +144,8 @@ END:VCALENDAR"""
 
     def test_get_root_tasks(self):
         """Test finding root tasks (no parents)."""
-        from moreradicale.vtodo.relationships import build_task_hierarchy, get_root_tasks
+        from moreradicale.vtodo.relationships import (build_task_hierarchy,
+                                                      get_root_tasks)
 
         parent_ics = """BEGIN:VCALENDAR
 VERSION:2.0
@@ -476,7 +485,8 @@ class TestRelationshipSerialization:
 
     def test_relationship_to_dict(self):
         """Test TaskRelationship to_dict conversion."""
-        from moreradicale.vtodo.relationships import TaskRelationship, RelationType
+        from moreradicale.vtodo.relationships import (RelationType,
+                                                      TaskRelationship)
 
         rel = TaskRelationship("task-1", "parent-1", RelationType.PARENT)
         d = rel.to_dict()
@@ -487,7 +497,8 @@ class TestRelationshipSerialization:
 
     def test_relationship_depends_on_to_dict(self):
         """Test DEPENDS-ON relationship serialization."""
-        from moreradicale.vtodo.relationships import TaskRelationship, RelationType
+        from moreradicale.vtodo.relationships import (RelationType,
+                                                      TaskRelationship)
 
         rel = TaskRelationship("task-1", "prereq-1", RelationType.DEPENDS_ON)
         d = rel.to_dict()

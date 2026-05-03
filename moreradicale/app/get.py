@@ -101,6 +101,7 @@ class ApplicationPartGet(ApplicationBase):
                 # Handle notification resources (stored as collections with XML in props)
                 if "/notifications/" in item.path:
                     import json
+
                     from moreradicale.sharing.notifications import Notification
                     notif_json = item.get_meta(NOTIFICATIONS_PROPERTY)
                     if notif_json:
@@ -145,7 +146,8 @@ class ApplicationPartGet(ApplicationBase):
 
             # RFC 7809: Filter VTIMEZONE based on CalDAV-Timezones header
             if isinstance(item, storage.BaseCollection) and item.tag == "VCALENDAR":
-                from moreradicale.tzdist.rfc7809 import filter_calendar_response
+                from moreradicale.tzdist.rfc7809 import \
+                    filter_calendar_response
                 answer = filter_calendar_response(answer, environ, self.configuration)
 
             return client.OK, headers, answer, None

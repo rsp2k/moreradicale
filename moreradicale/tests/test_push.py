@@ -287,7 +287,7 @@ class TestVAPIDKeyManager:
 
     def test_vapid_key_generation(self):
         """Test VAPID key generation."""
-        from moreradicale.push.vapid import VAPIDKeyManager, HAS_CRYPTOGRAPHY
+        from moreradicale.push.vapid import HAS_CRYPTOGRAPHY, VAPIDKeyManager
 
         if not HAS_CRYPTOGRAPHY:
             pytest.skip("cryptography package not available")
@@ -302,7 +302,7 @@ class TestVAPIDKeyManager:
 
     def test_vapid_key_persistence(self):
         """Test that VAPID keys persist across instances."""
-        from moreradicale.push.vapid import VAPIDKeyManager, HAS_CRYPTOGRAPHY
+        from moreradicale.push.vapid import HAS_CRYPTOGRAPHY, VAPIDKeyManager
 
         if not HAS_CRYPTOGRAPHY:
             pytest.skip("cryptography package not available")
@@ -324,7 +324,7 @@ class TestVAPIDKeyManager:
 
     def test_vapid_claims(self):
         """Test VAPID claims generation."""
-        from moreradicale.push.vapid import VAPIDKeyManager, HAS_CRYPTOGRAPHY
+        from moreradicale.push.vapid import HAS_CRYPTOGRAPHY, VAPIDKeyManager
 
         if not HAS_CRYPTOGRAPHY:
             pytest.skip("cryptography package not available")
@@ -342,7 +342,7 @@ class TestVAPIDKeyManager:
 
     def test_vapid_public_key_format(self):
         """Test that public key is in correct format for browsers."""
-        from moreradicale.push.vapid import VAPIDKeyManager, HAS_CRYPTOGRAPHY
+        from moreradicale.push.vapid import HAS_CRYPTOGRAPHY, VAPIDKeyManager
 
         if not HAS_CRYPTOGRAPHY:
             pytest.skip("cryptography package not available")

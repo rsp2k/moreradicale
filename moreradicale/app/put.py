@@ -37,8 +37,8 @@ from moreradicale import (httputils, pathutils, rights, storage, types, utils,
                           xmlutils)
 from moreradicale.app.base import Access, ApplicationBase
 from moreradicale.hook import HookNotificationItem, HookNotificationItemTypes
-from moreradicale.log import logger
 from moreradicale.itip.processor import ITIPProcessor
+from moreradicale.log import logger
 
 
 def _auto_version_item(configuration, path: str, user: str,
@@ -60,7 +60,8 @@ def _auto_version_item(configuration, path: str, user: str,
         return
 
     try:
-        from moreradicale.storage.multifilesystem.git_writer import GitMetadataWriter
+        from moreradicale.storage.multifilesystem.git_writer import \
+            GitMetadataWriter
 
         storage_folder = configuration.get("storage", "filesystem_folder")
         git_writer = GitMetadataWriter(storage_folder)

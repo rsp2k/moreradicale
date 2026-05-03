@@ -21,7 +21,8 @@ Configuration:
 """
 
 from moreradicale.directory.gateway import DirectoryGateway
-from moreradicale.directory.vcard_mapper import VCardMapper, DEFAULT_LDAP_MAPPING
+from moreradicale.directory.vcard_mapper import (DEFAULT_LDAP_MAPPING,
+                                                 VCardMapper)
 
 __all__ = [
     "DirectoryGateway",

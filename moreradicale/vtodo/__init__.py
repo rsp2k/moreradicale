@@ -12,16 +12,11 @@ This module provides:
 - Task filtering utilities for STATUS, PERCENT-COMPLETE, etc.
 """
 
-from moreradicale.vtodo.relationships import (
-    TaskRelationship,
-    RelationType,
-    extract_relationships,
-    find_related_tasks,
-)
-from moreradicale.vtodo.properties import (
-    get_task_properties,
-    TASK_SUPPORTED_PROPERTIES,
-)
+from moreradicale.vtodo.properties import (TASK_SUPPORTED_PROPERTIES,
+                                           get_task_properties)
+from moreradicale.vtodo.relationships import (RelationType, TaskRelationship,
+                                              extract_relationships,
+                                              find_related_tasks)
 
 __all__ = [
     "TaskRelationship",

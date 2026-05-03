@@ -9,7 +9,7 @@ Configuration:
     header_name = X-Tenant-ID
 """
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from moreradicale.log import logger
 from moreradicale.tenant import TenantContext

@@ -84,7 +84,8 @@ class ApplicationPartPost(ApplicationBase):
                          path: str, user: str,
                          collection: storage.BaseCollection) -> types.WSGIResponse:
         """Handle XML POST requests (sharing operations)."""
-        from moreradicale.sharing.handler import SharingHandler, is_sharing_request
+        from moreradicale.sharing.handler import (SharingHandler,
+                                                  is_sharing_request)
 
         # Read and parse XML body
         try:

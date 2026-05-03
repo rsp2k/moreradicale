@@ -40,7 +40,8 @@ from typing import TYPE_CHECKING, Optional
 from moreradicale import pathutils
 from moreradicale.log import logger
 from moreradicale.rights import owner_only
-from moreradicale.sharing import SHARES_PROPERTY, PROXY_READ_PROPERTY, PROXY_WRITE_PROPERTY
+from moreradicale.sharing import (PROXY_READ_PROPERTY, PROXY_WRITE_PROPERTY,
+                                  SHARES_PROPERTY)
 
 if TYPE_CHECKING:
     from moreradicale import config, storage

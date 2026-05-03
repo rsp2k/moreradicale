@@ -20,12 +20,12 @@
 import os
 import sys
 from tempfile import TemporaryDirectory
-from typing import IO, AnyStr, ClassVar, Iterator, Optional, Type
+from typing import (IO, TYPE_CHECKING, AnyStr, ClassVar, Iterator, Optional,
+                    Type)
 
 from moreradicale import config, logger, pathutils, storage, types, utils
 from moreradicale.storage import multifilesystem  # noqa:F401
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from moreradicale.tenant import TenantContext
 

@@ -38,13 +38,12 @@ import zlib
 from http import client
 from typing import Iterable, List, Mapping, Tuple, Union
 
-from moreradicale import config, httputils, log, pathutils, tenant, types, utils
+from moreradicale import (config, httputils, log, pathutils, tenant, types,
+                          utils)
 from moreradicale.app.base import ApplicationBase
-from moreradicale.tenant.config import TenantAwareConfiguration
 from moreradicale.app.checkin import ApplicationPartCheckin
 from moreradicale.app.checkout import ApplicationPartCheckout
 from moreradicale.app.delete import ApplicationPartDelete
-from moreradicale.app.webhook import WebhookHandler
 from moreradicale.app.get import ApplicationPartGet
 from moreradicale.app.head import ApplicationPartHead
 from moreradicale.app.label import ApplicationLabelMixin
@@ -60,8 +59,10 @@ from moreradicale.app.put import ApplicationPartPut
 from moreradicale.app.report import ApplicationPartReport
 from moreradicale.app.uncheckout import ApplicationPartUncheckout
 from moreradicale.app.versioncontrol import ApplicationPartVersionControl
+from moreradicale.app.webhook import WebhookHandler
 from moreradicale.auth import AuthContext
 from moreradicale.log import logger
+from moreradicale.tenant.config import TenantAwareConfiguration
 
 # Combination of types.WSGIStartResponse and WSGI application return value
 _IntermediateResponse = Tuple[str, List[Tuple[str, str]], Iterable[bytes]]

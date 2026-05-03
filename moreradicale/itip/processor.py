@@ -4,18 +4,19 @@ iTIP message processor for implicit scheduling.
 
 import logging
 import re
-import vobject
 from datetime import datetime
 from typing import List, Optional, Tuple
-from moreradicale.itip.models import (
-    ITIPMethod, ITIPAttendee, ITIPMessage, AttendeePartStat,
-    ScheduleStatus, ScheduleAgent
-)
-from moreradicale.itip.router import extract_email, route_attendee, get_inbox_path
-from moreradicale.itip.validator import needs_scheduling
-from moreradicale import item as radicale_item
-from moreradicale import email_utils
 
+import vobject
+
+from moreradicale import email_utils
+from moreradicale import item as radicale_item
+from moreradicale.itip.models import (AttendeePartStat, ITIPAttendee,
+                                      ITIPMessage, ITIPMethod, ScheduleAgent,
+                                      ScheduleStatus)
+from moreradicale.itip.router import (extract_email, get_inbox_path,
+                                      route_attendee)
+from moreradicale.itip.validator import needs_scheduling
 
 logger = logging.getLogger(__name__)
 
@@ -2123,9 +2124,10 @@ class ITIPProcessor:
         Returns:
             HTTP response with schedule-response XML
         """
-        from moreradicale import httputils, xmlutils
-        from http import client
         import xml.etree.ElementTree as ET
+        from http import client
+
+        from moreradicale import httputils, xmlutils
 
         try:
             # Get the component (VEVENT/VTODO/VJOURNAL)
@@ -2226,9 +2228,10 @@ class ITIPProcessor:
         Returns:
             HTTP response with schedule-response XML
         """
-        from moreradicale import httputils, xmlutils
-        from http import client
         import xml.etree.ElementTree as ET
+        from http import client
+
+        from moreradicale import httputils, xmlutils
 
         try:
             # Get the component (VEVENT/VTODO/VJOURNAL)
@@ -2395,9 +2398,10 @@ class ITIPProcessor:
         Returns:
             HTTP response with schedule-response XML
         """
-        from moreradicale import httputils, xmlutils
-        from http import client
         import xml.etree.ElementTree as ET
+        from http import client
+
+        from moreradicale import httputils, xmlutils
 
         try:
             # Get the component (VEVENT/VTODO/VJOURNAL)
@@ -2595,9 +2599,10 @@ class ITIPProcessor:
         Returns:
             HTTP response with schedule-response containing VFREEBUSY for each attendee
         """
-        from moreradicale import httputils, xmlutils
-        from http import client
         import xml.etree.ElementTree as ET
+        from http import client
+
+        from moreradicale import httputils, xmlutils
 
         try:
             # Get the VFREEBUSY component
@@ -2716,9 +2721,11 @@ class ITIPProcessor:
         Returns:
             iCalendar text with METHOD:REPLY and VFREEBUSY component
         """
-        from moreradicale.itip import availability
-        from vobject.icalendar import utc as vobj_utc
         from datetime import datetime
+
+        from vobject.icalendar import utc as vobj_utc
+
+        from moreradicale.itip import availability
 
         # Build time-range filter element for the query
         # Convert datetime to ISO format strings
@@ -2860,6 +2867,7 @@ class ITIPProcessor:
             List of (start, end) tuples for each occurrence
         """
         from datetime import datetime, timedelta
+
         from vobject.icalendar import utc as vobj_utc
 
         occurrences = []
@@ -3764,6 +3772,7 @@ class ITIPProcessor:
         """
         try:
             from datetime import datetime
+
             from vobject.icalendar import utc as vobj_utc
 
             # Create new VCALENDAR for the notification
@@ -3936,6 +3945,7 @@ class ITIPProcessor:
 
             # Parse recurrence_id and set as proper datetime/date
             from datetime import datetime as dt
+
             from vobject.icalendar import utc as vobj_utc
 
             recurrence_dt = None
@@ -4058,6 +4068,7 @@ class ITIPProcessor:
         """
         try:
             from datetime import datetime as dt
+
             from vobject.icalendar import utc as vobj_utc
 
             # Create new exception component
@@ -4184,9 +4195,10 @@ class ITIPProcessor:
 
     def _build_schedule_response_success(self, base_prefix: str, attendee_email: str):
         """Build successful RFC 6638 schedule-response."""
-        from moreradicale import xmlutils
-        from http import client
         import xml.etree.ElementTree as ET
+        from http import client
+
+        from moreradicale import xmlutils
 
         # Build schedule-response XML
         response = ET.Element(xmlutils.make_clark("C:schedule-response"))
@@ -4233,9 +4245,10 @@ class ITIPProcessor:
         Returns:
             HTTP response tuple (status, headers, body, None)
         """
-        from moreradicale import xmlutils
-        from http import client
         import xml.etree.ElementTree as ET
+        from http import client
+
+        from moreradicale import xmlutils
 
         # Map ScheduleStatus to RFC 6638 status codes
         status_map = {
@@ -4295,9 +4308,10 @@ class ITIPProcessor:
                 - 5.1: Could not be delivered
                 - 5.3: No authority / Invalid date-time
         """
-        from moreradicale import xmlutils
-        from http import client
         import xml.etree.ElementTree as ET
+        from http import client
+
+        from moreradicale import xmlutils
 
         response = ET.Element(xmlutils.make_clark("C:schedule-response"))
         response_elem = ET.SubElement(response, xmlutils.make_clark("C:response"))

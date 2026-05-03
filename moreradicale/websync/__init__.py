@@ -18,13 +18,9 @@ Features:
 - Graceful connection handling
 """
 
-from moreradicale.websync.manager import (
-    WebSyncManager,
-    WebSyncConnection,
-    ChangeNotification,
-    NotificationType,
-)
 from moreradicale.websync.handler import WebSyncHandler
+from moreradicale.websync.manager import (ChangeNotification, NotificationType,
+                                          WebSyncConnection, WebSyncManager)
 
 __all__ = [
     "WebSyncManager",

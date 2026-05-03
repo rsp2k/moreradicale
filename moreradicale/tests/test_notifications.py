@@ -28,10 +28,12 @@ Tests cover:
 import xml.etree.ElementTree as ET
 
 from moreradicale import xmlutils
-from moreradicale.sharing.notifications import (
-    Notification, NotificationType, NotificationManager,
-    NOTIFICATIONS_PROPERTY, NOTIFICATIONS_COLLECTION, CS, DAV
-)
+from moreradicale.sharing.notifications import (CS, DAV,
+                                                NOTIFICATIONS_COLLECTION,
+                                                NOTIFICATIONS_PROPERTY,
+                                                Notification,
+                                                NotificationManager,
+                                                NotificationType)
 
 
 class TestNotificationType:

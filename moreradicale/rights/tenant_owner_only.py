@@ -29,7 +29,7 @@ in the same tenant. In filesystem isolation mode, paths are already
 isolated at the storage layer.
 """
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import moreradicale.rights.owner_only as owner_only
 from moreradicale import config, pathutils

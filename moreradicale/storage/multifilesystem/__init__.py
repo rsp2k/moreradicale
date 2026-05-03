@@ -31,7 +31,8 @@ from typing import ClassVar, Iterator, Optional, Type
 
 from moreradicale import config, pathutils, utils
 from moreradicale.log import logger
-from moreradicale.storage.multifilesystem.base import CollectionBase, StorageBase
+from moreradicale.storage.multifilesystem.base import (CollectionBase,
+                                                       StorageBase)
 from moreradicale.storage.multifilesystem.cache import CollectionPartCache
 from moreradicale.storage.multifilesystem.create_collection import \
     StoragePartCreateCollection

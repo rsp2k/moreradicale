@@ -32,7 +32,9 @@ import xml.etree.ElementTree as ET
 from http import client
 from typing import Optional
 
-from moreradicale import httputils, item as radicale_item, types, xmlutils
+from moreradicale import httputils
+from moreradicale import item as radicale_item
+from moreradicale import types, xmlutils
 from moreradicale.app.base import ApplicationBase
 
 logger = logging.getLogger(__name__)
@@ -172,9 +174,8 @@ class ApplicationPartCheckout(ApplicationBase):
     def _get_git_reader(self):
         """Get git metadata reader."""
         try:
-            from moreradicale.storage.multifilesystem.git_metadata import (
+            from moreradicale.storage.multifilesystem.git_metadata import \
                 GitMetadataReader
-            )
             storage_folder = self.configuration.get("storage", "filesystem_folder")
             max_history = self.configuration.get("storage", "versioning_max_history")
             return GitMetadataReader(storage_folder, max_history)
@@ -184,7 +185,8 @@ class ApplicationPartCheckout(ApplicationBase):
     def _get_activity_manager(self):
         """Get activity manager."""
         try:
-            from moreradicale.versioning.activity_manager import ActivityManager
+            from moreradicale.versioning.activity_manager import \
+                ActivityManager
             storage_folder = self.configuration.get("storage", "filesystem_folder")
             return ActivityManager(storage_folder)
         except ImportError:

@@ -7,7 +7,7 @@ Provides per-tenant configuration overrides loaded from
 
 import os
 from configparser import RawConfigParser
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Optional
 
 from moreradicale.log import logger
 

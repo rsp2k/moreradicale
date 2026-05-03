@@ -24,14 +24,13 @@ with storage and rights systems.
 import os
 import tempfile
 
-
 from moreradicale import config, tenant
 from moreradicale.tenant import TenantContext
-from moreradicale.tenant.domain import Extractor as DomainExtractor
-from moreradicale.tenant.path_prefix import Extractor as PathPrefixExtractor
-from moreradicale.tenant.header import Extractor as HeaderExtractor
-from moreradicale.tenant.subdomain import Extractor as SubdomainExtractor
 from moreradicale.tenant.config import TenantAwareConfiguration
+from moreradicale.tenant.domain import Extractor as DomainExtractor
+from moreradicale.tenant.header import Extractor as HeaderExtractor
+from moreradicale.tenant.path_prefix import Extractor as PathPrefixExtractor
+from moreradicale.tenant.subdomain import Extractor as SubdomainExtractor
 from moreradicale.tests import BaseTest
 
 

@@ -27,11 +27,12 @@ import xml.etree.ElementTree as ET
 from http import client
 from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
-from moreradicale import config, httputils, pathutils, rights, storage, types, xmlutils
+from moreradicale import (config, httputils, pathutils, rights, storage, types,
+                          xmlutils)
 from moreradicale.app.base import Access, ApplicationBase
 from moreradicale.log import logger
-from moreradicale.sharing import (SHARES_PROPERTY, PROXY_READ_PROPERTY,
-                                  PROXY_WRITE_PROPERTY, InviteStatus, ShareAccess)
+from moreradicale.sharing import (PROXY_READ_PROPERTY, PROXY_WRITE_PROPERTY,
+                                  SHARES_PROPERTY, InviteStatus, ShareAccess)
 
 # RFC 3253 versioning support - lazy import
 _git_metadata_reader = None
@@ -43,8 +44,10 @@ def _get_git_metadata_reader(configuration: 'config.Configuration'):
     if _git_metadata_reader is None:
         if configuration.get("storage", "versioning"):
             try:
-                from moreradicale.storage.multifilesystem.git_metadata import GitMetadataReader
                 import os
+
+                from moreradicale.storage.multifilesystem.git_metadata import \
+                    GitMetadataReader
                 storage_folder = configuration.get("storage", "filesystem_folder")
                 collection_root = os.path.join(storage_folder, "collection-root")
                 max_history = configuration.get("storage", "versioning_max_history")
@@ -73,6 +76,7 @@ def _add_proxy_for_elements(element: ET.Element, user: str, proxy_type: str,
         configuration: Radicale configuration
     """
     import os
+
     from moreradicale import pathutils
 
     prop_name = PROXY_READ_PROPERTY if proxy_type == "read" else PROXY_WRITE_PROPERTY
@@ -437,6 +441,7 @@ def xml_propfind_response(
             # RFC 4331: Quota available bytes for the user
             if configuration.get("quota", "enabled") and is_collection:
                 from moreradicale import quota
+
                 # Get user from collection path (owner or path)
                 quota_user = collection.owner or path.strip("/").split("/")[0]
                 if quota_user:
@@ -454,6 +459,7 @@ def xml_propfind_response(
             # RFC 4331: Quota used bytes for the user
             if configuration.get("quota", "enabled") and is_collection:
                 from moreradicale import quota
+
                 # Get user from collection path (owner or path)
                 quota_user = collection.owner or path.strip("/").split("/")[0]
                 if quota_user:
@@ -954,7 +960,8 @@ def xml_propfind_response(
             assert not isinstance(item, storage.BaseCollection)
             if configuration.get("storage", "versioning") and item.href:
                 try:
-                    from moreradicale.versioning.activity_manager import ActivityManager
+                    from moreradicale.versioning.activity_manager import \
+                        ActivityManager
                     storage_folder = configuration.get("storage", "filesystem_folder")
                     activity_manager = ActivityManager(storage_folder)
 

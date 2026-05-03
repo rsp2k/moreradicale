@@ -186,8 +186,9 @@ class TestVCardMapper:
 
     def test_map_photo_attribute(self):
         """Test mapping photo attribute."""
-        from moreradicale.directory.vcard_mapper import VCardMapper
         import base64
+
+        from moreradicale.directory.vcard_mapper import VCardMapper
 
         mapper = VCardMapper()
 
@@ -295,6 +296,7 @@ class TestDirectoryGatewayConfig:
     def test_gateway_disabled_by_default(self):
         """Test gateway is disabled by default."""
         from unittest.mock import Mock
+
         from moreradicale.directory.gateway import DirectoryGateway
 
         config = Mock()
@@ -307,6 +309,7 @@ class TestDirectoryGatewayConfig:
     def test_gateway_virtual_path(self):
         """Test virtual path configuration."""
         from unittest.mock import Mock
+
         from moreradicale.directory.gateway import DirectoryGateway
 
         config = Mock()

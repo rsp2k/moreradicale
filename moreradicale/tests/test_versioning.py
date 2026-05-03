@@ -71,14 +71,16 @@ class TestGitMetadataReader(BaseTest):
 
     def test_git_available(self):
         """Test git availability detection."""
-        from moreradicale.storage.multifilesystem.git_metadata import GitMetadataReader
+        from moreradicale.storage.multifilesystem.git_metadata import \
+            GitMetadataReader
 
         reader = GitMetadataReader(self.temp_git_dir)
         assert reader.is_available() is True
 
     def test_git_not_available_non_repo(self):
         """Test detection of non-git directory."""
-        from moreradicale.storage.multifilesystem.git_metadata import GitMetadataReader
+        from moreradicale.storage.multifilesystem.git_metadata import \
+            GitMetadataReader
 
         non_git_dir = tempfile.mkdtemp()
         try:
@@ -89,7 +91,8 @@ class TestGitMetadataReader(BaseTest):
 
     def test_get_item_history(self):
         """Test retrieving version history for an item."""
-        from moreradicale.storage.multifilesystem.git_metadata import GitMetadataReader
+        from moreradicale.storage.multifilesystem.git_metadata import \
+            GitMetadataReader
 
         # Create a test file and make some commits
         test_file = os.path.join(self.temp_git_dir, "test.ics")
@@ -130,7 +133,8 @@ class TestGitMetadataReader(BaseTest):
 
     def test_get_current_version(self):
         """Test getting current version of an item."""
-        from moreradicale.storage.multifilesystem.git_metadata import GitMetadataReader
+        from moreradicale.storage.multifilesystem.git_metadata import \
+            GitMetadataReader
 
         # Create test file
         test_file = os.path.join(self.temp_git_dir, "test.ics")
@@ -159,7 +163,8 @@ class TestGitMetadataReader(BaseTest):
 
     def test_get_version_content(self):
         """Test retrieving content at a specific version."""
-        from moreradicale.storage.multifilesystem.git_metadata import GitMetadataReader
+        from moreradicale.storage.multifilesystem.git_metadata import \
+            GitMetadataReader
 
         # Create test file with multiple versions
         test_file = os.path.join(self.temp_git_dir, "test.ics")
@@ -213,7 +218,8 @@ class TestGitMetadataReader(BaseTest):
 
     def test_version_exists(self):
         """Test checking if a version exists."""
-        from moreradicale.storage.multifilesystem.git_metadata import GitMetadataReader
+        from moreradicale.storage.multifilesystem.git_metadata import \
+            GitMetadataReader
 
         # Create a commit
         test_file = os.path.join(self.temp_git_dir, "test.ics")
@@ -250,7 +256,8 @@ class TestGitMetadataReader(BaseTest):
 
     def test_invalid_sha_rejected(self):
         """Test that invalid SHA formats are rejected (security)."""
-        from moreradicale.storage.multifilesystem.git_metadata import GitMetadataReader
+        from moreradicale.storage.multifilesystem.git_metadata import \
+            GitMetadataReader
 
         reader = GitMetadataReader(self.temp_git_dir)
 

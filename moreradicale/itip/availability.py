@@ -39,9 +39,9 @@ See: https://datatracker.ietf.org/doc/html/rfc7953
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, date, timezone
-from typing import List, Optional, Tuple
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
+from typing import List, Optional, Tuple
 
 try:
     import vobject

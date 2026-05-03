@@ -12,11 +12,8 @@ Key components:
 Supports CalendarServer subscribed calendars (CS:source property).
 """
 
-from moreradicale.subscriptions.engine import (
-    SyncEngine,
-    SyncResult,
-    SyncStatus,
-)
+from moreradicale.subscriptions.engine import (SyncEngine, SyncResult,
+                                               SyncStatus)
 from moreradicale.subscriptions.manager import SubscriptionManager
 
 __all__ = [

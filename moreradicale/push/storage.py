@@ -54,6 +54,7 @@ class SubscriptionStorage:
     def _get_collection_path(self, user: str, collection_path: str) -> Path:
         """Get path for collection subscriptions."""
         import hashlib
+
         # Hash collection path for filesystem safety
         collection_hash = hashlib.sha256(collection_path.encode()).hexdigest()[:16]
         return self._get_user_path(user) / collection_hash

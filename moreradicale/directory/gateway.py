@@ -10,8 +10,9 @@ import threading
 from typing import Dict, Iterator, Optional, Tuple
 
 from moreradicale import config
+from moreradicale.directory.vcard_mapper import (DEFAULT_LDAP_MAPPING,
+                                                 VCardMapper)
 from moreradicale.log import logger
-from moreradicale.directory.vcard_mapper import VCardMapper, DEFAULT_LDAP_MAPPING
 
 
 class DirectoryGateway:

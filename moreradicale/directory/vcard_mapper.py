@@ -6,10 +6,9 @@ Supports standard LDAP schemas (inetOrgPerson, organizationalPerson)
 and Active Directory attributes.
 """
 
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
-import uuid
-
 
 # Default LDAP to vCard mapping
 # Format: ldap_attr -> (vcard_prop, vcard_params, transform)
@@ -355,6 +354,7 @@ class VCardMapper:
     def _dn_to_uid(self, dn: str) -> str:
         """Convert DN to a stable UID."""
         import hashlib
+
         # Use hash of DN for stable UID
         hash_val = hashlib.sha256(dn.encode()).hexdigest()[:16]
         return f"ldap-{hash_val}"

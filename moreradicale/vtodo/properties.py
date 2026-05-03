@@ -7,9 +7,9 @@ Provides CalDAV properties for task management:
 - task-status-set: Allowed STATUS values
 """
 
-from typing import Dict, List, Any
-import vobject
+from typing import Any, Dict, List
 
+import vobject
 
 # Task status values per RFC 5545
 TASK_STATUS_VALUES = [

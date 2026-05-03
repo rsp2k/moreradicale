@@ -110,6 +110,7 @@ class IMAPPoller:
         """Get or create ITIPProcessor instance."""
         if self._processor is None:
             from moreradicale.itip.processor import ITIPProcessor
+
             # ITIPProcessor expects (storage, configuration) - not (configuration, storage)!
             self._processor = ITIPProcessor(self._storage, self.configuration)
         return self._processor

@@ -8,12 +8,10 @@ Tests the subscription sync engine and manager including:
 - HTTP caching behavior
 """
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
-
 from moreradicale.tests import BaseTest
-
 
 # Sample ICS data for testing
 SAMPLE_ICS = """BEGIN:VCALENDAR
@@ -311,9 +309,8 @@ class TestSubscriptionManager:
 
     def test_should_refresh_with_backoff(self):
         """Test exponential backoff on failures."""
-        from moreradicale.subscriptions.manager import (
-            SubscriptionManager, SubscriptionState
-        )
+        from moreradicale.subscriptions.manager import (SubscriptionManager,
+                                                        SubscriptionState)
 
         mock_storage = Mock()
         config = Mock()
@@ -340,8 +337,9 @@ class TestSubscriptionHTTP:
 
     def test_fetch_not_modified_304(self):
         """Test handling of 304 Not Modified response."""
-        from moreradicale.subscriptions.engine import SyncEngine, SyncStatus
         from urllib.error import HTTPError
+
+        from moreradicale.subscriptions.engine import SyncEngine, SyncStatus
 
         config = Mock()
         config.get.side_effect = lambda s, k: {

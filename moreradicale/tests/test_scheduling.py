@@ -1455,9 +1455,11 @@ END:VCALENDAR"""
         self.propfind("/alice/", HTTP_DEPTH="1", login="alice:")
 
         # Query bob's availability using ITIPProcessor directly
-        from moreradicale.itip.processor import ITIPProcessor
         from datetime import datetime
+
         from vobject.icalendar import utc as vobj_utc
+
+        from moreradicale.itip.processor import ITIPProcessor
 
         processor = ITIPProcessor(self.application._storage, self.application.configuration)
 
@@ -1513,9 +1515,11 @@ END:VCALENDAR"""
                      transparent_event, CONTENT_TYPE="text/calendar", login="bob:")
 
         # Query bob's availability
-        from moreradicale.itip.processor import ITIPProcessor
         from datetime import datetime
+
         from vobject.icalendar import utc as vobj_utc
+
+        from moreradicale.itip.processor import ITIPProcessor
 
         processor = ITIPProcessor(self.application._storage, self.application.configuration)
 
@@ -1567,9 +1571,11 @@ END:VCALENDAR"""
                      tentative_event, CONTENT_TYPE="text/calendar", login="bob:")
 
         # Query bob's availability
-        from moreradicale.itip.processor import ITIPProcessor
         from datetime import datetime
+
         from vobject.icalendar import utc as vobj_utc
+
+        from moreradicale.itip.processor import ITIPProcessor
 
         processor = ITIPProcessor(self.application._storage, self.application.configuration)
 
@@ -1618,9 +1624,11 @@ END:VCALENDAR"""
                      cancelled_event, CONTENT_TYPE="text/calendar", login="bob:")
 
         # Query bob's availability
-        from moreradicale.itip.processor import ITIPProcessor
         from datetime import datetime
+
         from vobject.icalendar import utc as vobj_utc
+
+        from moreradicale.itip.processor import ITIPProcessor
 
         processor = ITIPProcessor(self.application._storage, self.application.configuration)
 
@@ -1640,10 +1648,12 @@ END:VCALENDAR"""
 
     def test_get_event_occurrences_single_event(self):
         """Test _get_event_occurrences for single (non-recurring) event."""
-        from moreradicale.itip.processor import ITIPProcessor
         from datetime import datetime
-        from vobject.icalendar import utc as vobj_utc
+
         import vobject
+        from vobject.icalendar import utc as vobj_utc
+
+        from moreradicale.itip.processor import ITIPProcessor
 
         processor = ITIPProcessor(None)
 
@@ -1666,10 +1676,12 @@ END:VCALENDAR"""
 
     def test_get_event_occurrences_outside_range(self):
         """Test _get_event_occurrences returns empty for events outside range."""
-        from moreradicale.itip.processor import ITIPProcessor
         from datetime import datetime
-        from vobject.icalendar import utc as vobj_utc
+
         import vobject
+        from vobject.icalendar import utc as vobj_utc
+
+        from moreradicale.itip.processor import ITIPProcessor
 
         processor = ITIPProcessor(None)
 
@@ -1973,7 +1985,7 @@ END:VCALENDAR"""
 
     def test_itip_attendee_model_delegation_fields(self):
         """Test ITIPAttendee model has delegation fields."""
-        from moreradicale.itip.models import ITIPAttendee, AttendeePartStat
+        from moreradicale.itip.models import AttendeePartStat, ITIPAttendee
 
         # Create attendee with delegation fields
         attendee = ITIPAttendee(
@@ -2043,8 +2055,9 @@ END:VCALENDAR"""
                      event_ics, CONTENT_TYPE="text/calendar", login="alice:")
 
         # Use processor to handle Carol's DECLINE reply
-        from moreradicale.itip.processor import ITIPProcessor
         import vobject
+
+        from moreradicale.itip.processor import ITIPProcessor
 
         processor = ITIPProcessor(self.application._storage, self.application.configuration)
 
@@ -2294,8 +2307,9 @@ END:VCALENDAR"""
                      event_ics, CONTENT_TYPE="text/calendar", login="alice:")
 
         # Bob delegates just the second occurrence to Carol
-        from moreradicale.itip.processor import ITIPProcessor
         import vobject
+
+        from moreradicale.itip.processor import ITIPProcessor
 
         processor = ITIPProcessor(self.application._storage, self.application.configuration)
 
@@ -2447,8 +2461,9 @@ END:VCALENDAR"""
         self.request("PUT", f"/alice/calendar/{event_uid}.ics",
                      event_ics, CONTENT_TYPE="text/calendar", login="alice:")
 
-        from moreradicale.itip.processor import ITIPProcessor
         import vobject
+
+        from moreradicale.itip.processor import ITIPProcessor
 
         processor = ITIPProcessor(self.application._storage, self.application.configuration)
 
@@ -2549,8 +2564,9 @@ END:VCALENDAR"""
         self.request("PUT", f"/alice/calendar/{event_uid}.ics",
                      event_ics, CONTENT_TYPE="text/calendar", login="alice:")
 
-        from moreradicale.itip.processor import ITIPProcessor
         import vobject
+
+        from moreradicale.itip.processor import ITIPProcessor
 
         processor = ITIPProcessor(self.application._storage, self.application.configuration)
 
@@ -2852,8 +2868,9 @@ END:VCALENDAR"""
 
     def test_vtodo_parse_message(self):
         """Test parsing VTODO iTIP message with VTODO-specific fields."""
-        from moreradicale.itip.validator import parse_itip_message
         import vobject
+
+        from moreradicale.itip.validator import parse_itip_message
 
         vtodo_ical = """BEGIN:VCALENDAR
 VERSION:2.0
@@ -3002,7 +3019,8 @@ class TestScheduleStatus(BaseTest):
 
     def test_internal_delivery_sets_delivered_status(self):
         """Test internal delivery sets SCHEDULE-STATUS=1.2 (DELIVERED)."""
-        from moreradicale.itip.models import ITIPAttendee, ITIPMethod, ITIPMessage, ScheduleStatus
+        from moreradicale.itip.models import (ITIPAttendee, ITIPMessage,
+                                              ITIPMethod, ScheduleStatus)
         from moreradicale.itip.processor import ITIPProcessor
 
         self.configure({"auth": {"type": "none"}})
@@ -3056,7 +3074,8 @@ END:VCALENDAR"""
 
     def test_internal_delivery_invalid_user_status(self):
         """Test internal delivery to non-existent user sets SCHEDULE-STATUS=3.7."""
-        from moreradicale.itip.models import ITIPAttendee, ITIPMethod, ITIPMessage, ScheduleStatus
+        from moreradicale.itip.models import (ITIPAttendee, ITIPMessage,
+                                              ITIPMethod, ScheduleStatus)
         from moreradicale.itip.processor import ITIPProcessor
 
         self.configure({"auth": {"type": "none"}})
@@ -3104,7 +3123,8 @@ END:VCALENDAR"""
 
     def test_external_delivery_without_email_sets_pending(self):
         """Test external delivery without email config sets SCHEDULE-STATUS=1.1 (PENDING)."""
-        from moreradicale.itip.models import ITIPAttendee, ITIPMethod, ITIPMessage, ScheduleStatus
+        from moreradicale.itip.models import (ITIPAttendee, ITIPMessage,
+                                              ITIPMethod, ScheduleStatus)
         from moreradicale.itip.processor import ITIPProcessor
 
         self.configure({"auth": {"type": "none"}})
@@ -3269,9 +3289,9 @@ class TestScheduleAgent(BaseTest):
 
     def test_schedule_agent_client_skips_internal_delivery(self):
         """Test SCHEDULE-AGENT=CLIENT skips delivery to internal attendee."""
-        from moreradicale.itip.models import (
-            ITIPAttendee, ITIPMethod, ITIPMessage, ScheduleAgent, ScheduleStatus
-        )
+        from moreradicale.itip.models import (ITIPAttendee, ITIPMessage,
+                                              ITIPMethod, ScheduleAgent,
+                                              ScheduleStatus)
         from moreradicale.itip.processor import ITIPProcessor
 
         self.configure({"auth": {"type": "none"}})
@@ -3331,9 +3351,9 @@ END:VCALENDAR"""
 
     def test_schedule_agent_none_skips_external_delivery(self):
         """Test SCHEDULE-AGENT=NONE skips delivery to external attendee."""
-        from moreradicale.itip.models import (
-            ITIPAttendee, ITIPMethod, ITIPMessage, ScheduleAgent, ScheduleStatus
-        )
+        from moreradicale.itip.models import (ITIPAttendee, ITIPMessage,
+                                              ITIPMethod, ScheduleAgent,
+                                              ScheduleStatus)
         from moreradicale.itip.processor import ITIPProcessor
 
         self.configure({"auth": {"type": "none"}})
@@ -3456,9 +3476,9 @@ END:VCALENDAR"""
 
     def test_schedule_agent_server_delivers(self):
         """Test SCHEDULE-AGENT=SERVER (default) delivers normally."""
-        from moreradicale.itip.models import (
-            ITIPAttendee, ITIPMethod, ITIPMessage, ScheduleAgent, ScheduleStatus
-        )
+        from moreradicale.itip.models import (ITIPAttendee, ITIPMessage,
+                                              ITIPMethod, ScheduleAgent,
+                                              ScheduleStatus)
         from moreradicale.itip.processor import ITIPProcessor
 
         self.configure({"auth": {"type": "none"}})
@@ -5594,8 +5614,8 @@ class TestGroupExpansion(BaseTest):
     def _write_groups_file(self, groups: dict) -> str:
         """Write a groups definition file and return the path."""
         import json
-        import tempfile
         import os
+        import tempfile
 
         fd, path = tempfile.mkstemp(suffix='.json')
         with os.fdopen(fd, 'w') as f:
@@ -5986,8 +6006,9 @@ class TestAttachmentHandling(BaseTest):
 
     def test_extract_inline_attachment(self):
         """Test extraction of inline base64 attachment."""
-        from moreradicale import email_utils
         import base64
+
+        from moreradicale import email_utils
 
         # Create a simple test attachment (a small PDF header)
         test_content = b"%PDF-1.4 test content"
@@ -6043,8 +6064,9 @@ END:VCALENDAR"""
 
     def test_extract_multiple_attachments(self):
         """Test extraction of multiple attachments."""
-        from moreradicale import email_utils
         import base64
+
+        from moreradicale import email_utils
 
         test_content = b"test file content"
         base64_content = base64.b64encode(test_content).decode('ascii')
@@ -6233,9 +6255,11 @@ END:VCALENDAR"""
 
     def test_available_occurrence_expansion(self):
         """Test expanding AVAILABLE recurrences within a time range."""
-        from moreradicale.itip.availability import AvailablePeriod
         from datetime import datetime
+
         from dateutil.tz import UTC
+
+        from moreradicale.itip.availability import AvailablePeriod
 
         # Create available period: every Monday 9am-5pm starting Jan 6, 2025
         available = AvailablePeriod(
@@ -6261,9 +6285,11 @@ END:VCALENDAR"""
 
     def test_vavailability_priority_ordering(self):
         """Test that VAVAILABILITY components are sorted by priority."""
-        from moreradicale.itip.availability import VAvailability
         from datetime import datetime
+
         from dateutil.tz import UTC
+
+        from moreradicale.itip.availability import VAvailability
 
         # Create components with different priorities
         low_priority = VAvailability(
@@ -6295,9 +6321,11 @@ END:VCALENDAR"""
 
     def test_merge_overlapping_busy_periods(self):
         """Test merging overlapping busy periods with priority."""
-        from moreradicale.itip.availability import _merge_busy_periods
         from datetime import datetime
+
         from dateutil.tz import UTC
+
+        from moreradicale.itip.availability import _merge_busy_periods
 
         periods = [
             (datetime(2025, 1, 1, 9, 0, tzinfo=UTC),
@@ -6317,8 +6345,9 @@ END:VCALENDAR"""
 
     def test_create_vavailability_helper(self):
         """Test the helper function for creating VAVAILABILITY iCalendar."""
-        from moreradicale.itip.availability import create_vavailability_ics
         from datetime import datetime
+
+        from moreradicale.itip.availability import create_vavailability_ics
 
         slots = [
             {

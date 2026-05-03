@@ -29,8 +29,8 @@ Related RFCs:
 
 import logging
 from datetime import datetime
-from typing import Optional, List
 from enum import Enum
+from typing import List, Optional
 
 try:
     import vobject
@@ -39,9 +39,8 @@ except ImportError:
     vobject = None
     vobj_utc = None
 
-from moreradicale.itip.models import (
-    ITIPMessage, ITIPAttendee, AttendeePartStat, ScheduleAgent
-)
+from moreradicale.itip.models import (AttendeePartStat, ITIPAttendee,
+                                      ITIPMessage, ScheduleAgent)
 
 logger = logging.getLogger(__name__)
 

@@ -41,7 +41,8 @@ import moreradicale.item as radicale_item
 from moreradicale import httputils, pathutils, storage, types, xmlutils
 from moreradicale.app.base import Access, ApplicationBase
 from moreradicale.item import filter as radicale_filter
-from moreradicale.item.filter import parse_calendar_timezone, set_default_floating_timezone
+from moreradicale.item.filter import (parse_calendar_timezone,
+                                      set_default_floating_timezone)
 from moreradicale.log import logger
 
 DT_FORMAT_TIMESTAMP: str = '%Y%m%dT%H%M%SZ'

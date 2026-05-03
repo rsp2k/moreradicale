@@ -28,11 +28,10 @@ Tests cover:
 
 import json
 
-from moreradicale.sharing import (
-    SharingManager, Share, ShareAccess, InviteStatus, Delegation,
-    SHARES_PROPERTY, PROXY_READ_PROPERTY, PROXY_WRITE_PROPERTY,
-    SCHEDULE_DELEGATES_PROPERTY
-)
+from moreradicale.sharing import (PROXY_READ_PROPERTY, PROXY_WRITE_PROPERTY,
+                                  SCHEDULE_DELEGATES_PROPERTY, SHARES_PROPERTY,
+                                  Delegation, InviteStatus, Share, ShareAccess,
+                                  SharingManager)
 from moreradicale.tests import BaseTest
 
 

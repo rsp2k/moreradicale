@@ -159,6 +159,7 @@ class TestMetricsHandler:
     def test_handler_disabled(self):
         """Test handler returns 404 when disabled."""
         from unittest.mock import Mock
+
         from moreradicale.metrics.handler import MetricsHandler
 
         config = Mock()
@@ -175,6 +176,7 @@ class TestMetricsHandler:
     def test_handler_requires_auth(self):
         """Test handler requires authentication when configured."""
         from unittest.mock import Mock
+
         from moreradicale.metrics.handler import MetricsHandler
 
         config = Mock()
@@ -193,6 +195,7 @@ class TestMetricsHandler:
     def test_handler_returns_metrics(self):
         """Test handler returns metrics when authenticated."""
         from unittest.mock import Mock
+
         from moreradicale.metrics.handler import MetricsHandler
 
         config = Mock()

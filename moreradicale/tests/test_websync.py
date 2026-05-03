@@ -7,6 +7,7 @@ Tests connection management, subscriptions, notifications, and frame handling.
 import json
 import struct
 import time
+
 import pytest
 
 
@@ -77,7 +78,8 @@ class TestWebSyncManager:
 
     def test_notify_subscribed_connections(self):
         """Test notification delivery to subscribed connections."""
-        from moreradicale.websync.manager import websync_manager, NotificationType
+        from moreradicale.websync.manager import (NotificationType,
+                                                  websync_manager)
 
         messages1 = []
         messages2 = []
@@ -116,7 +118,8 @@ class TestWebSyncManager:
         originator. Clients are responsible for deduping if they
         care (most don't - re-fetching is cheap and idempotent).
         """
-        from moreradicale.websync.manager import websync_manager, NotificationType
+        from moreradicale.websync.manager import (NotificationType,
+                                                  websync_manager)
 
         messages = []
         websync_manager.register_connection("conn-1", "user1", messages.append)
@@ -162,7 +165,8 @@ class TestWebSyncManager:
 
     def test_get_stats(self):
         """Test statistics gathering."""
-        from moreradicale.websync.manager import websync_manager, NotificationType
+        from moreradicale.websync.manager import (NotificationType,
+                                                  websync_manager)
 
         websync_manager.register_connection("conn-1", "user1", lambda m: None)
         websync_manager.subscribe("conn-1", "/user1/calendar/")
@@ -180,7 +184,8 @@ class TestChangeNotification:
 
     def test_notification_to_json(self):
         """Test notification JSON serialization."""
-        from moreradicale.websync.manager import ChangeNotification, NotificationType
+        from moreradicale.websync.manager import (ChangeNotification,
+                                                  NotificationType)
 
         notification = ChangeNotification(
             type=NotificationType.CREATE,
@@ -200,7 +205,8 @@ class TestChangeNotification:
 
     def test_notification_minimal_json(self):
         """Test notification with minimal fields."""
-        from moreradicale.websync.manager import ChangeNotification, NotificationType
+        from moreradicale.websync.manager import (ChangeNotification,
+                                                  NotificationType)
 
         notification = ChangeNotification(
             type=NotificationType.DELETE,
@@ -222,6 +228,7 @@ class TestWebSyncHandler:
     def test_is_websocket_request(self):
         """Test WebSocket request detection."""
         from unittest.mock import Mock
+
         from moreradicale.websync.handler import WebSyncHandler
 
         config = Mock()
@@ -246,6 +253,7 @@ class TestWebSyncHandler:
     def test_compute_accept_key(self):
         """Test WebSocket accept key computation."""
         from unittest.mock import Mock
+
         from moreradicale.websync.handler import WebSyncHandler
 
         config = Mock()
@@ -263,8 +271,9 @@ class TestWebSyncHandler:
     def test_handle_message_subscribe(self):
         """Test handling subscribe message."""
         from unittest.mock import Mock
-        from moreradicale.websync.manager import websync_manager
+
         from moreradicale.websync.handler import WebSyncHandler
+        from moreradicale.websync.manager import websync_manager
 
         websync_manager.reset()
         websync_manager.register_connection("conn-1", "user1", lambda m: None)
@@ -287,8 +296,9 @@ class TestWebSyncHandler:
     def test_handle_message_unsubscribe(self):
         """Test handling unsubscribe message."""
         from unittest.mock import Mock
-        from moreradicale.websync.manager import websync_manager
+
         from moreradicale.websync.handler import WebSyncHandler
+        from moreradicale.websync.manager import websync_manager
 
         websync_manager.reset()
         websync_manager.register_connection("conn-1", "user1", lambda m: None)
@@ -311,6 +321,7 @@ class TestWebSyncHandler:
     def test_handle_message_ping(self):
         """Test handling ping message."""
         from unittest.mock import Mock
+
         from moreradicale.websync.handler import WebSyncHandler
 
         config = Mock()
@@ -331,6 +342,7 @@ class TestWebSyncHandler:
     def test_handle_message_invalid_json(self):
         """Test handling invalid JSON."""
         from unittest.mock import Mock
+
         from moreradicale.websync.handler import WebSyncHandler
 
         config = Mock()
@@ -350,6 +362,7 @@ class TestWebSyncHandler:
     def test_can_access_path(self):
         """Test path access checking."""
         from unittest.mock import Mock
+
         from moreradicale.websync.handler import WebSyncHandler
 
         config = Mock()
@@ -453,8 +466,8 @@ class TestNotifyChangeFunction:
 
     def test_notify_change(self):
         """Test notify_change convenience function."""
-        from moreradicale.websync.manager import websync_manager
         from moreradicale.websync.handler import notify_change
+        from moreradicale.websync.manager import websync_manager
 
         messages = []
         websync_manager.register_connection("conn-1", "user1", messages.append)
@@ -473,8 +486,8 @@ class TestNotifyChangeFunction:
 
     def test_notify_change_invalid_type(self):
         """Test notify_change with invalid type defaults to update."""
-        from moreradicale.websync.manager import websync_manager
         from moreradicale.websync.handler import notify_change
+        from moreradicale.websync.manager import websync_manager
 
         messages = []
         websync_manager.register_connection("conn-1", "user1", messages.append)

@@ -21,18 +21,18 @@ This module provides RFC 6047 compliant email building and SMTP delivery
 functionality that can be used by both the email hook and iTIP processor.
 """
 
-import enum
 import base64
+import enum
 import mimetypes
 import smtplib
 import ssl
 from dataclasses import dataclass
+from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formatdate
-from email import encoders
-from typing import Optional, List
+from typing import List, Optional
 
 from moreradicale.log import logger
 
@@ -424,7 +424,7 @@ def extract_attachments_from_icalendar(icalendar_text: str) -> List[Attachment]:
                     # URI reference - store the URL as content
                     # We don't download by default (privacy/security)
                     # Extract filename from URL
-                    from urllib.parse import urlparse, unquote
+                    from urllib.parse import unquote, urlparse
                     parsed = urlparse(value)
                     filename = unquote(parsed.path.split('/')[-1]) or 'attachment.dat'
 

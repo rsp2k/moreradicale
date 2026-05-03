@@ -115,9 +115,8 @@ class ApplicationPartUncheckout(ApplicationBase):
     def _get_git_writer(self):
         """Get git metadata writer."""
         try:
-            from moreradicale.storage.multifilesystem.git_writer import (
+            from moreradicale.storage.multifilesystem.git_writer import \
                 GitMetadataWriter
-            )
             storage_folder = self.configuration.get("storage", "filesystem_folder")
             return GitMetadataWriter(storage_folder)
         except ImportError:

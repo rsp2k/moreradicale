@@ -9,12 +9,13 @@ import json
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from moreradicale.log import logger
-from moreradicale.subscriptions.engine import SyncEngine, SyncResult, SyncStatus
+from moreradicale.subscriptions.engine import (SyncEngine, SyncResult,
+                                               SyncStatus)
 
 
 @dataclass

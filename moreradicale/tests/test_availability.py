@@ -8,8 +8,7 @@ Tests the VAVAILABILITY implementation including:
 - CalDAV property discovery
 """
 
-from datetime import datetime, timezone, timedelta
-
+from datetime import datetime, timedelta, timezone
 
 from moreradicale.tests import BaseTest
 
@@ -19,7 +18,8 @@ class TestVAvailabilityComponent:
 
     def test_parse_basic_vavailability(self):
         """Test parsing a basic VAVAILABILITY component."""
-        from moreradicale.availability.component import parse_availability, BusyType
+        from moreradicale.availability.component import (BusyType,
+                                                         parse_availability)
 
         ical_data = """BEGIN:VCALENDAR
 VERSION:2.0
@@ -90,8 +90,7 @@ END:VCALENDAR"""
     def test_vavailability_serialization(self):
         """Test serializing a VAVAILABILITY to iCalendar format."""
         from moreradicale.availability.component import (
-            VAvailability, Available, BusyType, serialize_availability
-        )
+            Available, BusyType, VAvailability, serialize_availability)
 
         vavail = VAvailability(
             uid="serialize-test",
@@ -175,9 +174,8 @@ class TestAvailabilityProcessor:
 
     def test_freebusy_all_free_no_availability(self):
         """Test free-busy with no availability data returns all FREE."""
-        from moreradicale.availability.processor import (
-            AvailabilityProcessor, FreeBusyPeriod
-        )
+        from moreradicale.availability.processor import (AvailabilityProcessor,
+                                                         FreeBusyPeriod)
 
         # Create mock storage and config
         processor = AvailabilityProcessor(None, None)
@@ -196,12 +194,10 @@ class TestAvailabilityProcessor:
 
     def test_freebusy_with_availability(self):
         """Test free-busy calculation with VAVAILABILITY."""
-        from moreradicale.availability.component import (
-            VAvailability, Available, BusyType
-        )
-        from moreradicale.availability.processor import (
-            AvailabilityProcessor, FreeBusyPeriod
-        )
+        from moreradicale.availability.component import (Available, BusyType,
+                                                         VAvailability)
+        from moreradicale.availability.processor import (AvailabilityProcessor,
+                                                         FreeBusyPeriod)
 
         processor = AvailabilityProcessor(None, None)
 
@@ -238,12 +234,10 @@ class TestAvailabilityProcessor:
 
     def test_freebusy_with_event_overlay(self):
         """Test free-busy with availability + actual events."""
-        from moreradicale.availability.component import (
-            VAvailability, Available, BusyType
-        )
-        from moreradicale.availability.processor import (
-            AvailabilityProcessor, FreeBusyPeriod
-        )
+        from moreradicale.availability.component import (Available, BusyType,
+                                                         VAvailability)
+        from moreradicale.availability.processor import (AvailabilityProcessor,
+                                                         FreeBusyPeriod)
 
         processor = AvailabilityProcessor(None, None)
 
@@ -283,12 +277,10 @@ class TestAvailabilityProcessor:
 
     def test_freebusy_priority_ordering(self):
         """Test that higher priority availability overrides lower priority."""
-        from moreradicale.availability.component import (
-            VAvailability, Available, BusyType
-        )
-        from moreradicale.availability.processor import (
-            AvailabilityProcessor, FreeBusyPeriod
-        )
+        from moreradicale.availability.component import (Available, BusyType,
+                                                         VAvailability)
+        from moreradicale.availability.processor import (AvailabilityProcessor,
+                                                         FreeBusyPeriod)
 
         processor = AvailabilityProcessor(None, None)
 
@@ -335,9 +327,8 @@ class TestAvailabilityProcessor:
 
     def test_to_freebusy_ical(self):
         """Test VFREEBUSY iCalendar generation."""
-        from moreradicale.availability.processor import (
-            AvailabilityProcessor, FreeBusyPeriod
-        )
+        from moreradicale.availability.processor import (AvailabilityProcessor,
+                                                         FreeBusyPeriod)
 
         processor = AvailabilityProcessor(None, None)
 
@@ -373,7 +364,8 @@ class TestExpandAvailableInstances:
 
     def test_expand_single_instance(self):
         """Test expansion of non-recurring AVAILABLE."""
-        from moreradicale.availability.component import Available, expand_available_instances
+        from moreradicale.availability.component import (
+            Available, expand_available_instances)
 
         available = Available(
             uid="single",
@@ -393,7 +385,8 @@ class TestExpandAvailableInstances:
 
     def test_expand_weekly_recurrence(self):
         """Test expansion of weekly recurring AVAILABLE."""
-        from moreradicale.availability.component import Available, expand_available_instances
+        from moreradicale.availability.component import (
+            Available, expand_available_instances)
 
         available = Available(
             uid="weekly",
@@ -415,7 +408,8 @@ class TestExpandAvailableInstances:
 
     def test_expand_daily_recurrence(self):
         """Test expansion of daily recurring AVAILABLE."""
-        from moreradicale.availability.component import Available, expand_available_instances
+        from moreradicale.availability.component import (
+            Available, expand_available_instances)
 
         available = Available(
             uid="daily",

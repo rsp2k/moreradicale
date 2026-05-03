@@ -10,7 +10,6 @@ Tests the VPOLL implementation including:
 
 from datetime import datetime, timezone
 
-
 from moreradicale.tests import BaseTest
 
 
@@ -19,7 +18,7 @@ class TestVPollComponent:
 
     def test_parse_basic_vpoll(self):
         """Test parsing a basic VPOLL component."""
-        from moreradicale.vpoll.component import parse_vpoll, VPollStatus
+        from moreradicale.vpoll.component import VPollStatus, parse_vpoll
 
         ical_data = """BEGIN:VCALENDAR
 VERSION:2.0
@@ -115,9 +114,8 @@ END:VCALENDAR"""
 
     def test_vpoll_calculate_results(self):
         """Test calculating voting results."""
-        from moreradicale.vpoll.component import (
-            VPoll, Participant, Vote, PollItem, ParticipantType
-        )
+        from moreradicale.vpoll.component import (Participant, ParticipantType,
+                                                  PollItem, Vote, VPoll)
 
         vpoll = VPoll(
             uid="test-poll",
@@ -166,9 +164,8 @@ END:VCALENDAR"""
 
     def test_vpoll_determine_winner(self):
         """Test automatic winner determination."""
-        from moreradicale.vpoll.component import (
-            VPoll, Participant, Vote, PollItem, ParticipantType
-        )
+        from moreradicale.vpoll.component import (Participant, ParticipantType,
+                                                  PollItem, Vote, VPoll)
 
         vpoll = VPoll(
             uid="test-poll",
@@ -209,10 +206,9 @@ END:VCALENDAR"""
 
     def test_vpoll_serialization(self):
         """Test serializing a VPOLL to iCalendar format."""
-        from moreradicale.vpoll.component import (
-            VPoll, Participant, PollItem,
-            ParticipantType, VPollStatus, PollMode
-        )
+        from moreradicale.vpoll.component import (Participant, ParticipantType,
+                                                  PollItem, PollMode, VPoll,
+                                                  VPollStatus)
 
         vpoll = VPoll(
             uid="serialize-test",

@@ -3,7 +3,7 @@ Attendee routing - determine if attendees are internal or external.
 """
 
 import re
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 
 def extract_email(mailto_uri: str) -> Optional[str]:
@@ -184,6 +184,7 @@ def _check_delegation(delegate_user: str, organizer_user: str,
         True if delegate_user is in organizer's schedule-delegates
     """
     import json
+
     from moreradicale.sharing import SCHEDULE_DELEGATES_PROPERTY
 
     # Get organizer's principal collection

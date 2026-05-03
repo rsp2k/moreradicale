@@ -126,8 +126,10 @@ class ApplicationLabelMixin:
 
             # Get GitMetadataWriter
             try:
-                from moreradicale.storage.multifilesystem.git_writer import GitMetadataWriter
                 import os
+
+                from moreradicale.storage.multifilesystem.git_writer import \
+                    GitMetadataWriter
                 storage_folder = self.configuration.get("storage", "filesystem_folder")
                 collection_root = os.path.join(storage_folder, "collection-root")
                 writer = GitMetadataWriter(collection_root)
@@ -143,7 +145,8 @@ class ApplicationLabelMixin:
 
             # Get current version (checked-in SHA)
             try:
-                from moreradicale.storage.multifilesystem.git_metadata import GitMetadataReader
+                from moreradicale.storage.multifilesystem.git_metadata import \
+                    GitMetadataReader
                 reader = GitMetadataReader(collection_root)
 
                 # Get relative path for this item

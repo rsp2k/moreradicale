@@ -17,17 +17,10 @@ Key properties:
 - RESPONSE: Voter preference (0-100 scale)
 """
 
-from moreradicale.vpoll.component import (
-    VPollStatus,
-    PollMode,
-    PollCompletion,
-    ParticipantType,
-    VPoll,
-    Participant,
-    Vote,
-    parse_vpoll,
-    serialize_vpoll,
-)
+from moreradicale.vpoll.component import (Participant, ParticipantType,
+                                          PollCompletion, PollMode, Vote,
+                                          VPoll, VPollStatus, parse_vpoll,
+                                          serialize_vpoll)
 from moreradicale.vpoll.processor import VPollProcessor
 
 __all__ = [

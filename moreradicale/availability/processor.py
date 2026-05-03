@@ -8,13 +8,10 @@ free-busy query results.
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
+from moreradicale.availability.component import (BusyType, VAvailability,
+                                                 expand_available_instances,
+                                                 parse_availability)
 from moreradicale.log import logger
-from moreradicale.availability.component import (
-    VAvailability,
-    BusyType,
-    parse_availability,
-    expand_available_instances,
-)
 
 
 class FreeBusyPeriod:

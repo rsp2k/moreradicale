@@ -20,6 +20,7 @@ Example VTODO with relationships:
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Set
+
 import vobject
 
 

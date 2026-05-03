@@ -12,13 +12,8 @@ from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 from moreradicale.log import logger
-from moreradicale.vpoll.component import (
-    VPoll,
-    VPollStatus,
-    Participant,
-    ParticipantType,
-    parse_vpoll,
-)
+from moreradicale.vpoll.component import (Participant, ParticipantType, VPoll,
+                                          VPollStatus, parse_vpoll)
 
 
 class VPollProcessor:

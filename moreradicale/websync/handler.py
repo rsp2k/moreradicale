@@ -15,7 +15,7 @@ from typing import Dict, Optional, Tuple
 
 from moreradicale import config
 from moreradicale.log import logger
-from moreradicale.websync.manager import websync_manager, NotificationType
+from moreradicale.websync.manager import NotificationType, websync_manager
 
 
 class WebSyncHandler:

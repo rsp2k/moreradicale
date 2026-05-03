@@ -4,7 +4,6 @@ Tests for RFC 7808 Time Zone Data Distribution Service (TZDIST).
 
 import json
 
-
 from moreradicale.tests import BaseTest
 
 
@@ -305,6 +304,7 @@ class TestTZDistFormatter(BaseTest):
     def test_transitions_to_vtimezone_no_dst(self):
         """Test formatting timezone without DST."""
         from datetime import datetime, timezone
+
         from moreradicale.tzdist.formatter import transitions_to_vtimezone
 
         transitions = [(
@@ -325,6 +325,7 @@ class TestTZDistFormatter(BaseTest):
     def test_transitions_to_vtimezone_with_dst(self):
         """Test formatting timezone with DST transitions."""
         from datetime import datetime, timezone
+
         from moreradicale.tzdist.formatter import transitions_to_vtimezone
 
         transitions = [

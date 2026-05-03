@@ -30,9 +30,7 @@ from typing import TYPE_CHECKING, Optional, Tuple
 
 from moreradicale import httputils, xmlutils
 from moreradicale.log import logger
-from moreradicale.sharing import (
-    SharingManager, ShareAccess, InviteStatus
-)
+from moreradicale.sharing import InviteStatus, ShareAccess, SharingManager
 from moreradicale.sharing.notifications import NotificationManager
 
 if TYPE_CHECKING:

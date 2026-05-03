@@ -11,11 +11,8 @@ from typing import Dict, Optional, Tuple
 from moreradicale.log import logger
 
 from .storage import SubscriptionStorage
-from .subscription import (
-    PushSubscription,
-    generate_subscription_id,
-    parse_subscription_request
-)
+from .subscription import (PushSubscription, generate_subscription_id,
+                           parse_subscription_request)
 from .vapid import VAPIDKeyManager
 
 

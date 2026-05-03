@@ -115,8 +115,9 @@ class ApplicationPartMkactivity(ApplicationBase):
         if activity_id:
             # Non-standard: use client-provided ID
             # We need to bypass the UUID generation
-            from moreradicale.versioning.activity_manager import ActivityInfo
             from datetime import datetime, timezone
+
+            from moreradicale.versioning.activity_manager import ActivityInfo
             activity = ActivityInfo(
                 activity_id=activity_id,
                 creator=user or "anonymous",
@@ -146,7 +147,8 @@ class ApplicationPartMkactivity(ApplicationBase):
     def _get_activity_manager(self):
         """Get or create activity manager."""
         try:
-            from moreradicale.versioning.activity_manager import ActivityManager
+            from moreradicale.versioning.activity_manager import \
+                ActivityManager
             storage_folder = self.configuration.get("storage", "filesystem_folder")
             return ActivityManager(storage_folder)
         except ImportError:

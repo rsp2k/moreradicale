@@ -30,7 +30,6 @@ import vobject
 
 from moreradicale.tests import BaseTest
 
-
 SIMPLE_EVENT = """\
 BEGIN:VCALENDAR
 VERSION:2.0
@@ -575,6 +574,7 @@ class TestAttachmentSharedAccess(BaseTest):
         for testing purposes.
         """
         import json
+
         from moreradicale.sharing import SHARES_PROPERTY, InviteStatus
 
         # Discover the collection

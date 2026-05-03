@@ -16,7 +16,7 @@ from .vapid import VAPIDKeyManager
 
 # Check if pywebpush is available
 try:
-    from pywebpush import webpush, WebPushException
+    from pywebpush import WebPushException, webpush
     HAS_PYWEBPUSH = True
 except ImportError:
     HAS_PYWEBPUSH = False

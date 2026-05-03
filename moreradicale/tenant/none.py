@@ -22,7 +22,7 @@ but type is set to "none". It always returns None, effectively
 disabling tenant extraction.
 """
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from moreradicale import config
 from moreradicale.tenant.base import BaseTenantExtractor

@@ -152,9 +152,8 @@ class ApplicationPartCheckin(ApplicationBase):
     def _get_git_writer(self):
         """Get git metadata writer."""
         try:
-            from moreradicale.storage.multifilesystem.git_writer import (
+            from moreradicale.storage.multifilesystem.git_writer import \
                 GitMetadataWriter
-            )
             storage_folder = self.configuration.get("storage", "filesystem_folder")
             return GitMetadataWriter(storage_folder)
         except ImportError:
@@ -163,7 +162,8 @@ class ApplicationPartCheckin(ApplicationBase):
     def _get_activity_manager(self):
         """Get activity manager."""
         try:
-            from moreradicale.versioning.activity_manager import ActivityManager
+            from moreradicale.versioning.activity_manager import \
+                ActivityManager
             storage_folder = self.configuration.get("storage", "filesystem_folder")
             return ActivityManager(storage_folder)
         except ImportError:

@@ -28,7 +28,8 @@ from typing import Dict, Iterator
 
 from moreradicale import config, pathutils, types
 from moreradicale.log import logger
-from moreradicale.storage.multifilesystem.base import CollectionBase, StorageBase
+from moreradicale.storage.multifilesystem.base import (CollectionBase,
+                                                       StorageBase)
 
 
 class CollectionPartLock(CollectionBase):
