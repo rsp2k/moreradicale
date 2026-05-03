@@ -631,8 +631,8 @@ class TestSharingHTTPFlow(BaseTest):
       (the "accepted shares grant rw access" path that was broken
       before owner_only_shared.attach_storage was wired up).
     - Cascade-deletion of invite notifications on accept/decline/revoke.
-    - The shared-with-me back-reference write path on the sharee's
-      principal.
+    - Storage's depth=1 auto-merge of accepted shares into the
+      sharee's principal listing.
 
     Uses auth.type = "none" so any login string works; the focus is
     rights+sharing behavior, not authentication.
@@ -891,27 +891,13 @@ class TestSharingHTTPFlow(BaseTest):
         assert len(invites_after) == 1, \
             "the unrelated calendar_b invite must survive; got %r" % after
 
-    def test_accept_writes_shared_with_me_back_reference(self):
-        """Accept appends the calendar path to the sharee's principal prop."""
-        self._materialize_principal("alice")
-        self._materialize_principal("bob")
-        self._create_calendar("alice")
-        self._share("alice", "calendar", "bob")
+    def test_accepted_shared_calendar_appears_in_principal_listing(self):
+        """Storage discover() auto-merges accepted shares into depth=1.
 
-        uid = self._read_invite_uid("bob")
-        self._reply("alice", "calendar", "bob", uid, accept=True)
-
-        import os
-        bob_props_path = os.path.join(
-            self.colpath, "collection-root", "bob", ".Radicale.props")
-        with open(bob_props_path) as f:
-            bob_props = json.load(f)
-        shared = json.loads(bob_props.get("RADICALE:shared-with-me", "[]"))
-        assert "alice/calendar" in shared, \
-            "expected alice/calendar in shared-with-me; got %r" % shared
-
-    def test_revoke_removes_shared_with_me_back_reference(self):
-        """Revoke removes the entry from the sharee's shared-with-me list."""
+        The web UI relies on this: a single PROPFIND on /{user}/ depth=1
+        returns both owned and accepted-shared calendars in one trip,
+        so we don't need a separate "shared with me" enumeration API.
+        """
         self._materialize_principal("alice")
         self._materialize_principal("bob")
         self._create_calendar("alice")
@@ -919,17 +905,14 @@ class TestSharingHTTPFlow(BaseTest):
         uid = self._read_invite_uid("bob")
         self._reply("alice", "calendar", "bob", uid, accept=True)
 
-        # Confirm presence before revoke.
-        import os
-        bob_props_path = os.path.join(
-            self.colpath, "collection-root", "bob", ".Radicale.props")
-        with open(bob_props_path) as f:
-            shared = json.loads(json.load(f).get("RADICALE:shared-with-me", "[]"))
-        assert "alice/calendar" in shared
-
-        self._revoke("alice", "calendar", "bob")
-
-        with open(bob_props_path) as f:
-            shared = json.loads(json.load(f).get("RADICALE:shared-with-me", "[]"))
-        assert "alice/calendar" not in shared, \
-            "revoke should drop the back-reference; got %r" % shared
+        # PROPFIND bob's principal at depth=1 - the accepted share on
+        # alice's calendar should appear as a child response.
+        status, responses = self.propfind(
+            "/bob/",
+            data='<?xml version="1.0"?>'
+                 '<propfind xmlns="DAV:"><prop><displayname/><resourcetype/></prop></propfind>',
+            HTTP_DEPTH="1", login="bob:bobpass", check=207)
+        # Response keys are URL-quoted hrefs; alice/calendar is plain ASCII.
+        assert "/alice/calendar/" in responses, \
+            "expected /alice/calendar/ in bob's principal listing; got %r" % \
+            list(responses.keys())

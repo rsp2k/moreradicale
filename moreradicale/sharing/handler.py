@@ -24,7 +24,6 @@ This module processes POST requests for calendar sharing operations:
 Reference: https://github.com/apple/ccs-calendarserver/blob/master/doc/Extensions/caldav-sharing.txt
 """
 
-import json
 import xml.etree.ElementTree as ET
 from http import client
 from typing import TYPE_CHECKING, Optional, Tuple
@@ -38,9 +37,6 @@ from moreradicale.sharing.notifications import NotificationManager
 
 if TYPE_CHECKING:
     from moreradicale import config, storage
-
-
-SHARED_WITH_ME_PROPERTY = "RADICALE:shared-with-me"
 
 
 class SharingHandler:
@@ -77,49 +73,6 @@ class SharingHandler:
             logger.debug("Rights cache invalidation failed for %s: %s",
                          collection_path, e)
 
-    def _update_sharee_shared_list(self, sharee: str, collection_path: str,
-                                   add: bool) -> None:
-        """Add or remove a calendar path from the sharee's shared-with-me list.
-
-        Stored as JSON on the sharee's principal collection so the web UI can
-        enumerate accepted shares without scanning every owner's calendars.
-        Path is the collection's storage-style path (no leading slash, e.g.
-        "admin/704d4070-..."). The caller is expected to already hold a write
-        lock on the relevant scope.
-        """
-        try:
-            principal_path = "/" + sharee + "/"
-            items = list(self.storage.discover(principal_path, depth="0"))
-            if not items:
-                logger.debug("Sharee principal %s missing; skipping shared-with-me",
-                             sharee)
-                return
-            principal = items[0]
-            if not hasattr(principal, "get_meta") or not hasattr(principal, "set_meta"):
-                return
-            existing_json = principal.get_meta(SHARED_WITH_ME_PROPERTY)
-            paths: list = []
-            if existing_json:
-                try:
-                    parsed = json.loads(existing_json)
-                    if isinstance(parsed, list):
-                        paths = [p for p in parsed if isinstance(p, str)]
-                except json.JSONDecodeError:
-                    logger.warning("Malformed %s on %s; resetting",
-                                   SHARED_WITH_ME_PROPERTY, sharee)
-            normalized = collection_path.strip("/")
-            if add and normalized not in paths:
-                paths.append(normalized)
-            elif not add and normalized in paths:
-                paths.remove(normalized)
-            else:
-                return  # No-op
-            principal.set_meta({SHARED_WITH_ME_PROPERTY: json.dumps(paths)})
-            logger.info("Updated %s on %s: %s %s", SHARED_WITH_ME_PROPERTY,
-                        sharee, "+" if add else "-", normalized)
-        except Exception as e:
-            logger.warning("Failed to update shared-with-me for %s: %s",
-                           sharee, e)
 
     def handle_sharing_post(self, user: str, xml_content: ET.Element,
                             collection: "storage.BaseCollection",
@@ -295,9 +248,6 @@ class SharingHandler:
                 # the just-revoked sharee instead of grandfathering them
                 # in for the cache TTL window.
                 self._invalidate_rights_cache(collection.path)
-                # Drop the back-reference so the sharee's UI stops showing
-                # this calendar (no-op if they declined it earlier).
-                self._update_sharee_shared_list(sharee, collection.path, add=False)
                 # If a pending invite is still outstanding (sharee never
                 # accepted before owner revoked), kill it - it's now an
                 # invitation to access that no longer exists.
@@ -361,13 +311,9 @@ class SharingHandler:
         try:
             if accept:
                 self.sharing_manager.accept_share(collection, user)
-                self._update_sharee_shared_list(user, collection.path, add=True)
                 logger.info("User %s accepted share of %s", user, collection.path)
             else:
                 self.sharing_manager.decline_share(collection, user)
-                # Cleanup: a previous accept might have populated the list,
-                # so always remove on decline (no-op if it wasn't there).
-                self._update_sharee_shared_list(user, collection.path, add=False)
                 logger.info("User %s declined share of %s", user, collection.path)
 
             # Drop any cached share state so the next request sees the
