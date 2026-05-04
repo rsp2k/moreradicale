@@ -27,12 +27,16 @@ Take a look at the class ``BaseCollection`` if you want to implement your own.
 import json
 import xml.etree.ElementTree as ET
 from hashlib import sha256
-from typing import (Callable, ContextManager, Dict, Iterable, Iterator, List,
-                    Mapping, Optional, Sequence, Set, Tuple, Union, overload)
+from typing import (TYPE_CHECKING, Callable, ContextManager, Dict, Iterable,
+                    Iterator, List, Mapping, Optional, Sequence, Set, Tuple,
+                    Union, overload)
 
 import vobject
 
 from moreradicale import config
+
+if TYPE_CHECKING:
+    from moreradicale.tenant import TenantContext
 from moreradicale import item as radicale_item
 from moreradicale import types, utils
 from moreradicale.item import filter as radicale_filter
@@ -306,6 +310,20 @@ class BaseStorage:
 
         """
         self.configuration = configuration
+
+    def set_tenant_context(self, context: Optional["TenantContext"]) -> None:
+        """Set tenant context for storage operations.
+
+        Default no-op for storage backends that don't implement multi-tenant
+        isolation. Concrete backends like multifilesystem.Storage override
+        this to scope subsequent discover()/lock calls to a tenant. Callers
+        in app/__init__.py invoke it unconditionally on every request, so
+        the base must accept the call rather than raise NotImplementedError.
+
+        Mirrors BaseRights.set_tenant_context (rights/__init__.py:76) which
+        uses the same default-no-op pattern.
+        """
+        pass
 
     def discover(
             self, path: str, depth: str = "0",

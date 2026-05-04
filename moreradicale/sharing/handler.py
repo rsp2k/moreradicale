@@ -26,9 +26,9 @@ Reference: https://github.com/apple/ccs-calendarserver/blob/master/doc/Extension
 
 import xml.etree.ElementTree as ET
 from http import client
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
-from moreradicale import httputils, xmlutils
+from moreradicale import httputils, types, xmlutils
 from moreradicale.log import logger
 from moreradicale.sharing import InviteStatus, ShareAccess, SharingManager
 from moreradicale.sharing.notifications import NotificationManager
@@ -90,7 +90,7 @@ class SharingHandler:
 
     def handle_sharing_post(self, user: str, xml_content: ET.Element,
                             collection: "storage.BaseCollection",
-                            base_prefix: str) -> Tuple[int, dict, str]:
+                            base_prefix: str) -> types.WSGIResponse:
         """
         Handle a sharing POST request.
 
@@ -116,7 +116,7 @@ class SharingHandler:
 
     def _handle_share_resource(self, user: str, xml_content: ET.Element,
                                collection: "storage.BaseCollection",
-                               base_prefix: str) -> Tuple[int, dict, str]:
+                               base_prefix: str) -> types.WSGIResponse:
         """
         Handle CS:share-resource request to add/modify/remove shares.
 
@@ -158,7 +158,7 @@ class SharingHandler:
 
     def _process_share_set(self, user: str, set_elem: ET.Element,
                            collection: "storage.BaseCollection"
-                           ) -> Tuple[int, dict, str]:
+                           ) -> types.WSGIResponse:
         """Process a CS:set element to add or update a share."""
         # Extract sharee from href
         href_elem = set_elem.find(xmlutils.make_clark("D:href"))
@@ -241,7 +241,7 @@ class SharingHandler:
 
     def _process_share_remove(self, user: str, remove_elem: ET.Element,
                               collection: "storage.BaseCollection"
-                              ) -> Tuple[int, dict, str]:
+                              ) -> types.WSGIResponse:
         """Process a CS:remove element to remove a share."""
         # Extract sharee from href
         href_elem = remove_elem.find(xmlutils.make_clark("D:href"))
@@ -303,7 +303,7 @@ class SharingHandler:
 
     def _handle_share_reply(self, user: str, xml_content: ET.Element,
                             collection: "storage.BaseCollection",
-                            base_prefix: str) -> Tuple[int, dict, str]:
+                            base_prefix: str) -> types.WSGIResponse:
         """
         Handle CS:share-reply request to accept or decline an invitation.
 

@@ -35,6 +35,10 @@ dependencies = [
     "vobject>=0.9.6",
     "pika>=1.1.0",
     "requests",
+    # python-dateutil is used directly in moreradicale/itip/availability.py.
+    # vobject also depends on it transitively, but listing it explicitly
+    # makes the dependency intentional rather than incidental.
+    "python-dateutil",
     # ASGI runtime: uvicorn for HTTP+WebSocket; asgiref to wrap the
     # existing WSGI Application; websockets is uvicorn's WS implementation.
     "uvicorn>=0.30",
