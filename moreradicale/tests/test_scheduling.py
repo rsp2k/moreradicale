@@ -253,7 +253,12 @@ class TestAttendeeRouting(BaseTest):
         )
 
         assert is_internal is False
-        assert principal_path is None
+        # API change 2026-05: route_attendee now returns "" (empty str) for
+        # the principal when not internal, rather than Optional[str]/None.
+        # Lets callers pass the result straight to get_inbox_path() etc.
+        # without per-call narrowing. Falsy "" satisfies the same `if path`
+        # guards that "is not None" used to.
+        assert not principal_path
 
     def test_route_internal_nonexistent_user(self):
         """Test routing internal domain but user doesn't exist."""
@@ -270,7 +275,7 @@ class TestAttendeeRouting(BaseTest):
         )
 
         assert is_internal is False  # No principal found
-        assert principal_path is None
+        assert not principal_path
 
     def test_validate_organizer_permission(self):
         """Test organizer permission validation."""

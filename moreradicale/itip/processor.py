@@ -5,7 +5,7 @@ iTIP message processor for implicit scheduling.
 import logging
 import re
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import vobject
 
@@ -19,6 +19,28 @@ from moreradicale.itip.router import (extract_email, get_inbox_path,
 from moreradicale.itip.validator import needs_scheduling
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_schedulable_component(vcal) -> Optional[Tuple[Any, str]]:
+    """Extract the first VEVENT/VTODO/VJOURNAL component and its tag name.
+
+    Returns (component, "VEVENT"|"VTODO"|"VJOURNAL") if the calendar contains
+    a schedulable component, otherwise None. Centralizing this lookup ties
+    `component` and `comp_type_name` into a single return so mypy can narrow
+    them together - previously every call site had two separate Optionals
+    that were both populated in the same loop iteration but mypy couldn't
+    correlate them, producing many "incompatible type str | None; expected
+    str" errors at downstream ITIPMessage(component_type=...) calls.
+
+    Component is typed Any because vobject components expose properties
+    dynamically (component.uid, component.organizer, etc.) and there's no
+    static type that mypy can usefully check. The point of this helper is
+    just to bind comp_type_name's narrowing to component's existence.
+    """
+    for comp_type in ('vevent', 'vtodo', 'vjournal'):
+        if hasattr(vcal, comp_type):
+            return getattr(vcal, comp_type), comp_type.upper()
+    return None
 
 
 class ITIPProcessor:
@@ -255,17 +277,11 @@ class ITIPProcessor:
             vcal = vobject.readOne(vcal_text)
 
             # Get the component
-            component = None
-            comp_type_name = None
-            for comp_type in ('vevent', 'vtodo', 'vjournal'):
-                if hasattr(vcal, comp_type):
-                    component = getattr(vcal, comp_type)
-                    comp_type_name = comp_type.upper()
-                    break
-
-            if not component:
+            extracted = _extract_schedulable_component(vcal)
+            if extracted is None:
                 logger.warning("No schedulable component found")
                 return
+            component, comp_type_name = extracted
 
             # Extract organizer
             if not hasattr(component, 'organizer'):
@@ -404,17 +420,11 @@ class ITIPProcessor:
             vcal = item.vobject_item
 
             # Get the component
-            component = None
-            comp_type_name = None
-            for comp_type in ('vevent', 'vtodo', 'vjournal'):
-                if hasattr(vcal, comp_type):
-                    component = getattr(vcal, comp_type)
-                    comp_type_name = comp_type.upper()
-                    break
-
-            if not component:
+            extracted = _extract_schedulable_component(vcal)
+            if extracted is None:
                 logger.warning("No schedulable component found in deleted item")
                 return
+            component, comp_type_name = extracted
 
             # Extract organizer
             if not hasattr(component, 'organizer'):
@@ -2131,17 +2141,11 @@ class ITIPProcessor:
 
         try:
             # Get the component (VEVENT/VTODO/VJOURNAL)
-            component = None
-            comp_type_name = None
-            for comp_type in ('vevent', 'vtodo', 'vjournal'):
-                if hasattr(vcal, comp_type):
-                    component = getattr(vcal, comp_type)
-                    comp_type_name = comp_type.upper()
-                    break
-
-            if not component:
+            extracted = _extract_schedulable_component(vcal)
+            if extracted is None:
                 logger.warning("No schedulable component in PUBLISH")
                 return httputils.BAD_REQUEST
+            component, comp_type_name = extracted
 
             # Extract UID
             if not hasattr(component, 'uid'):
@@ -2235,17 +2239,11 @@ class ITIPProcessor:
 
         try:
             # Get the component (VEVENT/VTODO/VJOURNAL)
-            component = None
-            comp_type_name = None
-            for comp_type in ('vevent', 'vtodo', 'vjournal'):
-                if hasattr(vcal, comp_type):
-                    component = getattr(vcal, comp_type)
-                    comp_type_name = comp_type.upper()
-                    break
-
-            if not component:
+            extracted = _extract_schedulable_component(vcal)
+            if extracted is None:
                 logger.warning("No schedulable component in ADD")
                 return httputils.BAD_REQUEST
+            component, comp_type_name = extracted
 
             # Extract UID - must reference existing recurring event
             if not hasattr(component, 'uid'):
@@ -2405,17 +2403,11 @@ class ITIPProcessor:
 
         try:
             # Get the component (VEVENT/VTODO/VJOURNAL)
-            component = None
-            comp_type_name = None
-            for comp_type in ('vevent', 'vtodo', 'vjournal'):
-                if hasattr(vcal, comp_type):
-                    component = getattr(vcal, comp_type)
-                    comp_type_name = comp_type.upper()
-                    break
-
-            if not component:
+            extracted = _extract_schedulable_component(vcal)
+            if extracted is None:
                 logger.warning("No schedulable component in REQUEST")
                 return httputils.BAD_REQUEST
+            component, comp_type_name = extracted
 
             # Extract UID, SEQUENCE, and ORGANIZER
             if not hasattr(component, 'uid'):

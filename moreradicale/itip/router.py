@@ -32,7 +32,7 @@ def extract_email(mailto_uri: str) -> Optional[str]:
     return None
 
 
-def route_attendee(attendee_email: str, storage, base_prefix: str = "") -> Tuple[bool, Optional[str]]:
+def route_attendee(attendee_email: str, storage, base_prefix: str = "") -> Tuple[bool, str]:
     """
     Determine if attendee is internal (local Radicale user).
 
@@ -46,10 +46,17 @@ def route_attendee(attendee_email: str, storage, base_prefix: str = "") -> Tuple
         base_prefix: Base prefix for paths
 
     Returns:
-        Tuple of (is_internal, principal_path)
+        Tuple of (is_internal, principal_path). When is_internal is False
+        the principal_path is the empty string ""; this lets callers pass
+        the result directly to functions expecting str (and the empty
+        string is also falsy for "if principal_path" checks). Previously
+        this returned Optional[str], which forced every call site that
+        used the result to either narrow with mypy noise or accept type
+        errors at downstream get_inbox_path() / _find_organizer_event()
+        calls.
     """
     if not attendee_email or '@' not in attendee_email:
-        return False, None
+        return False, ""
 
     # Extract username from email
     username = attendee_email.split('@')[0]
@@ -68,7 +75,7 @@ def route_attendee(attendee_email: str, storage, base_prefix: str = "") -> Tuple
     except Exception:
         pass
 
-    return False, None
+    return False, ""
 
 
 def get_inbox_path(principal_path: str) -> str:
