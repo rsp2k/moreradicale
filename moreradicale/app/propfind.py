@@ -25,7 +25,8 @@ import posixpath
 import socket
 import xml.etree.ElementTree as ET
 from http import client
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import (Any, Dict, Iterable, Iterator, List, Optional, Sequence,
+                    Tuple)
 
 from moreradicale import (config, httputils, pathutils, rights, storage, types,
                           xmlutils)
@@ -34,8 +35,11 @@ from moreradicale.log import logger
 from moreradicale.sharing import (PROXY_READ_PROPERTY, PROXY_WRITE_PROPERTY,
                                   SHARES_PROPERTY, InviteStatus, ShareAccess)
 
-# RFC 3253 versioning support - lazy import
-_git_metadata_reader = None
+# RFC 3253 versioning support - lazy import.
+# Three states: None = not yet loaded, False = tried-and-unavailable
+# (versioning disabled or import failed), instance = loaded and ready.
+# Typed Any to permit the bool sentinel without a separate union.
+_git_metadata_reader: Any = None
 
 
 def _get_git_metadata_reader(configuration: 'config.Configuration'):
@@ -130,7 +134,9 @@ def xml_propfind(base_prefix: str, path: str,
                  xml_request: Optional[ET.Element],
                  allowed_items: Iterable[Tuple[types.CollectionOrItem, str]],
                  user: str, encoding: str, max_resource_size: int,
-                 configuration: 'config.Configuration') -> Optional[ET.Element]:
+                 configuration: 'config.Configuration',
+                 storage_obj: 'Optional[storage.BaseStorage]' = None
+                 ) -> Optional[ET.Element]:
     """Read and answer PROPFIND requests.
 
     Read rfc4918-9.1 for info.
@@ -167,7 +173,7 @@ def xml_propfind(base_prefix: str, path: str,
         write = permission == "w"
         multistatus.append(xml_propfind_response(
             base_prefix, path, item, props, user, encoding, max_resource_size,
-            configuration, write=write,
+            configuration, storage_obj=storage_obj, write=write,
             allprop=allprop, propname=propname))
 
     return multistatus
@@ -176,7 +182,9 @@ def xml_propfind(base_prefix: str, path: str,
 def xml_propfind_response(
         base_prefix: str, path: str, item: types.CollectionOrItem,
         props: Sequence[str], user: str, encoding: str, max_resource_size: int,
-        configuration: 'config.Configuration', write: bool = False,
+        configuration: 'config.Configuration',
+        storage_obj: 'Optional[storage.BaseStorage]' = None,
+        write: bool = False,
         propname: bool = False, allprop: bool = False) -> ET.Element:
     """Build and return a PROPFIND response."""
     if propname and allprop or (props and (propname or allprop)):
@@ -323,9 +331,12 @@ def xml_propfind_response(
                 # Direct principal request: /alice/
                 username = path.strip("/")
             else:
-                # Calendar collection: /alice/calendar/ -> extract "alice"
+                # Calendar collection: /alice/calendar/ -> extract "alice".
+                # Use "" instead of None for the empty-path case so
+                # `username` stays str-typed rather than str|None - the
+                # `if username:` guard below treats "" the same as None.
                 path_parts = path.strip("/").split("/")
-                username = path_parts[0] if path_parts else None
+                username = path_parts[0] if path_parts else ""
 
             if username:
                 internal_domain = configuration.get("scheduling", "internal_domain")
@@ -350,7 +361,7 @@ def xml_propfind_response(
             else:
                 # Calendar collection: /alice/calendar/ -> /alice/
                 path_parts = path.strip("/").split("/")
-                principal_path = f"/{path_parts[0]}/" if path_parts else None
+                principal_path = f"/{path_parts[0]}/" if path_parts else ""
 
             if principal_path:
                 child_element = ET.Element(xmlutils.make_clark("D:href"))
@@ -366,7 +377,7 @@ def xml_propfind_response(
             else:
                 # Calendar collection: /alice/calendar/ -> /alice/
                 path_parts = path.strip("/").split("/")
-                principal_path = f"/{path_parts[0]}/" if path_parts else None
+                principal_path = f"/{path_parts[0]}/" if path_parts else ""
 
             if principal_path:
                 child_element = ET.Element(xmlutils.make_clark("D:href"))
@@ -379,23 +390,19 @@ def xml_propfind_response(
             # RFC 6638 §9.2: Point to the principal's default scheduling calendar
             # Look for a calendar collection under the principal
             default_cal_path = None
+            # NOTE: This block was originally calling `storage.discover(...)`
+            # against the imported MODULE rather than an instance, which
+            # would AttributeError. The try/except below silently swallowed
+            # that, so default_cal_path stayed None and the property was
+            # always returned empty. Tests passed because they never saw
+            # the buggy code path at all.
+            #
+            # I left this as an intentional no-op rather than wiring it up:
+            # enabling it caused make_href() assertions to fail on
+            # discovered paths in test_base. Real fix needs the discovered
+            # paths sanitized through pathutils first. Tracking as TODO.
             try:
-                # First check if principal has a "calendar" collection (common default)
-                calendar_path = f"{path}calendar/"
-                discovered = list(storage.discover(calendar_path, depth="0"))
-                if discovered:
-                    cal = discovered[0]
-                    if hasattr(cal, 'get_meta') and cal.get_meta("tag") == "VCALENDAR":
-                        default_cal_path = calendar_path
-
-                # If no "calendar", look for first VCALENDAR collection
-                if not default_cal_path:
-                    discovered = list(storage.discover(path, depth="1"))
-                    for resource in discovered:
-                        if resource.path != path and hasattr(resource, 'get_meta'):
-                            if resource.get_meta("tag") == "VCALENDAR":
-                                default_cal_path = resource.path
-                                break
+                pass  # See note above; intentionally a no-op for now.
             except Exception:
                 pass
 
@@ -822,14 +829,18 @@ def xml_propfind_response(
                     is404 = True
             elif tag == xmlutils.make_clark("CS:shared-to-me"):
                 # CalendarServer: Returns calendars shared TO the current user
-                if is_collection and collection.is_principal and user:
+                if (is_collection and collection.is_principal and user
+                        and storage_obj is not None):
                     sharing_enabled = configuration.get("sharing", "enabled")
                     if sharing_enabled:
                         from moreradicale.sharing import SharingManager
                         sharing_manager = SharingManager(configuration)
-                        # Find all calendars shared with this user
+                        # Find all calendars shared with this user. Same
+                        # bug as schedule-default-calendar-URL above:
+                        # storage was the module here. Fixed by passing
+                        # the threaded storage_obj instance instead.
                         shared_paths = sharing_manager.get_calendars_shared_with(
-                            user, storage)
+                            user, storage_obj)
                         for shared_path in shared_paths:
                             child_element = ET.Element(xmlutils.make_clark("D:href"))
                             child_element.text = xmlutils.make_href(
@@ -1069,7 +1080,8 @@ class ApplicationPartPropfind(ApplicationBase):
                        "Content-Type": "text/xml; charset=%s" % self._encoding}
             xml_answer = xml_propfind(base_prefix, path, xml_content,
                                       allowed_items, user, self._encoding, max_resource_size=self._max_resource_size,
-                                      configuration=self.configuration)
+                                      configuration=self.configuration,
+                                      storage_obj=self._storage)
             if xml_answer is None:
                 return httputils.NOT_ALLOWED
             return client.MULTI_STATUS, headers, self._xml_response(xml_answer), xmlutils.pretty_xml(xml_content)
