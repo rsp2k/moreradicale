@@ -94,7 +94,8 @@ class SubscriptionStorage:
             logger.error("Failed to add subscription: %s", e)
             return False
 
-    def remove_subscription(self, subscription_id: str, user: str = None) -> bool:
+    def remove_subscription(self, subscription_id: str,
+                            user: Optional[str] = None) -> bool:
         """
         Remove a subscription by ID.
 
@@ -180,7 +181,7 @@ class SubscriptionStorage:
         Returns:
             List of PushSubscriptions
         """
-        subscriptions = []
+        subscriptions: List[PushSubscription] = []
         try:
             for user_path in self._base_path.iterdir():
                 if not user_path.is_dir():
@@ -214,7 +215,7 @@ class SubscriptionStorage:
         Returns:
             List of PushSubscriptions
         """
-        subscriptions = []
+        subscriptions: List[PushSubscription] = []
         try:
             user_path = self._get_user_path(user)
             if not user_path.is_dir():
@@ -255,7 +256,7 @@ class SubscriptionStorage:
         Returns:
             List of all PushSubscriptions
         """
-        subscriptions = []
+        subscriptions: List[PushSubscription] = []
         try:
             if not self._base_path.exists():
                 return subscriptions
