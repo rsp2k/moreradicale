@@ -146,7 +146,8 @@ class VCardBuilder:
         """Set note."""
         self.note = note
 
-    def add_custom(self, name: str, value: str, params: Dict = None):
+    def add_custom(self, name: str, value: str,
+                   params: Optional[Dict] = None):
         """Add custom property."""
         self.custom_props.append((name, value, params or {}))
 
@@ -335,7 +336,11 @@ class VCardMapper:
             elif vcard_prop == "TEL":
                 builder.add_phone(value, prop_type)
             elif vcard_prop == "ADR":
-                builder.set_address_part(prop_type, position, value)
+                # ADR mapping requires a position param (street, locality,
+                # etc.); skip silently if missing rather than passing None
+                # into set_address_part which expects str.
+                if position:
+                    builder.set_address_part(prop_type, position, value)
             elif vcard_prop == "URL":
                 builder.set_url(value)
             elif vcard_prop == "PHOTO":

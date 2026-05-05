@@ -175,6 +175,10 @@ def parse_itip_message(vcal: vobject.base.Component) -> ITIPMessage:
 
     method = ITIPMethod(vcal.method.value.upper())
     component = _get_schedulable_component(vcal)
+    # validate_itip_message above raises if there's no schedulable
+    # component, so by here it's guaranteed non-None. Assert for mypy
+    # narrowing - it can't see across the validate_itip_message call.
+    assert component is not None
 
     # Extract core properties
     uid = component.uid.value
