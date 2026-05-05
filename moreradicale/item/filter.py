@@ -23,7 +23,7 @@
 import math
 import sys
 import xml.etree.ElementTree as ET
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from itertools import chain
 from typing import (Callable, Iterable, Iterator, List, Optional, Sequence,
                     Tuple, Union)
@@ -54,10 +54,10 @@ _calendar_timezone_cache: dict = {}
 
 # Module-level default timezone for floating time interpretation
 # Used during filter operations when a collection has C:calendar-timezone set
-_default_floating_timezone: Optional[datetime.tzinfo] = None
+_default_floating_timezone: Optional[tzinfo] = None
 
 
-def set_default_floating_timezone(tzinfo: Optional[datetime.tzinfo]) -> None:
+def set_default_floating_timezone(tz: Optional[tzinfo]) -> None:
     """Set the default timezone for interpreting floating times.
 
     RFC 4791 §5.3.2: Floating times in calendar components should be
@@ -67,10 +67,10 @@ def set_default_floating_timezone(tzinfo: Optional[datetime.tzinfo]) -> None:
     to clear it after filtering.
     """
     global _default_floating_timezone
-    _default_floating_timezone = tzinfo
+    _default_floating_timezone = tz
 
 
-def get_default_floating_timezone() -> datetime.tzinfo:
+def get_default_floating_timezone() -> tzinfo:
     """Get the default timezone for interpreting floating times.
 
     Returns the collection's calendar-timezone if set, otherwise UTC.
@@ -78,7 +78,7 @@ def get_default_floating_timezone() -> datetime.tzinfo:
     return _default_floating_timezone or vobject.icalendar.utc
 
 
-def parse_calendar_timezone(calendar_timezone_prop: Optional[str]) -> Optional[datetime.tzinfo]:
+def parse_calendar_timezone(calendar_timezone_prop: Optional[str]) -> Optional[tzinfo]:
     """Parse a calendar-timezone property value and return a tzinfo object.
 
     RFC 4791 §5.3.2: The calendar-timezone property value is an iCalendar
@@ -121,7 +121,7 @@ def parse_calendar_timezone(calendar_timezone_prop: Optional[str]) -> Optional[d
     return None
 
 
-def date_to_datetime(d: date, tzinfo=None) -> datetime:
+def date_to_datetime(d: date, tz: Optional[tzinfo] = None) -> datetime:
     """Transform any date to a datetime with timezone.
 
     If ``d`` is a datetime without timezone (floating time), use the
@@ -133,7 +133,7 @@ def date_to_datetime(d: date, tzinfo=None) -> datetime:
 
     Args:
         d: A date or datetime object
-        tzinfo: Optional explicit timezone to use for floating times
+        tz: Optional explicit timezone to use for floating times
 
     Returns:
         A timezone-aware datetime
@@ -141,8 +141,8 @@ def date_to_datetime(d: date, tzinfo=None) -> datetime:
     if not isinstance(d, datetime):
         d = datetime.combine(d, datetime.min.time())
     if not d.tzinfo:
-        # Use provided tzinfo, or the default floating timezone (UTC if not set)
-        effective_tz = tzinfo if tzinfo is not None else get_default_floating_timezone()
+        # Use provided tz, or the default floating timezone (UTC if not set)
+        effective_tz = tz if tz is not None else get_default_floating_timezone()
         d = d.replace(tzinfo=effective_tz)
     return d
 
@@ -732,7 +732,11 @@ def visit_time_ranges(vobject_item: vobject.base.Component, child_name: str,
                     if isinstance(dtstart_naive, datetime) and dtstart_naive.tzinfo:
                         dtstart_naive = dtstart_naive.replace(tzinfo=None)
                     rule = dateutil_rrule.rrulestr(rrule_str, dtstart=dtstart_naive)
-                    dtstarts: Iterable[date] = rule
+                    # Re-binding inside the function (originally typed-
+                    # annotated here even though earlier line 507 already
+                    # bound dtstarts via tuple unpack). Drop the local
+                    # annotation - mypy now sees it as a redeclaration.
+                    dtstarts = rule
 
                     if is_infinite:
                         # Infinite recurrence - call infinity_fn to set time range
