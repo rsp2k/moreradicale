@@ -31,13 +31,21 @@ import xml.etree.ElementTree as ET
 from http import client
 
 from moreradicale import httputils, types, xmlutils
-from moreradicale.app.base import Access
+from moreradicale.app.base import Access, ApplicationBase
 
 logger = logging.getLogger(__name__)
 
 
-class ApplicationLabelMixin:
-    """Mixin for LABEL method support (RFC 3253 §8)."""
+class ApplicationLabelMixin(ApplicationBase):
+    """Mixin for LABEL method support (RFC 3253 §8).
+
+    Inherits from ApplicationBase so mypy sees self.configuration,
+    self._storage, and self._rights - same pattern as other Application*
+    mixins (ApplicationPartPost, ApplicationPartCheckout, etc.). At
+    runtime, the cooperative-multiple-inheritance Application class
+    threads these through without this base; the inheritance is purely
+    for static-type purposes.
+    """
 
     def do_LABEL(self, environ: types.WSGIEnviron, base_prefix: str,
                  path: str, user: str, remote_host: str, remote_useragent: str) -> types.WSGIResponse:
@@ -115,7 +123,9 @@ class ApplicationLabelMixin:
 
         # Get the resource
         with self._storage.acquire_lock("r", user):
-            item = next(self._storage.discover(path, depth="0"), None)
+            # iter() wraps the Iterable into an Iterator so next() can take
+            # a default - storage.discover returns Iterable, not Iterator.
+            item = next(iter(self._storage.discover(path, depth="0")), None)
             if not item:
                 return httputils.NOT_FOUND
 
