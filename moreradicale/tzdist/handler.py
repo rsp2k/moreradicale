@@ -9,7 +9,7 @@ import json
 import time
 from datetime import datetime, timezone
 from http import client
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 from urllib.parse import parse_qs
 
 from moreradicale.log import logger
@@ -59,7 +59,7 @@ class TZDistHandler:
         self._cache[key] = (time.time(), value)
 
     def handle_request(
-        self, environ: dict, base_prefix: str, path: str
+        self, environ: Mapping[str, Any], base_prefix: str, path: str
     ) -> Tuple[int, Dict[str, str], Optional[str], None]:
         """
         Handle a TZDIST request.

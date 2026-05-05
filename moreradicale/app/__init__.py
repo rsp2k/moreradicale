@@ -36,7 +36,7 @@ import random
 import time
 import zlib
 from http import client
-from typing import Iterable, List, Mapping, Tuple, Union
+from typing import Iterable, List, Mapping, Optional, Tuple, Union
 
 from moreradicale import (config, httputils, log, pathutils, tenant, types,
                           utils)
@@ -266,7 +266,16 @@ class Application(ApplicationPartCheckin, ApplicationPartCheckout,
         https = environ.get("HTTPS", "")
         profiler = None
         profiler_active = False
-        xml_request = None
+        xml_request: Optional[str] = None
+        # Pre-declare WSGIResponse-shape locals so mypy uses the broad
+        # types.WSGIResponseHeaders / Union[None, str, bytes] types from
+        # the start. Without these, the first `status, headers, answer = ...`
+        # unpack against a handler returning `Tuple[int, Dict[str, str], str]`
+        # binds `headers` as Dict[str, str], then later assignments from
+        # types.WSGIResponse-shaped handlers fail with incompatible types.
+        status: int = 0
+        headers: types.WSGIResponseHeaders = {}
+        answer: Union[None, str, bytes] = None
 
         context = AuthContext()
 
@@ -501,8 +510,8 @@ class Application(ApplicationPartCheckin, ApplicationPartCheckout,
         if path.startswith("/.well-known/timezone"):
             if self.configuration.get("tzdist", "enabled"):
                 from moreradicale.tzdist.handler import TZDistHandler
-                handler = TZDistHandler(self.configuration)
-                status, headers, answer, _ = handler.handle_request(
+                tzdist_handler = TZDistHandler(self.configuration)
+                status, headers, answer, _ = tzdist_handler.handle_request(
                     environ, base_prefix, path
                 )
                 return response(status, headers, answer)
@@ -512,8 +521,11 @@ class Application(ApplicationPartCheckin, ApplicationPartCheckout,
         if path == "/.metrics" and request_method == "GET":
             if self.configuration.get("metrics", "enabled"):
                 from moreradicale.metrics.handler import MetricsHandler
-                handler = MetricsHandler(self.configuration, self._auth)
-                status, headers, body = handler.handle_request(environ)
+                # Renamed from `handler` to break type-binding with the
+                # TZDistHandler `handler` above; same scope, different
+                # types, mypy can't reconcile a single name with both.
+                metrics_handler = MetricsHandler(self.configuration, self._auth)
+                status, headers, body = metrics_handler.handle_request(environ)
                 # Use response helper to format status text and encode body
                 # We use body.encode() since metrics output is already formatted
                 return response(status, headers, body.encode("utf-8") if body else b"")
@@ -539,10 +551,17 @@ class Application(ApplicationPartCheckin, ApplicationPartCheckout,
         # Handle inbound iTIP webhook (bypasses standard auth)
         if self._webhook_handler.should_handle(path, request_method):
             logger.info("Handling webhook request for %r", path)
-            status, headers, answer, _ = self._webhook_handler.handle_request(
+            # Type assignment to webhook_status/etc to avoid mypy
+            # cross-binding `headers` and `answer` with the inner
+            # response() closure's narrower types. The outer scope sees
+            # the WSGIResponse 4-tuple shape (Mapping[str,str] |
+            # Sequence[tuple[str,str]], str | bytes | None) which is
+            # broader than the response helper's params.
+            webhook_response: types.WSGIResponse = self._webhook_handler.handle_request(
                 environ, base_prefix, path
             )
-            return response(status, headers, answer)
+            return response(webhook_response[0], webhook_response[1],
+                            webhook_response[2])
 
         # Ask authentication backend to check rights
         login = password = ""
@@ -676,10 +695,15 @@ class Application(ApplicationPartCheckin, ApplicationPartCheckout,
                         return response(*httputils.NOT_ALLOWED)
 
                 with self._storage.acquire_lock("r", user):
-                    status, headers, answer, xml_req = versioning_handler.handle_request(
+                    # Index into the WSGIResponse 4-tuple rather than
+                    # unpacking - mypy was binding `headers` and `answer`
+                    # to the inner response()'s narrower closure-scoped
+                    # types and rejecting the WSGIResponse shapes.
+                    versioning_response: types.WSGIResponse = versioning_handler.handle_request(
                         environ, base_prefix, path, user
                     )
-                return response(status, headers, answer, xml_req)
+                return response(versioning_response[0], versioning_response[1],
+                                versioning_response[2], versioning_response[3])
             return response(*httputils.NOT_FOUND)
 
         if not login or user:

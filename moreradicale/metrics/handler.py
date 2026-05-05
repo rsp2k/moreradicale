@@ -5,7 +5,7 @@ Handles requests to /.metrics endpoint.
 """
 
 import base64
-from typing import Optional, Tuple
+from typing import Any, Mapping, Optional, Tuple
 
 from moreradicale.log import logger
 from moreradicale.metrics.collector import metrics
@@ -39,7 +39,7 @@ class MetricsHandler:
             radicale_version = "unknown"
         metrics.set_version(radicale_version)
 
-    def _get_user_from_environ(self, environ: dict) -> Optional[str]:
+    def _get_user_from_environ(self, environ: Mapping[str, Any]) -> Optional[str]:
         """
         Extract and validate user from HTTP Basic auth header.
 
@@ -71,7 +71,7 @@ class MetricsHandler:
         return None
 
     def handle_request(
-        self, environ: Optional[dict] = None, user: str = ""
+        self, environ: Optional[Mapping[str, Any]] = None, user: str = ""
     ) -> Tuple[int, dict, str]:
         """
         Handle metrics request.

@@ -6,7 +6,7 @@ Handles subscribe/unsubscribe requests for Web Push notifications.
 
 import json
 from http import client
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from moreradicale.log import logger
 
@@ -40,7 +40,7 @@ class PushHandler:
 
     def handle_subscribe(
         self,
-        environ: Dict,
+        environ: Mapping[str, Any],
         user: str,
         collection_path: str
     ) -> Tuple[int, Dict[str, str], str, None]:
