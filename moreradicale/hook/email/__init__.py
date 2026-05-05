@@ -1697,7 +1697,7 @@ class Hook(BaseHook):
         if not previous_todo:
             # Treat as new if previous cannot be parsed
             logger.warning("Previous todo content could not be parsed, treating as new.")
-            email_success: bool = self.email_config.send_added_todo_email(
+            email_success = self.email_config.send_added_todo_email(
                 attendees=attendees,
                 todo=email_todo
             )
@@ -1707,7 +1707,7 @@ class Hook(BaseHook):
             return
 
         # Send update notification to all current attendees
-        email_success: bool = self.email_config.send_updated_todo_email(
+        email_success = self.email_config.send_updated_todo_email(
             attendees=attendees,
             todo=email_todo
         )
@@ -1764,7 +1764,7 @@ class Hook(BaseHook):
         if not previous_journal:
             # Treat as new if previous cannot be parsed
             logger.warning("Previous journal content could not be parsed, treating as new.")
-            email_success: bool = self.email_config.send_added_journal_email(
+            email_success = self.email_config.send_added_journal_email(
                 attendees=attendees,
                 journal=email_journal
             )
@@ -1774,7 +1774,7 @@ class Hook(BaseHook):
             return
 
         # Send update notification to all current attendees
-        email_success: bool = self.email_config.send_updated_journal_email(
+        email_success = self.email_config.send_updated_journal_email(
             attendees=attendees,
             journal=email_journal
         )
