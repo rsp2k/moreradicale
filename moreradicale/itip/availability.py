@@ -43,19 +43,28 @@ from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional, Tuple
 
+# Both vobject and python-dateutil are declared dependencies in pyproject.toml,
+# so the imports below should never actually fail in a properly-installed
+# environment. The try/except is soft-fail belt-and-suspenders for unusual
+# deployments (frozen builds with missing optional deps, etc.) - downstream
+# code that cares conditionally checks `if vobj_utc` / `if dateutil_utc`.
+#
+# `# type: ignore[assignment]` on the None fallback prevents mypy from
+# inferring a non-None Module type from the try branch and then flagging the
+# except branch's `= None`.
 try:
     import vobject
     from vobject.icalendar import utc as vobj_utc
 except ImportError:
-    vobject = None
-    vobj_utc = None
+    vobject = None  # type: ignore[assignment]
+    vobj_utc = None  # type: ignore[assignment]
 
 try:
     from dateutil import rrule as dateutil_rrule
     from dateutil.tz import UTC as dateutil_utc
 except ImportError:
-    dateutil_rrule = None
-    dateutil_utc = None
+    dateutil_rrule = None  # type: ignore[assignment]
+    dateutil_utc = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -557,10 +566,14 @@ class AvailabilityProcessor:
 
 
 def _ensure_utc(dt) -> datetime:
-    """Ensure a datetime is timezone-aware (UTC)."""
-    if dt is None:
-        return None
+    """Ensure a datetime is timezone-aware (UTC).
 
+    Callers don't pass None - if a None ever reached this function the
+    None propagation through the original early-return would just cause
+    an AttributeError elsewhere. Removing the dead None branch keeps the
+    type annotation honest (return datetime, not Optional[datetime])
+    without cascading Optional-ness through every caller.
+    """
     if isinstance(dt, date) and not isinstance(dt, datetime):
         dt = datetime.combine(dt, datetime.min.time())
 
@@ -625,24 +638,31 @@ def _merge_busy_periods(periods: List[Tuple[datetime, datetime, str]]) -> List[T
     }
 
     sorted_periods = sorted(periods, key=lambda x: x[0])
-    merged = []
+    # Track (start, end, fbtype) tuples; mutate by rebuilding the last entry
+    # rather than indexing into a list-of-lists. The previous approach used
+    # `[start, end, fbtype]` lists with `last[1] = max(...)` mutation, which
+    # mypy couldn't type because list elements are heterogeneous (datetime,
+    # datetime, str). Tuple rebuild is the same algorithm, type-clean.
+    merged: List[Tuple[datetime, datetime, str]] = []
 
     for start, end, fbtype in sorted_periods:
         if not merged:
-            merged.append([start, end, fbtype])
+            merged.append((start, end, fbtype))
             continue
 
-        last = merged[-1]
+        last_start, last_end, last_type = merged[-1]
 
-        if start <= last[1]:
+        if start <= last_end:
             # Overlapping - merge and use higher priority type
-            last[1] = max(last[1], end)
-            if priority_map.get(fbtype, 10) < priority_map.get(last[2], 10):
-                last[2] = fbtype
+            new_end = max(last_end, end)
+            new_type = (fbtype if priority_map.get(fbtype, 10)
+                        < priority_map.get(last_type, 10)
+                        else last_type)
+            merged[-1] = (last_start, new_end, new_type)
         else:
-            merged.append([start, end, fbtype])
+            merged.append((start, end, fbtype))
 
-    return [(s, e, t) for s, e, t in merged]
+    return merged
 
 
 def create_vavailability_ics(
