@@ -43,9 +43,15 @@ MORERADICALE_MODULES: Sequence[str] = ("moreradicale", "vobject", "passlib", "de
                                        "pam")
 
 
-# IPv4 (host, port) and IPv6 (host, port, flowinfo, scopeid)
+# IPv4 (host, port) and IPv6 (host, port, flowinfo, scopeid).
+# Both shapes accept str|bytes|bytearray for the host - typeshed
+# annotates socket.server_address that broadly to cover the few
+# socket.AF_* families that report bytes hostnames (e.g. AF_PACKET
+# has no equivalent here, but typeshed's IPv6 union includes bytes
+# regardless). Without this, server.server_address can't be passed
+# to format_address.
 ADDRESS_TYPE = Union[Tuple[Union[str, bytes, bytearray], int],
-                     Tuple[str, int, int, int]]
+                     Tuple[Union[str, bytes, bytearray], int, int, int]]
 
 
 # Max/Min YEAR in datetime in unixtime

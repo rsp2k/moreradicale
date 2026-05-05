@@ -33,7 +33,7 @@ import ssl
 import sys
 import wsgiref.simple_server
 from typing import (Any, Callable, Dict, List, MutableMapping, Optional, Set,
-                    Tuple, Union)
+                    Tuple, Union, cast)
 from urllib.parse import unquote
 
 from moreradicale import Application, config, utils
@@ -275,8 +275,12 @@ class RequestHandler(wsgiref.simple_server.WSGIRequestHandler):
         if not self.parse_request():
             return
 
+        # self.wfile is BufferedIOBase per typeshed but ServerHandler's
+        # __init__ takes IO[bytes]. They're protocol-compatible at
+        # runtime (BufferedIOBase is a concrete IO[bytes] implementation)
+        # but mypy doesn't see them as substitutable.
         handler = ServerHandler(
-            self.rfile, self.wfile, self.get_stderr(), self.get_environ()
+            self.rfile, self.wfile, self.get_stderr(), self.get_environ()  # type: ignore[arg-type]
         )
         handler.request_handler = self  # type:ignore[attr-defined]
         app = self.server.get_app()  # type:ignore[attr-defined]
@@ -329,11 +333,20 @@ def serve(configuration: config.Configuration,
                 continue
             logger.debug("getaddrinfo of '%s': %s" % (utils.format_address(address_port), getaddrinfo))
             for (address_family, socket_kind, socket_proto, socket_flags, socket_address) in getaddrinfo:
-                logger.debug("try to create server socket on '%s'" % (utils.format_address(socket_address)))
+                # socket.getaddrinfo's typeshed return includes
+                # tuple[int, bytes] (AF_UNIX) and tuple[Any, bytes]
+                # shapes that cannot actually occur for SOCK_STREAM/
+                # IPPROTO_TCP queries, but mypy can't narrow that.
+                # cast() the address to the IP-only union utils accepts.
+                ip_addr = cast(utils.ADDRESS_TYPE, socket_address)
+                logger.debug("try to create server socket on '%s'" % (utils.format_address(ip_addr)))
                 try:
-                    server = server_class(configuration, address_family, (socket_address[0], socket_address[1]), RequestHandler)
+                    server = server_class(
+                        configuration, address_family,
+                        (str(socket_address[0]), int(socket_address[1])),
+                        RequestHandler)
                 except OSError as e:
-                    logger.warning("cannot create server socket on '%s': %s" % (utils.format_address(socket_address), e))
+                    logger.warning("cannot create server socket on '%s': %s" % (utils.format_address(ip_addr), e))
                     continue
                 servers[server.socket] = server
                 server.set_app(application)
