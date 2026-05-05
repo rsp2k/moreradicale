@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
-from moreradicale import xmlutils
+from moreradicale import storage, xmlutils
 from moreradicale.log import logger
 
 if TYPE_CHECKING:
@@ -523,17 +523,26 @@ class NotificationManager:
         try:
             with self.storage.acquire_lock("w", username):
                 for item in self.storage.discover(path, depth="1"):
-                    if hasattr(item, 'get_meta'):
-                        notif_json = item.get_meta(NOTIFICATIONS_PROPERTY)
-                        if notif_json:
-                            import json
-                            data = json.loads(notif_json)
-                            if data.get("uid") == uid:
-                                # Delete the item
-                                self.storage.delete_collection(item.path)
-                                logger.info("Deleted notification %s for %s",
-                                            uid, username)
-                                return True
+                    # Notifications are stored as nested COLLECTIONS, not
+                    # items - skip the BaseCollection-only get_meta /
+                    # delete checks if discover returned an Item.
+                    if not isinstance(item, storage.BaseCollection):
+                        continue
+                    notif_json = item.get_meta(NOTIFICATIONS_PROPERTY)
+                    if notif_json:
+                        import json
+                        data = json.loads(notif_json)
+                        if data.get("uid") == uid:
+                            # delete is on the collection itself, not
+                            # on BaseStorage - same fix as the cascade-
+                            # delete helper. Old code called the wrong
+                            # method (storage.delete_collection doesn't
+                            # exist), but this path was rarely
+                            # exercised so the bug went unnoticed.
+                            item.delete()
+                            logger.info("Deleted notification %s for %s",
+                                        uid, username)
+                            return True
         except Exception as e:
             logger.warning("Failed to delete notification %s: %s", uid, e)
 
@@ -578,7 +587,11 @@ class NotificationManager:
                              username, e)
                 return 0
             for item in candidates:
-                if not hasattr(item, "get_meta"):
+                # discover returns Item | BaseCollection; notifications
+                # are nested collections so skip Item instances. The
+                # isinstance guard also narrows for mypy so the
+                # subsequent get_meta/delete calls are valid.
+                if not isinstance(item, storage.BaseCollection):
                     continue
                 notif_json = item.get_meta(NOTIFICATIONS_PROPERTY)
                 if not notif_json:
