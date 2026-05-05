@@ -205,12 +205,16 @@ class MetricsCollector:
             # Subscription syncs
             lines.append("# HELP radicale_subscription_syncs_total External calendar syncs")
             lines.append("# TYPE radicale_subscription_syncs_total counter")
-            for (path, status), count in self._subscription_syncs.items():
+            # Renamed `status` to `sync_status` to avoid colliding with the
+            # `status: int` unpacked above in the request_count loop - same
+            # variable name in the same scope had different types, which
+            # mypy correctly flagged as an incompatible reassignment.
+            for (path, sync_status), count in self._subscription_syncs.items():
                 # Sanitize path for label
                 safe_path = path.replace('"', '\\"')[:50]
                 lines.append(
                     f'radicale_subscription_syncs_total{{path="{safe_path}",'
-                    f'status="{status}"}} {count}'
+                    f'status="{sync_status}"}} {count}'
                 )
 
             # Active subscriptions gauge

@@ -88,7 +88,11 @@ def get_task_properties(vtodo: vobject.base.Component) -> Dict[str, Any]:
     Returns:
         Dictionary of property name -> value mappings
     """
-    props = {}
+    # Heterogeneous values (str, int, bool, list, datetime). Without an
+    # explicit annotation mypy infers Dict[str, str] from the first
+    # assignment and flags every later non-str insertion. Function's
+    # declared return type is Dict[str, Any] - match it on the local.
+    props: Dict[str, Any] = {}
 
     # UID
     if hasattr(vtodo, "uid"):
