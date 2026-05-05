@@ -170,6 +170,10 @@ class IMAPPoller:
         logger.info("Stopping IMAP poller...")
         self._stop_event.set()
 
+        # is_running guarantees the thread is non-None (it's how the property
+        # is defined). Assert documents the invariant for mypy, which can't
+        # narrow through a property call.
+        assert self._thread is not None
         self._thread.join(timeout=timeout)
         if self._thread.is_alive():
             logger.warning("IMAP poller thread did not stop cleanly")
@@ -227,7 +231,15 @@ class IMAPPoller:
                 logger.error("IMAP search failed: %s", data)
                 return 0
 
-            message_ids = data[0].split()
+            # imap.search returns List[bytes | None] - the first element is
+            # space-separated ASCII message UIDs. Decode once here so all
+            # downstream code (fetch, copy, store) can use str instead of
+            # bytes, matching imaplib's typeshed signature.
+            search_result = data[0] if data else None
+            if search_result is None:
+                logger.debug("No search result data in %s", self._folder)
+                return 0
+            message_ids = search_result.decode("ascii").split()
             if not message_ids:
                 logger.debug("No messages in IMAP folder %s", self._folder)
                 return 0
@@ -273,6 +285,11 @@ class IMAPPoller:
             IMAPConnectionError: Connection failed
             IMAPAuthenticationError: Login failed
         """
+        # Annotate as the supertype so the SSL branch (IMAP4_SSL, a subclass)
+        # and the plain branches (IMAP4) are both compatible. Without this
+        # mypy infers IMAP4_SSL from whichever assignment it sees first and
+        # then flags the other branches.
+        imap: imaplib.IMAP4
         try:
             if self._security == "ssl":
                 # Direct SSL connection (port 993)
@@ -307,7 +324,7 @@ class IMAPPoller:
 
         return imap
 
-    def _process_message(self, imap: imaplib.IMAP4, msg_id: bytes) -> bool:
+    def _process_message(self, imap: imaplib.IMAP4, msg_id: str) -> bool:
         """
         Fetch and process a single message.
 
@@ -324,10 +341,17 @@ class IMAPPoller:
             logger.warning("Failed to fetch message %s", msg_id)
             return False
 
-        # Parse raw email
-        raw_email = data[0][1]
-        if isinstance(raw_email, bytes):
-            raw_email = raw_email.decode("utf-8", errors="replace")
+        # imap.fetch() returns data as List[bytes | tuple[bytes, bytes] | None].
+        # For RFC822 fetches, the first element is a 2-tuple of (header, body).
+        # Defensively check the shape rather than indexing blindly - a None or
+        # unexpected response shouldn't crash the poller, just skip the message.
+        if not data or not isinstance(data[0], tuple) or len(data[0]) < 2:
+            logger.warning("Unexpected fetch response shape for %s", msg_id)
+            return False
+        raw_email_bytes = data[0][1]
+        raw_email = (raw_email_bytes.decode("utf-8", errors="replace")
+                     if isinstance(raw_email_bytes, bytes)
+                     else str(raw_email_bytes))
 
         parsed = email_parser.parse_mime_email(raw_email)
         if not parsed:
@@ -364,7 +388,7 @@ class IMAPPoller:
             )
             return False
 
-    def _handle_processed(self, imap: imaplib.IMAP4, msg_id: bytes) -> None:
+    def _handle_processed(self, imap: imaplib.IMAP4, msg_id: str) -> None:
         """
         Handle successfully processed message.
 
@@ -379,7 +403,7 @@ class IMAPPoller:
         else:
             self._delete_message(imap, msg_id)
 
-    def _handle_failed(self, imap: imaplib.IMAP4, msg_id: bytes) -> None:
+    def _handle_failed(self, imap: imaplib.IMAP4, msg_id: str) -> None:
         """
         Handle failed message.
 
@@ -393,7 +417,7 @@ class IMAPPoller:
             self._move_message(imap, msg_id, self._failed_folder)
         # Otherwise leave in inbox for manual review
 
-    def _move_message(self, imap: imaplib.IMAP4, msg_id: bytes,
+    def _move_message(self, imap: imaplib.IMAP4, msg_id: str,
                       folder: str) -> bool:
         """
         Move message to another folder.
@@ -428,7 +452,7 @@ class IMAPPoller:
             logger.warning("Failed to move message %s to %s: %s", msg_id, folder, e)
             return False
 
-    def _delete_message(self, imap: imaplib.IMAP4, msg_id: bytes) -> bool:
+    def _delete_message(self, imap: imaplib.IMAP4, msg_id: str) -> bool:
         """
         Delete a message.
 
