@@ -47,6 +47,29 @@ if TYPE_CHECKING:
     from moreradicale import config, storage
 
 
+def _json_list_contains(raw: str, needle: str, prop_name: str,
+                        owner: str) -> bool:
+    """True if `raw` is a JSON array of strings containing `needle`.
+
+    Deliberately strict about shape. The naive `needle in json.loads(raw)`
+    is a **substring test** when the stored value happens to be a JSON
+    string rather than an array: with `"mallory"` stored, `"mal"`, `"o"`
+    and `"y"` all test true and would each be granted proxy rights.
+    Anything that is not a list of strings denies and logs.
+    """
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("rights: malformed %s on %s (not JSON), denying",
+                       prop_name, owner)
+        return False
+    if not isinstance(parsed, list):
+        logger.warning("rights: %s on %s is %s, expected a list - denying",
+                       prop_name, owner, type(parsed).__name__)
+        return False
+    return any(entry == needle for entry in parsed if isinstance(entry, str))
+
+
 class Rights(owner_only.Rights):
     """
     Rights backend with calendar sharing support.
@@ -180,9 +203,7 @@ class Rights(owner_only.Rights):
         else:
             collection_path = sane_path
 
-        # Get collection metadata
-        # Note: We can't directly access storage here, so we rely on
-        # the metadata being passed through or cached
+        # Read the shares property from storage (TTL-cached).
         shares_data = self._get_shares_for_path(collection_path)
         if not shares_data:
             return ""
@@ -190,6 +211,14 @@ class Rights(owner_only.Rights):
         # Check if user is in shares
         user_share = shares_data.get(user)
         if not user_share:
+            return ""
+        if not isinstance(user_share, dict):
+            # A malformed entry (e.g. {"bob": "read-write"}) would otherwise
+            # raise AttributeError out of authorization() and surface as a
+            # 500 for every request on this collection. Deny instead.
+            logger.warning("rights: share entry for %s on %s is %s, expected "
+                           "an object - denying", user, collection_path,
+                           type(user_share).__name__)
             return ""
 
         # Check invitation status
@@ -259,7 +288,11 @@ class Rights(owner_only.Rights):
             return None
         expiry, value = entry
         if expiry < time.monotonic():
-            del self._meta_cache[key]
+            # pop(), not del: two threads can both observe the same expired
+            # entry and race to remove it, and `del` would raise KeyError in
+            # the loser. The HTTP layer is genuinely multi-threaded now, and
+            # this dict is shared by every worker.
+            self._meta_cache.pop(key, None)
             return None
         return value
 
@@ -269,27 +302,35 @@ class Rights(owner_only.Rights):
     def _load_collection_meta(self, collection_path: str) -> dict:
         """Read .Radicale.props for a collection path; return empty dict on miss.
 
-        Acquires a SHARED lock on the owner segment so we don't race a writer
-        mid-update. The path is "user/calendar"; we strip to the user for
-        locking purposes (storage.acquire_lock takes the user, not the path).
+        Deliberately does NOT take the storage lock. authorization() is called
+        from handlers that already hold the global write lock - DELETE, MOVE
+        and PUT all evaluate Access.parent_permissions inside
+        acquire_lock("w"). The lock is a single global flock with no timeout
+        and it is not re-entrant, so acquiring a read lock here would
+        self-deadlock the worker *while it holds the exclusive lock*, wedging
+        every subsequent request from every user until the process is killed.
+
+        Reading unlocked is safe: set_meta writes via _atomic_write (temp file
+        + rename), so a concurrent reader sees either the complete old file or
+        the complete new one, never a torn read. The worst case is a slightly
+        stale but well-formed value, which the TTL cache already tolerates.
         """
         if self._storage is None:
             return {}
-        owner = collection_path.split("/", 1)[0]
         try:
-            with self._storage.acquire_lock("r", owner):
-                items = list(self._storage.discover(
-                    "/" + collection_path + "/", depth="0"))
-                if not items:
-                    return {}
-                coll = items[0]
-                if not hasattr(coll, "get_meta"):
-                    return {}
-                # get_meta() with no arg returns full property mapping.
-                return dict(coll.get_meta())
+            items = list(self._storage.discover(
+                "/" + collection_path + "/", depth="0"))
+            if not items:
+                return {}
+            coll = items[0]
+            if not hasattr(coll, "get_meta"):
+                return {}
+            # get_meta() with no arg returns full property mapping.
+            return dict(coll.get_meta())
         except Exception as e:
-            logger.debug("rights: failed to read meta for %s: %s",
-                         collection_path, e)
+            # Fail closed - callers treat {} as "no shares", i.e. deny.
+            logger.warning("rights: failed to read meta for %s: %s",
+                           collection_path, e)
             return {}
 
     def _get_shares_for_path(self, collection_path: str) -> dict:
@@ -321,21 +362,25 @@ class Rights(owner_only.Rights):
         return shares
 
     def _load_principal_meta(self, owner: str) -> dict:
-        """Read .Radicale.props for a principal (user-level) collection."""
+        """Read .Radicale.props for a principal (user-level) collection.
+
+        Unlocked for the same reason as _load_collection_meta - see the
+        explanation there.
+        """
         if self._storage is None:
             return {}
         try:
-            with self._storage.acquire_lock("r", owner):
-                items = list(self._storage.discover("/" + owner + "/", depth="0"))
-                if not items:
-                    return {}
-                coll = items[0]
-                if not hasattr(coll, "get_meta"):
-                    return {}
-                return dict(coll.get_meta())
+            items = list(self._storage.discover("/" + owner + "/", depth="0"))
+            if not items:
+                return {}
+            coll = items[0]
+            if not hasattr(coll, "get_meta"):
+                return {}
+            return dict(coll.get_meta())
         except Exception as e:
-            logger.debug("rights: failed to read principal meta for %s: %s",
-                         owner, e)
+            # Fail closed - callers treat {} as "no proxy rights", i.e. deny.
+            logger.warning("rights: failed to read principal meta for %s: %s",
+                           owner, e)
             return {}
 
     def _get_proxy_level_for(self, user: str, owner: str) -> str:
@@ -357,21 +402,14 @@ class Rights(owner_only.Rights):
         owner_meta = cached
 
         # Check write proxy first (higher privilege)
-        write_proxies = owner_meta.get(PROXY_WRITE_PROPERTY, "[]")
-        try:
-            if user in json.loads(write_proxies):
-                return "write"
-        except json.JSONDecodeError:
-            pass
+        if _json_list_contains(owner_meta.get(PROXY_WRITE_PROPERTY, "[]"),
+                               user, PROXY_WRITE_PROPERTY, owner):
+            return "write"
 
         # Check read proxy
-        read_proxies = owner_meta.get(PROXY_READ_PROPERTY, "[]")
-        try:
-            if user in json.loads(read_proxies):
-                return "read"
-        except json.JSONDecodeError:
-            pass
-
+        if _json_list_contains(owner_meta.get(PROXY_READ_PROPERTY, "[]"),
+                               user, PROXY_READ_PROPERTY, owner):
+            return "read"
         return ""
 
     def set_collection_meta(self, path: str, meta: dict) -> None:

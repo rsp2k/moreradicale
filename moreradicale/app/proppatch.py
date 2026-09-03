@@ -95,6 +95,20 @@ class ApplicationPartProppatch(ApplicationBase):
                 return httputils.NOT_ALLOWED
             if not isinstance(item, storage.BaseCollection):
                 return httputils.FORBIDDEN
+            # RADICALE:shares and the proxy/delegate lists are what the
+            # sharing rights backend consults to decide access. If a client
+            # can PROPPATCH them, any user holding a read-write share can
+            # rewrite the share list and grant itself or a third party
+            # access to the owner's calendar. Refuse outright - these are
+            # written only by the sharing handler.
+            if xml_content is not None:
+                reserved = radicale_item.reject_server_managed_props(
+                    xmlutils.props_from_request(xml_content))
+                if reserved is not None:
+                    logger.warning(
+                        "Refused PROPPATCH of server-managed property %r on "
+                        "%r by %r", reserved, path, user)
+                    return httputils.FORBIDDEN
             headers = {"DAV": httputils.get_dav_headers(self.configuration),
                        "Content-Type": "text/xml; charset=%s" % self._encoding}
             try:

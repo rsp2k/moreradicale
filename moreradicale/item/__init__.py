@@ -31,8 +31,8 @@ import re
 from datetime import datetime, timedelta
 from hashlib import sha256
 from itertools import chain
-from typing import (Any, Callable, List, MutableMapping, Optional, Sequence,
-                    Tuple)
+from typing import (Any, Callable, Iterable, List, MutableMapping, Optional,
+                    Sequence, Tuple)
 
 import vobject
 from vobject import icalendar as vobject_icalendar
@@ -241,6 +241,44 @@ def check_and_sanitize_items(
         for item in vobject_items:
             raise ValueError("Item type %r not supported in %s collection" %
                              (item.name, repr(tag) if tag else "generic"))
+
+
+# Properties the server owns. They are written only by internal code paths
+# (the sharing manager, the notification manager) and are load-bearing for
+# authorization: `RADICALE:shares` and the proxy/delegate lists are what the
+# owner_only_shared rights backend consults to decide access.
+#
+# They must never be settable or readable through the generic WebDAV property
+# machinery. A client-writable authorization property is a privilege
+# escalation - a read-write sharee could rewrite the share list to grant
+# itself or a third party access (confirmed exploitable before this guard
+# existed). A client-readable one discloses every sharee's identity, invite
+# state and the owner's private per-sharee comments.
+#
+# Kept as literal strings rather than importing moreradicale.sharing to avoid
+# an import cycle; tests/test_server_managed_props.py asserts this set stays
+# in sync with the constants those modules actually use.
+SERVER_MANAGED_PROPS = frozenset({
+    "RADICALE:shares",
+    "RADICALE:calendar-proxy-read",
+    "RADICALE:calendar-proxy-write",
+    "RADICALE:schedule-delegates",
+    "RADICALE:notifications",
+})
+
+
+def reject_server_managed_props(props: Iterable[str]) -> Optional[str]:
+    """Return the first server-managed property name in `props`, else None.
+
+    Callers handling a *client* request must refuse the request when this
+    returns a name. Do not wire this into check_and_sanitize_props: that
+    function also runs when props are read back from disk, where these
+    properties are legitimately present.
+    """
+    for name in props:
+        if name in SERVER_MANAGED_PROPS:
+            return name
+    return None
 
 
 def check_and_sanitize_props(props: MutableMapping[Any, Any]

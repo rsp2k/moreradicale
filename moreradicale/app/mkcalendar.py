@@ -48,6 +48,13 @@ class ApplicationPartMkcalendar(ApplicationBase):
             return httputils.REQUEST_TIMEOUT
         # Prepare before locking
         props_with_remove = xmlutils.props_from_request(xml_content)
+        # See proppatch.py: these are the sharing rights backend's
+        # authorization inputs and must never arrive from a client.
+        reserved = radicale_item.reject_server_managed_props(props_with_remove)
+        if reserved is not None:
+            logger.warning("Refused MKCALENDAR carrying server-managed "
+                           "property %r on %r by %r", reserved, path, user)
+            return httputils.FORBIDDEN
         props_with_remove["tag"] = "VCALENDAR"
         try:
             props = radicale_item.check_and_sanitize_props(props_with_remove)

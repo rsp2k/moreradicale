@@ -28,6 +28,7 @@ from http import client
 from typing import (Any, Dict, Iterable, Iterator, List, Optional, Sequence,
                     Tuple)
 
+import moreradicale.item as radicale_item
 from moreradicale import (config, httputils, pathutils, rights, storage, types,
                           xmlutils)
 from moreradicale.app.base import Access, ApplicationBase
@@ -297,6 +298,15 @@ def xml_propfind_response(
             meta = collection.get_meta()
             for tag in meta:
                 if tag == "tag":
+                    continue
+                # Never advertise or return server-managed properties here.
+                # RADICALE:shares and the proxy/delegate lists carry every
+                # sharee's identity, invite state and the owner's private
+                # per-sharee comments; allprop is sent by many clients by
+                # default, so without this the share list leaks passively to
+                # anyone with read access. The sanctioned view is CS:invite,
+                # which is owner-only.
+                if tag in radicale_item.SERVER_MANAGED_PROPS:
                     continue
                 clark_tag = xmlutils.make_clark(tag)
                 if clark_tag not in props:
@@ -876,11 +886,18 @@ def xml_propfind_response(
                     is404 = True
             else:
                 human_tag = xmlutils.make_human_tag(tag)
-                tag_text = collection.get_meta(human_tag)
-                if tag_text is not None:
-                    element.text = tag_text
-                else:
+                # The generic fallback would happily hand back any stored
+                # property by name, including the server-managed ones. A
+                # client asking for <R:shares/> directly must get 404, the
+                # same as if it did not exist - see SERVER_MANAGED_PROPS.
+                if human_tag in radicale_item.SERVER_MANAGED_PROPS:
                     is404 = True
+                else:
+                    tag_text = collection.get_meta(human_tag)
+                    if tag_text is not None:
+                        element.text = tag_text
+                    else:
+                        is404 = True
         # Not for collections
         elif tag == xmlutils.make_clark("D:getcontenttype"):
             assert not isinstance(item, storage.BaseCollection)

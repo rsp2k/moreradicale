@@ -972,3 +972,105 @@ class TestSharingHTTPFlow(BaseTest):
         assert "/alice/calendar/" in responses, \
             "expected /alice/calendar/ in bob's principal listing; got %r" % \
             list(responses.keys())
+
+    # ---- security regressions --------------------------------------------
+    #
+    # Both of these were confirmed exploitable before the
+    # SERVER_MANAGED_PROPS guard existed. See
+    # docs/agent-threads/asgi-executor-lifecycle/ for the review that found
+    # them and the exploit transcripts.
+
+    def test_sharee_cannot_rewrite_shares_via_proppatch(self):
+        """A read-write sharee must not be able to edit the share list.
+
+        RADICALE:shares is what the rights backend consults to decide
+        access. When it was writable through the generic WebDAV property
+        machinery, bob (holding only a read-write share) could add mallory
+        and grant her access alice never gave - a straight privilege
+        escalation. It must be refused outright.
+        """
+        import os
+        with open(os.path.join(self.colpath, ".htpasswd"), "a") as f:
+            f.write("mallory:mallorypass\n")
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._materialize_principal("mallory")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob")
+        uid = self._read_invite_uid("bob")
+        self._reply("alice", "calendar", "bob", uid, accept=True)
+
+        # Precondition: mallory has no access.
+        self.request("PROPFIND", "/alice/calendar/",
+                     data='<?xml version="1.0"?><propfind xmlns="DAV:">'
+                          '<prop><displayname/></prop></propfind>',
+                     HTTP_DEPTH="0", login="mallory:mallorypass", check=403)
+
+        # bob tries to rewrite the share list to include mallory.
+        evil = ('{"bob": {"access": "read-write", "status": "accepted"},'
+                ' "mallory": {"access": "read-write", "status": "accepted"}}')
+        status, _, _ = self.request(
+            "PROPPATCH", "/alice/calendar/",
+            data='<?xml version="1.0"?><propertyupdate xmlns="DAV:" '
+                 'xmlns:R="http://radicale.org/ns/"><set><prop>'
+                 '<R:shares>%s</R:shares></prop></set></propertyupdate>' % evil,
+            login="bob:bobpass")
+        assert status == 403, \
+            "PROPPATCH of RADICALE:shares must be refused, got %d" % status
+
+        # And mallory still has no access.
+        self.request("PROPFIND", "/alice/calendar/",
+                     data='<?xml version="1.0"?><propfind xmlns="DAV:">'
+                          '<prop><displayname/></prop></propfind>',
+                     HTTP_DEPTH="0", login="mallory:mallorypass", check=403)
+
+    def test_shares_property_is_not_readable_by_sharees(self):
+        """The share list must not leak through the generic property paths.
+
+        Restricting CS:invite to the owner is not sufficient on its own:
+        the same JSON escaped through the generic property fallback and
+        through <allprop/>, which many CalDAV clients send by default. It
+        carries every sharee's username, invite state, and the owner's
+        private per-sharee comment.
+        """
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob", summary="secret note")
+        uid = self._read_invite_uid("bob")
+        self._reply("alice", "calendar", "bob", uid, accept=True)
+
+        # Named request for the property.
+        _, _, body = self.request(
+            "PROPFIND", "/alice/calendar/",
+            data='<?xml version="1.0"?><propfind xmlns="DAV:" '
+                 'xmlns:R="http://radicale.org/ns/"><prop><R:shares/></prop>'
+                 '</propfind>',
+            HTTP_DEPTH="0", login="bob:bobpass", check=207)
+        assert "read-write" not in body and "secret note" not in body, \
+            "RADICALE:shares leaked via named PROPFIND: %r" % body
+
+        # allprop - the passive leak.
+        _, _, body = self.request(
+            "PROPFIND", "/alice/calendar/",
+            data='<?xml version="1.0"?><propfind xmlns="DAV:"><allprop/>'
+                 '</propfind>',
+            HTTP_DEPTH="0", login="bob:bobpass", check=207)
+        assert "secret note" not in body, \
+            "RADICALE:shares leaked via allprop: %r" % body
+
+    def test_owner_still_sees_invite_list(self):
+        """The guard must not break the sanctioned owner-only view."""
+        self._materialize_principal("alice")
+        self._materialize_principal("bob")
+        self._create_calendar("alice")
+        self._share("alice", "calendar", "bob")
+
+        _, _, body = self.request(
+            "PROPFIND", "/alice/calendar/",
+            data='<?xml version="1.0"?><propfind xmlns="DAV:" '
+                 'xmlns:CS="http://calendarserver.org/ns/">'
+                 '<prop><CS:invite/></prop></propfind>',
+            HTTP_DEPTH="0", login="alice:alicepass", check=207)
+        assert "/bob/" in body, \
+            "owner must still see sharees via CS:invite; got %r" % body
