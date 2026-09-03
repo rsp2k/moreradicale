@@ -42,7 +42,16 @@ dependencies = [
     # ASGI runtime: uvicorn for HTTP+WebSocket; asgiref to wrap the
     # existing WSGI Application; websockets is uvicorn's WS implementation.
     "uvicorn>=0.30",
-    "asgiref>=3.8",
+    # asgiref 3.12.0 fixes several Python 3.14 issues in the executor /
+    # Local machinery that WsgiToAsgi depends on - AsyncToSync capturing
+    # the loop at instantiation (#562), a ThreadSensitiveContext executor
+    # deadlock (#535), and Local leaking across sync threads under
+    # thread_inherit_context. Downstream reported
+    # "CurrentThreadExecutor already quit or is broken" on 3.14 with
+    # 3.11.1, so 3.10+ installs take the fixed line. 3.12 requires Python
+    # >= 3.10, so 3.9 installs keep the old floor.
+    "asgiref>=3.12.1; python_version >= '3.10'",
+    "asgiref>=3.8; python_version < '3.10'",
     "websockets>=13",
 ]
 

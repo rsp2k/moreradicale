@@ -215,6 +215,23 @@ async def _handle_websocket(
         )
         for task in pending:
             task.cancel()
+        # Await the cancellations so they actually finish before we tear the
+        # connection down, and retrieve every task's exception. Without this,
+        # a client that vanishes mid-write leaves the writer task holding an
+        # unretrieved ClientDisconnected, which asyncio then reports at GC
+        # time as "Task exception was never retrieved" plus a full traceback.
+        # A disconnect racing an in-flight send is completely routine, so it
+        # is logged at debug, not error.
+        if pending:
+            await asyncio.wait(pending)
+        for task in (*done, *pending):
+            if task.cancelled():
+                continue
+            exc = task.exception()
+            if exc is not None:
+                logger.debug(
+                    "WebSync: connection %s ended with %s: %s",
+                    connection_id, type(exc).__name__, exc)
     finally:
         websync_manager.unregister_connection(connection_id)
         logger.info("WebSync: ws closed for user=%s connection=%s", user, connection_id)
