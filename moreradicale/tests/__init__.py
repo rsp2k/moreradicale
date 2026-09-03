@@ -52,6 +52,18 @@ class BaseTest:
     application: app.Application
 
     def setup_method(self) -> None:
+        # Request-scoped state lives in ContextVars, which are per-thread and
+        # therefore survive between tests running on the same thread. The
+        # server resets these at the start of every request; tests construct
+        # objects directly, so they must reset them here or one test's tenant
+        # or group state leaks into the next.
+        from moreradicale.auth import _ldap_groups_var
+        from moreradicale.rights import _user_groups_var
+        from moreradicale.tenant import current_tenant
+        current_tenant.set(None)
+        _ldap_groups_var.set(None)
+        _user_groups_var.set(None)
+
         self.configuration = config.load()
         self.colpath = tempfile.mkdtemp()
         self.configure({

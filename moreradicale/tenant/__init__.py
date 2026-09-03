@@ -16,6 +16,7 @@ Configuration:
     config_directory = /etc/moreradicale/tenants
 """
 
+import contextvars
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence
 
@@ -29,6 +30,23 @@ if TYPE_CHECKING:
 INTERNAL_TYPES: Sequence[str] = (
     "none", "domain", "path_prefix", "header", "subdomain"
 )
+
+
+# The tenant whose request is being served on this thread.
+#
+# This is deliberately a ContextVar rather than attributes on the storage and
+# rights objects. ApplicationBase builds exactly one of each for the whole
+# process, so storing per-request tenant identity on them is process-global
+# state: with concurrent requests, a request for tenant A can observe tenant
+# B's context. That is not a cosmetic race - the storage layer resolves the
+# collection root from it (``/storage/tenants/{tenant_id}/collection-root`` in
+# filesystem isolation mode), so the request would read and write another
+# tenant's calendar data.
+#
+# Storage and rights share this single variable so they can never disagree
+# about which tenant a request belongs to.
+current_tenant: "contextvars.ContextVar[Optional[TenantContext]]" = (
+    contextvars.ContextVar("moreradicale_current_tenant", default=None))
 
 
 @dataclass

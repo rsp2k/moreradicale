@@ -32,6 +32,7 @@ Take a look at the class ``BaseRights`` if you want to implement your own.
 
 """
 
+import contextvars
 from typing import TYPE_CHECKING, Optional, Sequence, Set
 
 from moreradicale import config, utils
@@ -59,9 +60,33 @@ def intersect(a: str, b: str) -> str:
     return "".join(set(a).intersection(set(b)))
 
 
+# Group memberships used to evaluate the request being served.
+#
+# Not instance state: ApplicationBase builds exactly one rights object for the
+# whole process, so an instance/class attribute here is shared by every
+# concurrent request. app/__init__.py assigns this per request from the auth
+# backend, and from_file.Rights intersects it with the configured allowed
+# groups - so a leak across requests means one user's group memberships
+# deciding another user's access. See the matching note in auth/__init__.py.
+# Defaults to None rather than an empty set: a mutable default on a
+# ContextVar would be shared by every context that never assigned one.
+_user_groups_var: "contextvars.ContextVar[Optional[Set[str]]]" = (
+    contextvars.ContextVar("moreradicale_user_groups", default=None))
+
+
 class BaseRights:
 
-    _user_groups: Set[str] = set([])
+    # Bound as a class attribute so subclasses share the one ContextVar.
+    _user_groups_var = _user_groups_var
+
+    @property
+    def _user_groups(self) -> Set[str]:
+        """Groups for the request currently being served on this thread."""
+        return self._user_groups_var.get() or set()
+
+    @_user_groups.setter
+    def _user_groups(self, value: Set[str]) -> None:
+        self._user_groups_var.set(value)
 
     def __init__(self, configuration: "config.Configuration") -> None:
         """Initialize BaseRights.

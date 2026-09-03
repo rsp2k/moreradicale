@@ -20,6 +20,7 @@
 # along with Radicale.  If not, see <http://www.gnu.org/licenses/>.
 
 
+import contextvars
 import math
 import sys
 import xml.etree.ElementTree as ET
@@ -52,9 +53,23 @@ else:
 # Module-level cache for parsed calendar timezones
 _calendar_timezone_cache: dict = {}
 
-# Module-level default timezone for floating time interpretation
-# Used during filter operations when a collection has C:calendar-timezone set
-_default_floating_timezone: Optional[tzinfo] = None
+# Default timezone for floating-time interpretation, scoped to the request.
+#
+# This MUST NOT be a plain module global. REPORT handlers set it from the
+# collection's C:calendar-timezone, filter, then clear it. With a module
+# global and more than one request in flight, two concurrent REPORTs on
+# calendars with different timezones read each other's value, or one clears
+# it mid-flight for the other. The result is not a crash - it is silently
+# wrong calendar-query and free-busy output, with events filtered against
+# another calendar's zone and nothing logged.
+#
+# A ContextVar is per-thread (each thread starts with its own context), so
+# concurrent requests on the WSGI worker pool cannot observe each other's
+# value. Callers still pair set/clear in a finally block, which also keeps
+# a pooled worker thread from carrying a value into the next request.
+_default_floating_timezone: contextvars.ContextVar[Optional[tzinfo]] = (
+    contextvars.ContextVar("moreradicale_default_floating_timezone",
+                           default=None))
 
 
 def set_default_floating_timezone(tz: Optional[tzinfo]) -> None:
@@ -66,8 +81,7 @@ def set_default_floating_timezone(tz: Optional[tzinfo]) -> None:
     Call this before filtering to set the timezone, and call with None
     to clear it after filtering.
     """
-    global _default_floating_timezone
-    _default_floating_timezone = tz
+    _default_floating_timezone.set(tz)
 
 
 def get_default_floating_timezone() -> tzinfo:
@@ -75,7 +89,7 @@ def get_default_floating_timezone() -> tzinfo:
 
     Returns the collection's calendar-timezone if set, otherwise UTC.
     """
-    return _default_floating_timezone or vobject.icalendar.utc
+    return _default_floating_timezone.get() or vobject.icalendar.utc
 
 
 def parse_calendar_timezone(calendar_timezone_prop: Optional[str]) -> Optional[tzinfo]:

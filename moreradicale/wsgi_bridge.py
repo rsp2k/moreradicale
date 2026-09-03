@@ -69,10 +69,28 @@ from moreradicale.log import logger
 
 # Requests run on a dedicated pool rather than the loop's default executor
 # so that WSGI traffic cannot starve other ``asyncio.to_thread`` users
-# (the WebSocket auth path in asgi.py is one). The application is written
-# for concurrent multi-threaded execution - it is what the built-in
-# ParallelHTTPServer and the documented gunicorn/uwsgi deployments already
-# do - so it does not need asgiref's thread_sensitive serialisation.
+# (the WebSocket auth path in asgi.py is one).
+#
+# On concurrency: an earlier version of this comment asserted the application
+# "is written for concurrent multi-threaded execution". That was wrong, and it
+# was the load-bearing assumption of replacing asgiref. asgiref's
+# ``thread_sensitive=True`` serialised every WSGI call through one thread, and
+# that serialisation was accidentally holding together three pieces of
+# per-request state that were being written onto process-wide singletons:
+# LDAP group memberships, the tenant context, and the calendar filter's
+# floating timezone. Under a real pool those leak across requests - the first
+# two are authorization decisions, the third silently corrupts query results.
+#
+# They now live in ContextVars (see moreradicale/tenant/__init__.py,
+# auth/__init__.py, rights/__init__.py, item/filter.py) and are reset per
+# request, with regression coverage in tests/test_request_isolation.py.
+# The same exposure existed under the built-in ParallelHTTPServer and the
+# documented gunicorn/uwsgi thread deployments, so this was a latent defect
+# that the bridge surfaced rather than introduced.
+#
+# If a future change reintroduces shared per-request state, set
+# MORERADICALE_WSGI_THREADS=1 to restore serialised execution while it is
+# fixed. Do not set it to 0.
 _DEFAULT_THREADS = min(32, (os.cpu_count() or 1) + 4)
 
 

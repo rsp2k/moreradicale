@@ -83,10 +83,22 @@ class StorageBase(storage.BaseStorage):
     _folder_umask: str
     _config_umask: int
 
-    # Multi-tenant support
-    _tenant_context: Optional["TenantContext"] = None
+    # Multi-tenant support. _tenant_context is request-scoped and therefore
+    # lives in a ContextVar, NOT on this object - there is one shared storage
+    # instance per process and it resolves the collection root from this
+    # value. See moreradicale.tenant.current_tenant.
     _tenant_enabled: bool = False
     _tenant_isolation_mode: str = "logical"
+
+    @property
+    def _tenant_context(self) -> Optional["TenantContext"]:
+        from moreradicale.tenant import current_tenant
+        return current_tenant.get()
+
+    @_tenant_context.setter
+    def _tenant_context(self, context: Optional["TenantContext"]) -> None:
+        from moreradicale.tenant import current_tenant
+        current_tenant.set(context)
 
     def __init__(self, configuration: config.Configuration) -> None:
         super().__init__(configuration)

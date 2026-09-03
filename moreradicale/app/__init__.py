@@ -460,8 +460,17 @@ class Application(ApplicationPartCheckin, ApplicationPartCheckout,
                 else:
                     logger.debug("Called by reverse proxy, cannot remove base prefix %r from path: %r as not matching", base_prefix, path)
 
-        # Extract tenant context for multi-tenant support
+        # Extract tenant context for multi-tenant support.
+        #
+        # Clear first, unconditionally. The tenant context is request-scoped
+        # state held in a ContextVar, and worker threads are pooled - without
+        # this reset a request that does not set a tenant (extraction failed,
+        # or multi-tenancy is off) would inherit whatever the previous request
+        # on this thread left behind, and in filesystem isolation mode that
+        # decides which tenant's data directory it reads.
         tenant_context = None
+        self._storage.set_tenant_context(None)
+        self._rights.set_tenant_context(None)
         if self._tenant_enabled:
             # Extract tenant from path/header/subdomain (user not known yet)
             # Domain extraction will be updated after authentication
@@ -578,12 +587,18 @@ class Application(ApplicationPartCheckin, ApplicationPartCheckout,
                     authorization.encode("ascii"))).split(":", 1)
 
         (user, info) = self._auth.login(login, password, context) or ("", "") if login else ("", "")
+        # Assign unconditionally, including the empty case. Both sides are
+        # ContextVar-backed and worker threads are pooled, so skipping the
+        # assignment would let a previous request's groups persist on this
+        # thread and be used to authorize the current one.
         if self.configuration.get("auth", "type") == "ldap":
             try:
                 logger.debug("Groups received from LDAP: %r", ",".join(self._auth._ldap_groups))
                 self._rights._user_groups = self._auth._ldap_groups
             except AttributeError:
-                pass
+                self._rights._user_groups = set()
+        else:
+            self._rights._user_groups = set()
         if user and login == user:
             logger.info("Successful login: %r (%s)", user, info)
         elif user:

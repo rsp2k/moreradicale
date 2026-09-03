@@ -29,11 +29,12 @@ Take a look at the class ``BaseAuth`` if you want to implement your own.
 
 """
 
+import contextvars
 import hashlib
 import os
 import threading
 import time
-from typing import List, Sequence, Set, Tuple, Union, final
+from typing import List, Optional, Sequence, Set, Tuple, Union, final
 from urllib.parse import unquote
 
 from moreradicale import config, types, utils
@@ -104,9 +105,26 @@ class AuthContext:
         self.x_remote_addr = None
 
 
+# LDAP group memberships for the request being served.
+#
+# This MUST NOT live on the BaseAuth instance: there is exactly one shared
+# auth object for the whole process (ApplicationBase builds it once), so an
+# instance/class attribute is global state. app/__init__.py copies these into
+# the shared rights object right after login, and the rights backend then uses
+# them to decide access. With concurrent requests, user A's groups could be
+# used to evaluate user B's authorization - a privilege escalation with no
+# trace in the logs.
+#
+# A ContextVar is per-thread, and a request is served start-to-finish on one
+# worker thread, so each request sees only its own groups.
+# Defaults to None rather than an empty set: a mutable default on a
+# ContextVar would be shared by every context that never assigned one.
+_ldap_groups_var: "contextvars.ContextVar[Optional[Set[str]]]" = (
+    contextvars.ContextVar("moreradicale_ldap_groups", default=None))
+
+
 class BaseAuth:
 
-    _ldap_groups: Set[str] = set([])
     _urldecode_username: bool
     _lc_username: bool
     _uc_username: bool
@@ -121,6 +139,23 @@ class BaseAuth:
     _cache_failed_logins_expiry: int
     _cache_failed_logins_salt_ns: int       # persistent over runtime
     _lock: threading.Lock
+
+    @property
+    def _ldap_groups(self) -> Set[str]:
+        """Groups for the request currently being served on this thread.
+
+        Backed by a ContextVar rather than instance state - see the note on
+        _ldap_groups_var. Exposed as a property so existing call sites keep
+        working unchanged.
+        """
+        return self._ldap_groups_var.get() or set()
+
+    @_ldap_groups.setter
+    def _ldap_groups(self, value: Set[str]) -> None:
+        self._ldap_groups_var.set(value)
+
+    # Bound as a class attribute so subclasses share the one ContextVar.
+    _ldap_groups_var = _ldap_groups_var
 
     def __init__(self, configuration: "config.Configuration") -> None:
         """Initialize BaseAuth.
