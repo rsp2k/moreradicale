@@ -11,6 +11,78 @@ rather than implying a semantic contract with upstream.
 PEP 440 sorts CalVer above the old scheme (`2026.9.3` > `3.5.15`), so
 `pip install --upgrade` moves forward correctly across the change.
 
+## 2026.09.03.1
+
+**Security release. Upgrade from `2026.09.03` and earlier.**
+
+Two adversarial code reviews of the `2026.09.03` changes found defects that
+were confirmed exploitable against a running server. The first two are
+long-standing and present in `3.5.14` and earlier; the third was introduced
+in `2026.09.03`; the fourth was made reachable by it.
+
+* Security: server-managed properties are no longer client-writable
+  - `RADICALE:shares` is the `owner_only_shared` rights backend's
+    authorization source of truth, and was an ordinary client-writable WebDAV
+    property. Any user holding a **read-write share** could PROPPATCH it to
+    grant themselves or a third party access to the owner's calendar, or to
+    remove the owner's other sharees. Confirmed end to end: a non-owner
+    sharee took an unrelated user from 403 to 207.
+  - `RADICALE:shares`, `RADICALE:calendar-proxy-read`,
+    `RADICALE:calendar-proxy-write`, `RADICALE:schedule-delegates` and
+    `RADICALE:notifications` are now refused with 403 on PROPPATCH, MKCOL and
+    MKCALENDAR.
+* Security: the share list is no longer readable by sharees
+  - The `CS:invite` owner-only restriction added in `2026.09.03` was
+    incomplete. The same JSON was still returned by the generic property
+    fallback (a named request for `<R:shares/>`) and by `<allprop/>`, which
+    many CalDAV clients send by default. It disclosed every sharee's
+    username, invite state, timestamps, and the owner's private per-sharee
+    comment text. All three read paths now omit server-managed properties;
+    `CS:invite` remains the single sanctioned, owner-only view.
+* Fix: `authorization()` no longer acquires the storage lock
+  - Introduced in `2026.09.03`. The rights backend took a read lock while
+    handlers already held the global write lock (DELETE, MOVE and PUT all
+    evaluate parent permissions inside it). The lock is a single global
+    `flock`, not re-entrant and with no timeout, so this self-deadlocked the
+    worker **while holding the exclusive lock**, blocking every subsequent
+    request from every user until the process was killed. Reads are now
+    unlocked, which is safe because properties are written with an atomic
+    temp-file rename.
+* Fix: per-request state moved off process-wide singletons
+  - asgiref's `thread_sensitive=True` serialised all WSGI execution through
+    one thread, which was accidentally the only thing making these safe. The
+    `2026.09.03` bridge introduced real concurrency and made them live.
+  - LDAP group memberships were copied between the shared auth and rights
+    objects, so one user's groups could decide another user's access
+    (`[auth] type = ldap`).
+  - The tenant context lived on the shared storage and rights objects and
+    resolves the storage root, so a request could read and write another
+    tenant's data (`[tenant] enabled`).
+  - The calendar filter's floating timezone was a module global, so
+    concurrent REPORTs read each other's zone. **No configuration gate** -
+    the symptom is silently wrong calendar-query and free-busy output.
+  - All three now use ContextVars and are reset per request.
+* Fix: hardening in the authorization path
+  - Proxy membership used `user in json.loads(value)`, which is a *substring*
+    test when the stored value is a JSON string rather than a list - with
+    `"mallory"` stored, `"mal"` and `"o"` also matched and were granted proxy
+    rights. Now shape-validated.
+  - A malformed share entry or proxy list raised out of `authorization()` and
+    surfaced as a 500 on every request for that collection. Now denied with a
+    warning. Storage and JSON read failures in this path log at WARNING
+    instead of DEBUG; they already failed closed but were invisible.
+  - An expired cache entry could be deleted by two threads at once, raising
+    `KeyError`. Now uses `pop`.
+* Improve: dropped the `asgiref` dependency
+  - Nothing imports it since the in-tree bridge replaced `WsgiToAsgi`, and
+    uvicorn does not require it transitively.
+* New: `MORERADICALE_WSGI_THREADS` controls the WSGI worker pool size. Set it
+  to `1` to restore fully serialised request execution.
+
+Tests: 984 passing (was 962 at `2026.09.03`), including regressions for both
+exploits and a `threading.Barrier`-based suite that forces the interleaving
+which ordinary concurrency tests miss.
+
 ## 2026.09.03
 
 Also published as `3.5.15` / `3.5.15-wsgibridge` (identical image digest)
