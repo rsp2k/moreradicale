@@ -1,6 +1,21 @@
 # Changelog
 
-## 3.5.15
+Versions from `2026.09.03` onward use CalVer (`YYYY.MM.DD`). Earlier entries
+continued upstream Radicale's semver numbering, which had become misleading:
+this fork diverged from upstream 3.5.10 by a large margin, and a `3.5.x`
+number implied a correspondence to upstream releases that no longer existed.
+CalVer also answers the question that actually matters for a server that
+integrates with many third-party clients - *when was this built and tested* -
+rather than implying a semantic contract with upstream.
+
+PEP 440 sorts CalVer above the old scheme (`2026.9.3` > `3.5.15`), so
+`pip install --upgrade` moves forward correctly across the change.
+
+## 2026.09.03
+
+Also published as `3.5.15` / `3.5.15-wsgibridge` (identical image digest)
+because those tags shipped minutes before the CalVer switch.
+
 * Fix: replace `asgiref.wsgi.WsgiToAsgi` with an in-tree WSGI-to-ASGI bridge
   - Fixes `RuntimeError: CurrentThreadExecutor already quit or is broken`,
     which returned HTTP 500 for requests arriving on a reused HTTP/1.1
