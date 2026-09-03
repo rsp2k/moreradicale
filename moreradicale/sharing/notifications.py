@@ -42,7 +42,9 @@ from moreradicale import storage, xmlutils
 from moreradicale.log import logger
 
 if TYPE_CHECKING:
-    from moreradicale import config, storage
+    # `storage` is imported unconditionally above - it's needed at runtime
+    # for the isinstance(item, storage.BaseCollection) narrowing checks.
+    from moreradicale import config
     from moreradicale.sharing import Share
 
 

@@ -521,6 +521,7 @@ class Application(ApplicationPartCheckin, ApplicationPartCheckout,
         if path == "/.metrics" and request_method == "GET":
             if self.configuration.get("metrics", "enabled"):
                 from moreradicale.metrics.handler import MetricsHandler
+
                 # Renamed from `handler` to break type-binding with the
                 # TZDistHandler `handler` above; same scope, different
                 # types, mypy can't reconcile a single name with both.
