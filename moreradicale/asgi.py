@@ -14,9 +14,10 @@ Run with: uvicorn moreradicale.asgi:app --host 0.0.0.0 --port 5232
 The default WSGI server (`python -m moreradicale`) can't handle the
 WebSocket protocol upgrade because wsgiref doesn't expose the raw
 socket after dispatch. This entry point keeps the existing WSGI
-Application unchanged for HTTP traffic - it's wrapped by
-asgiref.WsgiToAsgi - and adds a native ASGI WebSocket handler on
-/.websync that uses the existing WebSyncHandler protocol logic.
+Application unchanged for HTTP traffic - it's wrapped by our own
+WSGIBridge (see moreradicale/wsgi_bridge.py) - and adds a native ASGI
+WebSocket handler on /.websync that uses the existing WebSyncHandler
+protocol logic.
 
 Authentication for WebSocket: the standard WSGI auth backend isn't
 reachable from the ASGI side, so WebSockets accept Basic Auth via
@@ -31,12 +32,11 @@ import logging
 import os
 from typing import Any, Awaitable, Callable, Dict, Optional
 
-from asgiref.wsgi import WsgiToAsgi
-
 from moreradicale import Application, config
 from moreradicale.log import logger
 from moreradicale.websync.handler import WebSyncHandler
 from moreradicale.websync.manager import websync_manager
+from moreradicale.wsgi_bridge import WSGIBridge
 
 
 def _load_configuration() -> config.Configuration:
@@ -49,7 +49,10 @@ def _load_configuration() -> config.Configuration:
 
 _configuration = _load_configuration()
 _wsgi_application = Application(_configuration)
-_wsgi_asgi = WsgiToAsgi(_wsgi_application)
+# Own bridge rather than asgiref.wsgi.WsgiToAsgi - see wsgi_bridge.py for
+# why (asgiref's CurrentThreadExecutor is single-use and could be observed
+# dead by a later request on the same keep-alive connection, 500ing it).
+_wsgi_asgi = WSGIBridge(_wsgi_application)
 _websync_handler = WebSyncHandler(_configuration)
 
 

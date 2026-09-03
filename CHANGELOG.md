@@ -1,5 +1,32 @@
 # Changelog
 
+## 3.5.15
+* Fix: replace `asgiref.wsgi.WsgiToAsgi` with an in-tree WSGI-to-ASGI bridge
+  - Fixes `RuntimeError: CurrentThreadExecutor already quit or is broken`,
+    which returned HTTP 500 for requests arriving on a reused HTTP/1.1
+    keep-alive connection under Python 3.14 (reported downstream against
+    python-caldav, whose urllib3 connection pool reuses connections)
+  - asgiref's bridge parks a single-use `CurrentThreadExecutor` in a
+    contextvar-backed `Local` so that WSGI apps can call back into the event
+    loop. moreradicale's WSGI application never does that, so the new bridge
+    simply runs the app in a worker thread and sends the response - no
+    `AsyncToSync`, no executor state carried between requests
+  - Measured on the keep-alive workload that triggered it: 935 failures in
+    12,000 requests before, 0 after
+  - WSGI worker count is configurable via `MORERADICALE_WSGI_THREADS`
+  - New test module `tests/test_wsgi_bridge.py` (14 tests) covering the
+    keep-alive regression shape, environ mapping, PEP 3333 `close()`,
+    client disconnect, and application errors
+* Fix: WebSocket handler no longer leaks unretrieved task exceptions
+  - `_handle_websocket` cancelled its pending reader/writer task without
+    awaiting it or retrieving its exception, so every client that vanished
+    mid-write produced a `Task exception was never retrieved` traceback
+    (120 of them per 15s of connection churn). Cancelled tasks are now
+    awaited and their exceptions retrieved and logged at debug
+* Improve: `asgiref` floor raised to 3.12.1 on Python 3.10+ for its Python
+  3.14 executor and `Local` fixes; Python 3.9 keeps the previous floor since
+  asgiref 3.12 requires 3.10+
+
 ## 3.5.14
 * Feature: RFC 3253 WebDAV Versioning (DeltaV) with git backend
   - Read Operations: View version history, retrieve old content at `/.versions/` paths
