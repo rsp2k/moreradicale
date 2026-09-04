@@ -1074,3 +1074,66 @@ class TestSharingHTTPFlow(BaseTest):
             HTTP_DEPTH="0", login="alice:alicepass", check=207)
         assert "/bob/" in body, \
             "owner must still see sharees via CS:invite; got %r" % body
+
+    def test_server_managed_guard_matches_what_the_parser_produces(self):
+        """Pin the composition production actually runs.
+
+        The guard compares property names against SERVER_MANAGED_PROPS, but
+        the names come from xmlutils.props_from_request. If those two ever
+        disagree about representation the guard returns "not reserved" for
+        everything and fails OPEN, with no error anywhere.
+
+        Asserting on the composition - real XML in, guard verdict out - is
+        what pins it. Testing the guard with hand-written prefixed strings
+        would exercise a branch production never takes.
+        """
+        import defusedxml.ElementTree as DefusedET
+
+        from moreradicale import item as radicale_item
+        from moreradicale import xmlutils
+
+        for prop in ("shares", "calendar-proxy-read", "calendar-proxy-write",
+                     "schedule-delegates", "notifications"):
+            body = (
+                '<?xml version="1.0"?>'
+                '<D:propertyupdate xmlns:D="DAV:" '
+                'xmlns:R="http://radicale.org/ns/">'
+                '<D:set><D:prop><R:%s>x</R:%s></D:prop></D:set>'
+                '</D:propertyupdate>' % (prop, prop))
+            parsed = xmlutils.props_from_request(DefusedET.fromstring(body))
+            assert radicale_item.reject_server_managed_props(parsed) is not None, \
+                ("RADICALE:%s reached the guard as %r and was not reserved - "
+                 "the guard is failing open" % (prop, list(parsed)))
+
+    def test_server_managed_props_cover_both_representations(self):
+        """The prefixed and Clark forms must both be reserved.
+
+        props_from_request yields the prefixed form for known namespaces and
+        Clark notation for unknown ones. Listing only one form would make the
+        guard depend on that mapping never changing.
+        """
+        from moreradicale import item as radicale_item
+        from moreradicale import xmlutils
+
+        for name in ("RADICALE:shares", "RADICALE:calendar-proxy-read",
+                     "RADICALE:calendar-proxy-write",
+                     "RADICALE:schedule-delegates", "RADICALE:notifications"):
+            assert name in radicale_item.SERVER_MANAGED_PROPS
+            clark = xmlutils.make_clark(name)
+            assert clark in radicale_item.SERVER_MANAGED_PROPS, \
+                "%s (Clark form of %s) is not reserved" % (clark, name)
+
+    def test_server_managed_props_match_the_real_constants(self):
+        """Guard list must not drift from the names the code actually uses."""
+        from moreradicale import item as radicale_item
+        from moreradicale.sharing import (PROXY_READ_PROPERTY,
+                                          PROXY_WRITE_PROPERTY,
+                                          SCHEDULE_DELEGATES_PROPERTY,
+                                          SHARES_PROPERTY)
+        from moreradicale.sharing.notifications import NOTIFICATIONS_PROPERTY
+
+        for constant in (SHARES_PROPERTY, PROXY_READ_PROPERTY,
+                         PROXY_WRITE_PROPERTY, SCHEDULE_DELEGATES_PROPERTY,
+                         NOTIFICATIONS_PROPERTY):
+            assert constant in radicale_item.SERVER_MANAGED_PROPS, \
+                "%s is used by the code but is not reserved" % constant

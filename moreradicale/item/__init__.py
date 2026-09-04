@@ -255,16 +255,31 @@ def check_and_sanitize_items(
 # existed). A client-readable one discloses every sharee's identity, invite
 # state and the owner's private per-sharee comments.
 #
-# Kept as literal strings rather than importing moreradicale.sharing to avoid
-# an import cycle; tests/test_server_managed_props.py asserts this set stays
-# in sync with the constants those modules actually use.
-SERVER_MANAGED_PROPS = frozenset({
-    "RADICALE:shares",
-    "RADICALE:calendar-proxy-read",
-    "RADICALE:calendar-proxy-write",
-    "RADICALE:schedule-delegates",
-    "RADICALE:notifications",
-})
+# Kept as literal strings rather than importing moreradicale.sharing or
+# moreradicale.xmlutils - xmlutils imports this module, so either would be an
+# import cycle. tests/test_sharing.py pins these against the real constants
+# and against xmlutils.make_clark, so drift is caught rather than silently
+# disabling the guard.
+_RADICALE_NS = "http://radicale.org/ns/"
+_SERVER_MANAGED_NAMES = (
+    "shares",
+    "calendar-proxy-read",
+    "calendar-proxy-write",
+    "schedule-delegates",
+    "notifications",
+)
+
+# Both representations are listed on purpose. Property names reach this guard
+# from xmlutils.props_from_request, which yields the prefixed form
+# ("RADICALE:shares") for namespaces it knows and falls back to Clark
+# notation ("{http://radicale.org/ns/}shares") for ones it does not. Matching
+# only one form would leave a security guard that silently passes everything
+# if that mapping ever changes - a fail-open failure mode, which is the worst
+# kind for an authorization check.
+SERVER_MANAGED_PROPS = frozenset(
+    ["RADICALE:%s" % name for name in _SERVER_MANAGED_NAMES] +
+    ["{%s}%s" % (_RADICALE_NS, name) for name in _SERVER_MANAGED_NAMES]
+)
 
 
 def reject_server_managed_props(props: Iterable[str]) -> Optional[str]:
