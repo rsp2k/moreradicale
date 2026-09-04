@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026.09.03.2
+
+* Harden: `SERVER_MANAGED_PROPS` now reserves both the prefixed
+  (`RADICALE:shares`) and Clark (`{http://radicale.org/ns/}shares`)
+  representations of every server-managed property.
+  - A downstream report claimed the `2026.09.03.1` guard was inert due to a
+    namespace-representation mismatch. It is not: `props_from_request` yields
+    the prefixed form for known namespaces, and the reported repro used a
+    namespace that is not moreradicale's, so it set an unrelated WebDAV dead
+    property. Re-verified the original privilege-escalation exploit against
+    the published image, with a control confirming the blocked user genuinely
+    holds write access.
+  - The underlying fragility was real, though: the guard depended on
+    `props_from_request`'s representation and nothing pinned it. Had that
+    mapping ever changed, the guard would have failed **open** with no error.
+    Both forms are now covered and three tests pin the composition that
+    production actually runs.
+
 Versions from `2026.09.03` onward use CalVer (`YYYY.MM.DD`). Earlier entries
 continued upstream Radicale's semver numbering, which had become misleading:
 this fork diverged from upstream 3.5.10 by a large margin, and a `3.5.x`
