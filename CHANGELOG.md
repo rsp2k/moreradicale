@@ -1,5 +1,16 @@
 # Changelog
 
+Versions from `2026.09.03` onward use CalVer (`YYYY.MM.DD`). Earlier entries
+continued upstream Radicale's semver numbering, which had become misleading:
+this fork diverged from upstream 3.5.10 by a large margin, and a `3.5.x`
+number implied a correspondence to upstream releases that no longer existed.
+CalVer also answers the question that actually matters for a server that
+integrates with many third-party clients - *when was this built and tested* -
+rather than implying a semantic contract with upstream.
+
+PEP 440 sorts CalVer above the old scheme (`2026.9.3` > `3.5.15`), so
+`pip install --upgrade` moves forward correctly across the change.
+
 ## 2026.09.03.2
 
 * Harden: `SERVER_MANAGED_PROPS` now reserves both the prefixed
@@ -17,17 +28,6 @@
     mapping ever changed, the guard would have failed **open** with no error.
     Both forms are now covered and three tests pin the composition that
     production actually runs.
-
-Versions from `2026.09.03` onward use CalVer (`YYYY.MM.DD`). Earlier entries
-continued upstream Radicale's semver numbering, which had become misleading:
-this fork diverged from upstream 3.5.10 by a large margin, and a `3.5.x`
-number implied a correspondence to upstream releases that no longer existed.
-CalVer also answers the question that actually matters for a server that
-integrates with many third-party clients - *when was this built and tested* -
-rather than implying a semantic contract with upstream.
-
-PEP 440 sorts CalVer above the old scheme (`2026.9.3` > `3.5.15`), so
-`pip install --upgrade` moves forward correctly across the change.
 
 ## 2026.09.03.1
 
